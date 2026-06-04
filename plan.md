@@ -2416,3 +2416,423 @@ After implementation:
 5. Verify documentation renders correctly
 6. Verify security scanning passes
 7. Verify performance benchmarks
+
+---
+
+# EXPANSION 4: Speed, Usability, Reports
+
+## Decisions (Grilled)
+
+| Decision | Choice |
+|----------|--------|
+| Subsumption | Full subsumption (check if M1 killed by all tests that kill M2) |
+| Weak mutants | Coverage-based (check if mutation reaches execution point) |
+| Inlined finally | Bytecode analysis (ASM LineNumberNode analysis) |
+| Regex filtering | Regex patterns (targetClasses + targetTests) |
+| Test ordering | History-based (run tests that killed most mutants first) |
+| History tracking | Per-commit tracking (store scores per commit SHA) |
+| CSV report | Full CSV (all mutation details) |
+| Mutation graph | Interactive HTML (test-mutant relationships) |
+| Class-level scores | Per-class breakdown in reports |
+| Custom mutators | Public interface (SPI-style) |
+| Implementation order | Speed → Usability → Reports |
+
+---
+
+## Priority 1: Speed Features
+
+### P1.1 Subsumption Detection
+
+**What:** Skip mutant M2 if all tests that kill M2 also kill M1. M1 subsumes M2.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt`
+- `mutation-core/src/main/kotlin/.../model/Mutation.kt` (add subsumption tracking)
+- `mutation-core/src/main/kotlin/.../report/SubsumptionAnalyzer.kt` (NEW)
+
+**Algorithm:**
+```
+1. Run all mutants against all tests
+2. Build kill matrix: Map<MutationId, Set<TestName>>
+3. For each pair (M1, M2):
+   - If kill(M1) ⊆ kill(M2): M1 subsumes M2
+   - Skip M2
+4. Report subsumed mutants as "subsumed" (not killed/survived)
+```
+
+**Data model:**
+```kotlin
+data class SubsumptionResult(
+    val subsumedMutations: List<Mutation>,
+    val subsumedBy: Map<String, String>, // M2 -> M1 (M1 subsumes M2)
+    val skippedCount: Int
+)
+```
+
+**UI/Reporting:**
+- Console: "Subsumed 45 mutants (23% of total)"
+- HTML report: "Subsumed" section with details
+- CSV: Add "subsumed_by" column
+
+### P1.2 Weak Mutant Detection
+
+**What:** Check if mutation actually reaches execution point before running full test.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt`
+- `mutation-core/src/main/kotlin/.../engine/WeakMutationAnalyzer.kt` (NEW)
+- `mutation-core/src/main/kotlin/.../model/Mutation.kt` (add weak status)
+
+**Algorithm:**
+```
+1. For each mutant M:
+   - Get line number from MutationInfo
+   - Check coverage data: is this line covered by any test?
+   - If line not covered: mark as "weak" (never reached)
+2. Only run tests against non-weak mutants
+3. Report weak mutants separately
+```
+
+**Data model:**
+```kotlin
+enum class MutationStrength {
+    STRONG,   // Reaches execution point
+    WEAK      // Never reaches execution point
+}
+
+data class Mutation(
+    // ... existing fields
+    val strength: MutationStrength = MutationStrength.STRONG
+)
+```
+
+**UI/Reporting:**
+- Console: "Weak mutants: 12 (7% of total)"
+- HTML report: "Weak Mutants" section
+- CSV: Add "strength" column
+
+### P1.3 Inlined Finally Detection
+
+**What:** Detect finally blocks inlined by compiler. Create single mutation, not per-line.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt`
+- `mutation-core/src/main/kotlin/.../mutator/InlinedFinallyDetector.kt` (NEW)
+
+**Algorithm:**
+```
+1. Scan for try-finally blocks in bytecode
+2. Detect finally block inlining:
+   - Look for duplicate bytecode sequences
+   - Check LineNumberNode patterns
+3. Create single mutation for entire finally block
+4. Skip individual mutations within inlined block
+```
+
+**ASM analysis:**
+```kotlin
+class InlinedFinallyDetector {
+    fun detect(classBytes: ByteArray): List<InlinedFinallyBlock> {
+        // Analyze MethodNode's tryCatchBlocks
+        // Detect finally handlers (type = null)
+        // Find duplicate bytecode patterns
+        // Return list of inlined blocks
+    }
+}
+```
+
+**UI/Reporting:**
+- Console: "Inlined finally blocks: 3 (skipped 9 mutations)"
+- HTML report: "Inlined Code" section
+- CSV: Add "inlined" column
+
+---
+
+## Priority 2: Usability Features
+
+### P2.1 Regex Filtering
+
+**What:** Support regex patterns for class/test filtering.
+
+**Files to modify:**
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationPluginExtension.kt`
+- `mutation-core/src/main/kotlin/.../filter/ClassFilter.kt` (NEW)
+
+**DSL:**
+```kotlin
+mutationTest {
+    // Regex patterns
+    targetClasses.set(listOf("com\\.example\\..*"))
+    targetTests.set(listOf("com\\.example\\..*Test"))
+    
+    // Exclude patterns
+    excludeClasses.set(listOf("com\\.example\\.generated\\..*"))
+    excludeTests.set(listOf("com\\.example\\.Generated.*"))
+}
+```
+
+**Implementation:**
+```kotlin
+class ClassFilter(
+    private val targetPatterns: List<Regex>,
+    private val excludePatterns: List<Regex>
+) {
+    fun shouldMutate(className: String): Boolean {
+        val matchesTarget = targetPatterns.isEmpty() || 
+            targetPatterns.any { it.matches(className) }
+        val matchesExclude = excludePatterns.any { it.matches(className) }
+        return matchesTarget && !matchesExclude
+    }
+}
+```
+
+### P2.2 Test Ordering
+
+**What:** Run tests that killed most mutants first.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt`
+- `mutation-core/src/main/kotlin/.../engine/TestOrderingStrategy.kt` (NEW)
+
+**Algorithm:**
+```
+1. Load history: Map<TestId, KillCount>
+2. Sort tests by kill count descending
+3. Run top-k tests first (k = 10% of tests, min 5)
+4. If mutant killed by early tests: skip remaining tests
+5. Update history with new kill counts
+```
+
+**Data model:**
+```kotlin
+data class TestKillCount(
+    val testId: String,
+    val killCount: Int,
+    val lastRun: Long
+)
+
+class TestOrderingStrategy(
+    private val historyManager: MutationHistoryManager
+) {
+    fun orderTests(testIds: List<String>): List<String> {
+        val history = historyManager.loadTestHistory()
+        return testIds.sortedByDescending { 
+            history[it]?.killCount ?: 0 
+        }
+    }
+}
+```
+
+### P2.3 Per-Commit History Tracking
+
+**What:** Store mutation scores per commit SHA.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../engine/MutationHistoryManager.kt`
+
+**Data model:**
+```kotlin
+data class CommitHistory(
+    val commitSha: String,
+    val timestamp: Long,
+    val mutationScore: Int,
+    val totalMutations: Int,
+    val killedMutations: Int,
+    val survivedMutations: Int,
+    val weakMutations: Int,
+    val subsumedMutations: Int
+)
+```
+
+**Storage:**
+```
+.mutation-history/
+├── history.json          # Current run
+├── commits/
+│   ├── abc123.json       # Per-commit history
+│   ├── def456.json
+│   └── ...
+└── trends.json           # Aggregated trends
+```
+
+---
+
+## Priority 3: Report Features
+
+### P3.1 Full CSV Report
+
+**What:** CSV with all mutation details.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../report/CsvReportGenerator.kt` (NEW)
+
+**CSV columns:**
+```
+mutation_id,status,operator,operator_description,className,methodName,lineNumber,
+description,executionTimeMs,strength,subsumedBy,inlined
+```
+
+**Example:**
+```csv
+mut_001,KILLED,CONDITIONALS_BOUNDARY,Boundary: == 0 -> != 0,com.example.Calculator,max,47,Return 0,12,STRONG,,false
+mut_002,SURVIVED,ARITHMETIC,Arithmetic: + -> -,com.example.Calculator,add,32,Return -1,15,STRONG,,false
+mut_003,WEAK,NEGATE_CONDITIONALS,Negate: == -> !=,com.example.Calculator,equals,28,Return true,8,WEAK,,false
+mut_004,SUBSUMED,RETURN_VALS,Return 0,com.example.Calculator,min,52,Return 0,11,STRONG,mut_001,false
+```
+
+### P3.2 Interactive HTML Graph
+
+**What:** Interactive visualization of test-mutant relationships.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../report/MutationGraphGenerator.kt` (NEW)
+- `mutation-core/src/main/resources/templates/mutation-graph.html` (NEW)
+
+**Features:**
+- Force-directed graph layout
+- Nodes: tests (circles) and mutants (squares)
+- Edges: test kills mutant (solid), test doesn't kill mutant (dashed)
+- Color: killed (green), survived (red), weak (yellow), subsumed (gray)
+- Hover: show mutation details
+- Click: filter by test or mutant
+- Export: PNG/SVG
+
+**Implementation:**
+- Use D3.js for graph rendering
+- Generate JSON data from mutation results
+- Embed in HTML template
+
+### P3.3 Per-Class Breakdown
+
+**What:** Show mutation score per class in reports.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../model/MutationReport.kt`
+- `mutation-core/src/main/kotlin/.../report/HtmlReportGenerator.kt`
+
+**Data model:**
+```kotlin
+data class ClassMutationScore(
+    val className: String,
+    val totalMutations: Int,
+    val killedMutations: Int,
+    val survivedMutations: Int,
+    val weakMutations: Int,
+    val subsumedMutations: Int,
+    val score: Int // percentage
+)
+
+data class MutationReport(
+    // ... existing fields
+    val classScores: List<ClassMutationScore>
+)
+```
+
+**HTML report:**
+```html
+<div class="class-scores">
+  <h2>Mutation Scores by Class</h2>
+  <table>
+    <tr><th>Class</th><th>Score</th><th>Killed</th><th>Survived</th><th>Weak</th><th>Subsumed</th></tr>
+    <tr><td>Calculator</td><td>92%</td><td>23</td><td>2</td><td>1</td><td>4</td></tr>
+    <tr><td>StringUtils</td><td>88%</td><td>15</td><td>2</td><td>0</td><td>3</td></tr>
+  </table>
+</div>
+```
+
+### P3.4 Custom Mutators API
+
+**What:** Public interface for users to add operators.
+
+**Files to modify:**
+- `mutation-core/src/main/kotlin/.../mutator/CustomMutator.kt` (NEW)
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt`
+
+**Interface:**
+```kotlin
+interface CustomMutator {
+    val name: String
+    val description: String
+    
+    fun canMutate(methodNode: MethodNode): Boolean
+    fun generateMutations(methodNode: MethodNode): List<MutationInfo>
+    fun applyMutation(methodNode: MethodNode, mutation: MutationInfo): MethodNode
+}
+```
+
+**Registration:**
+```kotlin
+// ServiceLoader pattern
+// META-INF/services/com.github.rodrigotimoteo.mutation.mutator.CustomMutator
+com.example.MyCustomMutator
+
+// Or Gradle DSL
+mutationTest {
+    customOperators.addAll(
+        "com.example.MyCustomMutator"
+    )
+}
+```
+
+---
+
+## Implementation Order
+
+1. **Priority 1: Speed** (4-6 hours)
+   - P1.1 Subsumption detection
+   - P1.2 Weak mutant detection
+   - P1.3 Inlined finally detection
+
+2. **Priority 2: Usability** (3-4 hours)
+   - P2.1 Regex filtering
+   - P2.2 Test ordering
+   - P2.3 Per-commit history tracking
+
+3. **Priority 3: Reports** (3-4 hours)
+   - P3.1 Full CSV report
+   - P3.2 Interactive HTML graph
+   - P3.3 Per-class breakdown
+   - P3.4 Custom mutators API
+
+**Total estimated time:** 10-14 hours
+
+---
+
+## Files to Create/Modify
+
+### New Files
+- `mutation-core/src/main/kotlin/.../report/SubsumptionAnalyzer.kt`
+- `mutation-core/src/main/kotlin/.../engine/WeakMutationAnalyzer.kt`
+- `mutation-core/src/main/kotlin/.../mutator/InlinedFinallyDetector.kt`
+- `mutation-core/src/main/kotlin/.../filter/ClassFilter.kt`
+- `mutation-core/src/main/kotlin/.../engine/TestOrderingStrategy.kt`
+- `mutation-core/src/main/kotlin/.../report/CsvReportGenerator.kt`
+- `mutation-core/src/main/kotlin/.../report/MutationGraphGenerator.kt`
+- `mutation-core/src/main/resources/templates/mutation-graph.html`
+- `mutation-core/src/main/kotlin/.../mutator/CustomMutator.kt`
+
+### Modified Files
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt`
+- `mutation-core/src/main/kotlin/.../model/Mutation.kt`
+- `mutation-core/src/main/kotlin/.../model/MutationReport.kt`
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt`
+- `mutation-core/src/main/kotlin/.../engine/MutationHistoryManager.kt`
+- `mutation-core/src/main/kotlin/.../report/HtmlReportGenerator.kt`
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationPluginExtension.kt`
+
+---
+
+## Verification
+
+After implementation:
+1. Run all tests: `./gradlew test`
+2. Verify subsumption skips redundant mutants
+3. Verify weak mutants detected correctly
+4. Verify inlined finally blocks detected
+5. Verify regex filtering works
+6. Verify test ordering improves speed
+7. Verify history tracks per commit
+8. Verify CSV report generates correctly
+9. Verify HTML graph renders correctly
+10. Verify per-class scores in reports
+11. Verify custom mutators can be registered
