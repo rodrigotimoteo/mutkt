@@ -1380,3 +1380,1039 @@ After implementation:
 5. Verify XML/JSON reports generate correctly
 6. Verify timeout detection catches infinite loops
 7. Verify readable mutation names in reports
+
+---
+
+# EXPANSION 3: Production Readiness
+
+## Decisions (Grilled)
+
+| Decision | Choice |
+|----------|--------|
+| Priority focus | All areas (full production) |
+| CI/CD platform | GitHub Actions |
+| Testing strategy | Full test suite (unit + integration + performance + edge cases) |
+| Documentation scope | Full docs (API, architecture, contributing, changelog, migration) |
+| Security measures | Full security (dependency scanning, code signing, SBOM, vulnerability reporting) |
+| Performance optimization | Full optimization (caching, parallel, memory, profiling) |
+| Compatibility targets | All: Multi-Kotlin, Multi-Gradle, Android, KMP |
+| Developer experience | Full DX (IDE plugins, error messages, progress, validation) |
+| Community features | Full community (contributing, code of conduct, issue/PR templates) |
+| Implementation order | CI/CD → testing → docs → security → performance |
+| Session scope | Everything (full production) |
+
+## Phase 7: CI/CD (GitHub Actions)
+
+### 7.1 Main CI Workflow
+
+**File:** `.github/workflows/ci.yml`
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [17, 21]
+        kotlin: [2.0.0, 2.1.10]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'corretto'
+      - uses: gradle/actions/setup-gradle@v3
+      - run: ./gradlew test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-java${{ matrix.java }}-kotlin${{ matrix.kotlin }}
+          path: build/reports/tests/
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+      - uses: gradle/actions/setup-gradle@v3
+      - run: ./gradlew build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: build/libs/
+
+  code-coverage:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+      - uses: gradle/actions/setup-gradle@v3
+      - run: ./gradlew jacocoTestReport
+      - uses: codecov/codecov-action@v4
+        with:
+          file: build/reports/jacoco/test/jacocoTestReport.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+```
+
+### 7.2 Publish Workflow
+
+**File:** `.github/workflows/publish.yml`
+
+```yaml
+name: Publish
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish'
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+      - uses: gradle/actions/setup-gradle@v3
+      - run: ./gradlew publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+```
+
+### 7.3 Security Scanning Workflow
+
+**File:** `.github/workflows/security.yml`
+
+```yaml
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly on Monday
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+      - uses: gradle/actions/setup-gradle@v3
+      - run: ./gradlew dependencyCheckAnalyze
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: java, kotlin
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+```
+
+### 7.4 Release Workflow
+
+**File:** `.github/workflows/release.yml`
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+      - uses: gradle/actions/setup-gradle@v3
+      - run: ./gradlew build
+      - uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          files: build/libs/*
+```
+
+---
+
+## Phase 8: Testing
+
+### 8.1 Unit Tests for New Features
+
+**Files to create:**
+- `mutation-core/src/test/kotlin/.../mutator/VoidMethodCallMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../mutator/IncrementMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../mutator/BooleanReturnMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../mutator/ConstructorCallMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../mutator/NonVoidMethodCallMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../annotation/SuppressMutationsTest.kt`
+- `mutation-core/src/test/kotlin/.../engine/MutationHistoryManagerTest.kt`
+- `mutation-core/src/test/kotlin/.../report/XmlReportGeneratorTest.kt`
+- `mutation-core/src/test/kotlin/.../report/JsonReportGeneratorTest.kt`
+- `mutation-core/src/test/kotlin/.../report/MutationDescriberTest.kt`
+
+### 8.2 Integration Tests
+
+**File:** `mutation-test-runner/src/test/kotlin/.../runner/FullIntegrationTest.kt`
+
+```kotlin
+class FullIntegrationTest {
+    @Test
+    fun `full mutation testing pipeline works end-to-end`() {
+        // 1. Load class files
+        // 2. Scan for mutations
+        // 3. Generate mutants
+        // 4. Run tests against mutants
+        // 5. Generate report
+        // 6. Verify results
+    }
+
+    @Test
+    fun `incremental analysis skips unchanged classes`() {
+        // 1. Run first analysis
+        // 2. Save history
+        // 3. Run second analysis without changes
+        // 4. Verify cached results used
+    }
+
+    @Test
+    fun `suppression works via annotation`() {
+        // 1. Load class with @SuppressMutations
+        // 2. Scan for mutations
+        // 3. Verify suppressed mutations not generated
+    }
+
+    @Test
+    fun `timeout detection catches infinite loops`() {
+        // 1. Create mutant with infinite loop
+        // 2. Run with timeout
+        // 3. Verify timeout detected
+    }
+}
+```
+
+### 8.3 Performance Tests
+
+**File:** `mutation-core/src/test/kotlin/.../performance/MutationPerformanceTest.kt`
+
+```kotlin
+class MutationPerformanceTest {
+    @Test
+    fun `mutation scanning scales linearly with class count`() {
+        // Measure scanning time for 10, 100, 1000 classes
+        // Verify linear scaling
+    }
+
+    @Test
+    fun `parallel execution improves throughput`() {
+        // Measure single-threaded vs multi-threaded execution
+        // Verify speedup
+    }
+
+    @Test
+    fun `incremental analysis reduces re-analysis time`() {
+        // Measure first run vs subsequent runs
+        // Verify time reduction
+    }
+}
+```
+
+### 8.4 Edge Case Tests
+
+**File:** `mutation-core/src/test/kotlin/.../edge/EdgeCaseTest.kt`
+
+```kotlin
+class EdgeCaseTest {
+    @Test
+    fun `handles empty classes gracefully`() {
+        // Empty class, no methods
+    }
+
+    @Test
+    fun `handles extremely large classes`() {
+        // Class with 1000+ methods
+    }
+
+    @Test
+    fun `handles malformed bytecode`() {
+        // Corrupted class file
+    }
+
+    @Test
+    fun `handles concurrent mutation scanning`() {
+        // Multiple threads scanning same class
+    }
+}
+```
+
+---
+
+## Phase 9: Documentation
+
+### 9.1 API Documentation (KDoc)
+
+**Files to update:**
+- All public classes/functions in `mutation-core`
+- All public classes/functions in `mutation-test-runner`
+- All public classes/functions in `mutation-gradle-plugin`
+
+**Example:**
+```kotlin
+/**
+ * Main mutation engine that applies mutations to class bytecode.
+ *
+ * This engine uses ASM to visit and transform bytecode instructions,
+ * generating mutants for mutation testing analysis.
+ *
+ * Usage:
+ * ```kotlin
+ * val engine = MutationEngine(
+ *     enabledOperators = MutationOperator.ALL_OPERATORS,
+ *     timeoutMs = 30000,
+ *     maxParallelMutants = 4
+ * )
+ *
+ * val report = engine.runMutationTesting(
+ *     classFiles = mapOf("com/example/MyClass" to classBytes),
+ *     testClassNames = listOf("com.example.MyClassTest"),
+ *     testClassBytes = mapOf("com/example/MyClassTest" to testBytes)
+ * )
+ * ```
+ *
+ * @param enabledOperators Set of mutation operators to apply
+ * @param timeoutMs Timeout per mutant in milliseconds
+ * @param maxParallelMutants Maximum number of mutants to test in parallel
+ * @throws IllegalArgumentException if no operators are enabled
+ * @since 0.1.0
+ */
+class MutationEngine(
+    private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
+    private val timeoutMs: Long = 30000,
+    private val maxParallelMutants: Int = Runtime.getRuntime().availableProcessors()
+) {
+    // ...
+}
+```
+
+### 9.2 Architecture Documentation
+
+**File:** `docs/ARCHITECTURE.md`
+
+```markdown
+# Architecture
+
+## Overview
+
+The mutation testing library consists of four modules:
+
+1. **mutation-core** - Core mutation engine
+2. **mutation-test-runner** - JUnit Platform integration
+3. **mutation-gradle-plugin** - Gradle plugin
+4. **mutation-sample** - Example project
+
+## Module Dependencies
+
+```
+mutation-gradle-plugin
+    ↓
+mutation-test-runner
+    ↓
+mutation-core
+```
+
+## Core Components
+
+### Mutator
+- Scans bytecode for mutation points
+- Applies mutations to generate mutants
+- Uses ASM for bytecode manipulation
+
+### MutationEngine
+- Orchestrates mutation testing process
+- Manages parallel execution
+- Handles timeout detection
+
+### MutationHistoryManager
+- Caches mutation results
+- Enables incremental analysis
+- Uses SHA-256 hashing for change detection
+
+### ReportGenerators
+- HTML, XML, JSON report generation
+- Human-readable mutation descriptions
+- Integration with CI/CD systems
+
+## Data Flow
+
+1. Load class files from build output
+2. Scan for mutation points
+3. Generate mutants
+4. Run tests against each mutant
+5. Collect results
+6. Generate reports
+7. Cache results for incremental analysis
+```
+
+### 9.3 Contributing Guide
+
+**File:** `CONTRIBUTING.md`
+
+```markdown
+# Contributing
+
+## Development Setup
+
+1. Clone the repository
+2. Run `./gradlew build` to verify setup
+3. Run `./gradlew test` to run tests
+
+## Code Style
+
+- Follow Kotlin coding conventions
+- Use meaningful variable/function names
+- Add KDoc for public APIs
+- Write tests for new features
+
+## Pull Request Process
+
+1. Create feature branch from `develop`
+2. Make changes
+3. Add tests
+4. Update documentation
+5. Submit PR
+
+## Issue Templates
+
+- Bug report
+- Feature request
+- Performance improvement
+- Documentation improvement
+```
+
+### 9.4 Changelog
+
+**File:** `CHANGELOG.md`
+
+```markdown
+# Changelog
+
+## [0.2.0] - 2024-XX-XX
+
+### Added
+- 5 new mutation operators (VOID_METHOD_CALLS, INCREMENTS, TRUE/FALSE_RETURNS, CONSTRUCTOR_CALLS, NON_VOID_METHOD_CALLS)
+- @SuppressMutations annotation
+- Comment-based line suppression
+- Incremental analysis with MutationHistoryManager
+- XML and JSON report generators
+- MutationDescriber for readable names
+- GitHub Actions CI/CD workflows
+- Full KDoc API documentation
+- Architecture documentation
+- Contributing guide
+- Changelog
+
+### Changed
+- Updated Gradle plugin DSL with new configuration options
+- Improved error messages
+- Enhanced report formatting
+
+### Fixed
+- Fixed timeout detection for infinite loops
+- Fixed incremental analysis caching
+
+## [0.1.0] - 2024-XX-XX
+
+### Added
+- Initial release
+- 7 MVP mutation operators
+- 4 Kotlin-specific operators
+- Gradle plugin with auto-discovery
+- HTML report generation
+- JUnit 5 integration
+```
+
+### 9.5 Migration Guide
+
+**File:** `docs/MIGRATION.md`
+
+```markdown
+# Migration Guide
+
+## From 0.1.0 to 0.2.0
+
+### New Configuration Options
+
+```kotlin
+mutationTest {
+    // New options
+    failOnScoreThreshold.set(80)
+    failOnCoverageThreshold.set(90)
+    maxMutationsPerClass.set(100)
+    enableIncrementalAnalysis.set(true)
+    mutantTimeoutMs.set(10000)
+}
+```
+
+### New Operators
+
+```kotlin
+mutationTest {
+    enabledOperators.addAll(
+        "VOID_METHOD_CALLS",
+        "INCREMENTS",
+        "TRUE_RETURNS",
+        "FALSE_RETURNS",
+        "CONSTRUCTOR_CALLS",
+        "NON_VOID_METHOD_CALLS"
+    )
+}
+```
+
+### Suppression
+
+```kotlin
+// Annotation-based
+@SuppressMutations(reason = "Generated code")
+class BuildConfig { }
+
+// Comment-based
+fun calculate(): Int {
+    return value + 1  // mutflow:ignore
+}
+```
+```
+
+---
+
+## Phase 10: Security
+
+### 10.1 Dependency Scanning
+
+**File:** `build.gradle.kts` (add to root)
+
+```kotlin
+plugins {
+    id("org.ow2.dependency-check") version "9.0.7"
+}
+
+dependencyCheck {
+    failBuildOnCVSS = 7
+    formats = ["HTML", "JSON"]
+    suppressionFile = "dependency-check-suppressions.xml"
+}
+```
+
+### 10.2 Code Signing
+
+**Already implemented** in `build.gradle.kts`:
+```kotlin
+signing {
+    val signingKey = System.getenv("GPG_SIGNING_KEY")
+    val signingPassword = System.getenv("GPG_SIGNING_PASSWORD")
+    if (signingKey != null && signingPassword != null) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+    }
+    sign(publishing.publications["maven"])
+}
+```
+
+### 10.3 SBOM Generation
+
+**File:** `build.gradle.kts` (add to root)
+
+```kotlin
+plugins {
+    id("org.cyclonedx") version "1.8.0"
+}
+
+cyclonedx {
+    schemaVersion = "1.5"
+    includeBom = true
+    includeReport = false
+}
+```
+
+### 10.4 Vulnerability Reporting
+
+**File:** `SECURITY.md`
+
+```markdown
+# Security Policy
+
+## Reporting a Vulnerability
+
+If you discover a security vulnerability, please report it responsibly:
+
+1. Email: security@example.com
+2. Include: Description, steps to reproduce, potential impact
+3. Response: Within 48 hours
+
+## Security Measures
+
+- Dependency scanning with OWASP Dependency-Check
+- Code signing with GPG
+- SBOM generation for supply chain security
+- Regular security audits
+```
+
+---
+
+## Phase 11: Performance Optimization
+
+### 11.1 Caching
+
+**Already implemented** via `MutationHistoryManager`.
+
+### 11.2 Parallel Execution
+
+**Already implemented** via `maxParallelMutants` parameter.
+
+### 11.3 Memory Optimization
+
+**File:** `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt`
+
+```kotlin
+// Add memory-efficient mutant generation
+private fun generateMutantsEfficiently(
+    classFiles: Map<String, ByteArray>
+): Map<String, List<Pair<MutationInfo, ByteArray>>> {
+    return classFiles.map { (className, classBytes) ->
+        val mutator = Mutator(enabledOperators)
+        val mutants = mutator.generateMutants(classBytes)
+        className to mutants
+    }.toMap()
+}
+```
+
+### 11.4 Profiling Support
+
+**File:** `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt`
+
+```kotlin
+// Add profiling metrics
+data class MutationMetrics(
+    val scanTimeMs: Long,
+    val mutantGenerationTimeMs: Long,
+    val testExecutionTimeMs: Long,
+    val reportGenerationTimeMs: Long,
+    val totalTimeMs: Long,
+    val memoryUsedMb: Long
+)
+```
+
+---
+
+## Phase 12: Compatibility
+
+### 12.1 Multi-Kotlin Version Support
+
+**File:** `build.gradle.kts`
+
+```kotlin
+subprojects {
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        kotlinOptions {
+            jvmTarget = "21"
+            // Support multiple Kotlin versions via matrix testing
+        }
+    }
+}
+```
+
+### 12.2 Multi-Gradle Version Support
+
+**File:** `gradle/wrapper/gradle-wrapper.properties`
+
+```properties
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.10-bin.zip
+```
+
+**CI Matrix:**
+```yaml
+strategy:
+  matrix:
+    gradle: [8.0, 8.5, 8.10]
+```
+
+### 12.3 Android Support
+
+**Already supported** via Gradle plugin.
+
+### 12.4 KMP Support
+
+**Already supported** via Kotlin Multiplatform.
+
+---
+
+## Phase 13: Developer Experience
+
+### 13.1 Better Error Messages
+
+**File:** `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt`
+
+```kotlin
+// Add descriptive error messages
+throw IllegalArgumentException(
+    "No mutation operators enabled. " +
+    "Add operators to mutationTest { enabledOperators.addAll(...) } " +
+    "or use MutationOperator.ALL_OPERATORS"
+)
+```
+
+### 13.2 Progress Reporting
+
+**File:** `mutation-gradle-plugin/src/main/kotlin/.../MutationTask.kt`
+
+```kotlin
+// Add progress bar
+val progress = ProgressLogger(project, "Mutation Testing")
+progress.start("Analyzing mutations...")
+
+for ((index, mutation) in mutations.withIndex()) {
+    progress.progress("Testing mutation ${index + 1}/${mutations.size}: ${mutation.description}")
+    // ... test mutation
+}
+
+progress.completed()
+```
+
+### 13.3 Configuration Validation
+
+**File:** `mutation-gradle-plugin/src/main/kotlin/.../MutationPlugin.kt`
+
+```kotlin
+// Validate configuration
+project.afterEvaluate {
+    if (extension.enabledOperators.get().isEmpty()) {
+        project.logger.warn("No mutation operators enabled. Using defaults.")
+        extension.enabledOperators.set(MutationOperator.MVP_OPERATORS.map { it.operatorName }.toSet())
+    }
+
+    if (extension.timeoutMs.get() <= 0) {
+        throw IllegalArgumentException("Timeout must be positive")
+    }
+}
+```
+
+---
+
+## Phase 14: Community Features
+
+### 14.1 Issue Templates
+
+**File:** `.github/ISSUE_TEMPLATE/bug_report.md`
+
+```markdown
+---
+name: Bug report
+about: Create a report to help us improve
+title: ''
+labels: bug
+assignees: ''
+---
+
+**Describe the bug**
+A clear and concise description of what the bug is.
+
+**To Reproduce**
+Steps to reproduce the behavior:
+1. Run '...'
+2. See error
+
+**Expected behavior**
+A clear and concise description of what you expected to happen.
+
+**Environment**
+- OS: [e.g., Ubuntu 22.04]
+- Java version: [e.g., 21]
+- Kotlin version: [e.g., 2.1.10]
+- Gradle version: [e.g., 8.10]
+- Plugin version: [e.g., 0.2.0]
+```
+
+### 14.2 PR Template
+
+**File:** `.github/pull_request_template.md`
+
+```markdown
+## Description
+
+Brief description of changes
+
+## Type of Change
+
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Breaking change
+- [ ] Documentation update
+
+## Testing
+
+- [ ] Unit tests added/updated
+- [ ] Integration tests added/updated
+- [ ] Manual testing performed
+
+## Checklist
+
+- [ ] Code follows project style
+- [ ] Self-reviewed code
+- [ ] Comments added for complex code
+- [ ] Documentation updated
+- [ ] No breaking changes
+```
+
+### 14.3 Code of Conduct
+
+**File:** `CODE_OF_CONDUCT.md`
+
+```markdown
+# Contributor Covenant Code of Conduct
+
+## Our Pledge
+
+We as members, contributors, and leaders pledge to make participation in our
+community a harassment-free experience for everyone, regardless of age, body
+size, visible or invisible disability, ethnicity, sex characteristics, gender
+identity and expression, level of experience, education, socio-economic status,
+nationality, personal appearance, race, religion, or sexual identity
+and orientation.
+
+## Our Standards
+
+Examples of behavior that contributes to a positive environment:
+
+* Using welcoming and inclusive language
+* Being respectful of differing viewpoints and experiences
+* Gracefully accepting constructive criticism
+* Focusing on what is best for the community
+* Showing empathy towards other community members
+
+Examples of unacceptable behavior:
+
+* The use of sexualized language or imagery, and sexual attention or
+  advances of any kind
+* Trolling, insulting or derogatory comments, and personal or political attacks
+* Public or private harassment
+* Publishing others' private information without explicit permission
+* Other conduct which could reasonably be considered inappropriate in a
+  professional setting
+
+## Enforcement Responsibilities
+
+Community leaders are responsible for clarifying and enforcing our standards of
+acceptable behavior and will take appropriate and fair corrective action in
+response to any behavior that they deem inappropriate, threatening, offensive,
+or harmful.
+
+## Scope
+
+This Code of Conduct applies within all community spaces, and also applies when
+an individual is officially representing the community in public spaces.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the community leaders responsible for enforcement at
+[INSERT CONTACT METHOD].
+
+All complaints will be reviewed and investigated promptly and fairly.
+
+All community leaders are obligated to respect the privacy and security of the
+reporter of any incident.
+
+## Enforcement Guidelines
+
+Community leaders will follow these Community Impact Guidelines in determining
+the consequences for any action they deem in violation of this Code of Conduct:
+
+### 1. Correction
+
+**Community Impact**: Use of inappropriate language or other behavior deemed
+unprofessional or unwelcome in the community.
+
+**Consequence**: A private, written warning from community leaders, providing
+clarity around the nature of the violation and an explanation of why the
+behavior was inappropriate. A public apology may be requested.
+
+### 2. Warning
+
+**Community Impact**: A violation through a single incident or series
+of actions.
+
+**Consequence**: A warning with consequences for continued behavior. No
+interaction with the people involved, including unsolicited interaction with
+those enforcing the Code of Conduct, for a specified period of time. This
+includes avoiding interactions in community spaces as well as external channels
+like social media. Violating these terms may lead to a temporary or
+permanent ban.
+
+### 3. Temporary Ban
+
+**Community Impact**: A serious violation of community standards, including
+sustained inappropriate behavior.
+
+**Consequence**: A temporary ban from any sort of interaction or public
+communication with the community for a specified period of time. No public or
+private interaction with the people involved, including unsolicited interaction
+with those enforcing the Code of Conduct, is allowed during this period.
+Violating these terms may lead to a permanent ban.
+
+### 4. Permanent Ban
+
+**Community Impact**: Demonstrating a pattern of violation of community
+standards, including sustained inappropriate behavior, harassment of an
+individual, or aggression toward or disparagement of classes of individuals.
+
+**Consequence**: A permanent ban from any sort of public interaction within
+the community.
+
+## Attribution
+
+This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 2.0,
+available at https://www.contributor-covenant.org/version/2/0/code_of_conduct.html.
+
+Community Impact Guidelines were inspired by [Mozilla's code of conduct
+enforcement ladder](https://github.com/mozilla/diversity).
+
+[homepage]: https://www.contributor-covenant.org
+
+For answers to common questions about this code of conduct, see the FAQ at
+https://www.contributor-covenant.org/faq. Translations are available at
+https://www.contributor-covenant.org/translations.
+```
+
+---
+
+## Implementation Order
+
+1. **Phase 7: CI/CD** (2-3 hours)
+   - Create GitHub Actions workflows
+   - Set up dependency scanning
+   - Configure code signing
+
+2. **Phase 8: Testing** (3-4 hours)
+   - Write unit tests for new features
+   - Write integration tests
+   - Write performance tests
+   - Write edge case tests
+
+3. **Phase 9: Documentation** (2-3 hours)
+   - Add KDoc to all public APIs
+   - Write architecture documentation
+   - Write contributing guide
+   - Write changelog
+   - Write migration guide
+
+4. **Phase 10: Security** (1-2 hours)
+   - Add dependency scanning
+   - Add SBOM generation
+   - Write security policy
+
+5. **Phase 11: Performance** (1-2 hours)
+   - Add memory optimization
+   - Add profiling support
+   - Optimize parallel execution
+
+6. **Phase 12: Compatibility** (1-2 hours)
+   - Test multi-Kotlin version support
+   - Test multi-Gradle version support
+   - Verify Android support
+   - Verify KMP support
+
+7. **Phase 13: Developer Experience** (1-2 hours)
+   - Improve error messages
+   - Add progress reporting
+   - Add configuration validation
+
+8. **Phase 14: Community** (1-2 hours)
+   - Create issue templates
+   - Create PR template
+   - Write code of conduct
+
+**Total estimated time:** 12-18 hours
+
+---
+
+## Files to Create/Modify
+
+### New Files
+- `.github/workflows/ci.yml`
+- `.github/workflows/publish.yml`
+- `.github/workflows/security.yml`
+- `.github/workflows/release.yml`
+- `.github/ISSUE_TEMPLATE/bug_report.md`
+- `.github/ISSUE_TEMPLATE/feature_request.md`
+- `.github/pull_request_template.md`
+- `docs/ARCHITECTURE.md`
+- `docs/MIGRATION.md`
+- `CONTRIBUTING.md`
+- `CHANGELOG.md`
+- `SECURITY.md`
+- `CODE_OF_CONDUCT.md`
+- `dependency-check-suppressions.xml`
+
+### Modified Files
+- `build.gradle.kts` (add dependency-check, cyclonedx plugins)
+- All source files (add KDoc)
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationTask.kt` (add progress reporting)
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationPlugin.kt` (add validation)
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt` (add metrics, error messages)
+
+---
+
+## Verification
+
+After implementation:
+1. Run all tests: `./gradlew test`
+2. Run dependency check: `./gradlew dependencyCheckAnalyze`
+3. Generate SBOM: `./gradlew cyclonedx`
+4. Verify CI workflows work
+5. Verify documentation renders correctly
+6. Verify security scanning passes
+7. Verify performance benchmarks
