@@ -1,0 +1,40 @@
+package com.github.rodrigotimoteo.mutation.annotation
+
+/**
+ * Annotation to mark a test class for mutation testing.
+ *
+ * When combined with MutKtExtension, this annotation activates
+ * automatic multi-run execution where each run uses a different mutant.
+ *
+ * Example:
+ * ```
+ * @MutKtTest
+ * class CalculatorTest {
+ *     @Test
+ *     fun testAdd() = MutKt.underTest {
+ *         val calc = Calculator()
+ *         assertEquals(4, calc.add(2, 2))
+ *     }
+ * }
+ * ```
+ */
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class MutKtTest(
+    /**
+     * Mutation operators to enable. Empty means all operators.
+     */
+    val operators: Array<String> = [],
+    /**
+     * Timeout in milliseconds for each mutation execution.
+     */
+    val timeoutMs: Long = 30_000L,
+    /**
+     * Maximum mutations to run (0 = unlimited).
+     */
+    val maxMutations: Int = 0,
+    /**
+     * Whether to automatically reset mutation state between runs.
+     */
+    val autoReset: Boolean = true,
+)
