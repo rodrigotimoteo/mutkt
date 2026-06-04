@@ -1,0 +1,47 @@
+[versions]
+kotlin = "2.1.10"
+jvmTarget = "21"
+kover = "0.7.6"
+detekt = "1.23.7"
+ktlint = "12.1.1"
+dokka = "1.9.20"
+junit = "5.10.2"
+junitPlatform = "1.10.2"
+assertj = "3.25.3"
+asm = "9.7"
+slf4j = "2.0.9"
+jacoco = "0.8.12"
+
+[libraries]
+# Kotlin
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+
+# ASM
+asm-core = { module = "org.ow2.asm:asm", version.ref = "asm" }
+asm-commons = { module = "org.ow2.asm:asm-commons", version.ref = "asm" }
+asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "asm" }
+
+# JUnit
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitPlatform" }
+
+# Test
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+
+# Logging
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+
+# JaCoCo
+jacoco-core = { module = "org.jacoco:org.jacoco.core", version.ref = "jacoco" }
+jacoco-agent = { module = "org.jacoco:org.jacoco.agent", version.ref = "jacoco" }
+jacoco-report = { module = "org.jacoco:org.jacoco.report", version.ref = "jacoco" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

@@ -69,10 +69,10 @@ object HtmlReportGenerator {
                             else -> ""
                         }
                     appendLine("    <tr>")
-                    appendLine("      <td>${result.mutation.id}</td>")
-                    appendLine("      <td>${result.mutation.operator.operatorName}</td>")
-                    appendLine("      <td>${result.mutation.className}</td>")
-                    appendLine("      <td>${result.mutation.methodName}</td>")
+                    appendLine("      <td>${escapeHtml(result.mutation.id)}</td>")
+                    appendLine("      <td>${escapeHtml(result.mutation.operator.operatorName)}</td>")
+                    appendLine("      <td>${escapeHtml(result.mutation.className)}</td>")
+                    appendLine("      <td>${escapeHtml(result.mutation.methodName)}</td>")
                     appendLine("      <td>${result.mutation.lineNumber}</td>")
                     appendLine("      <td class=\"$statusClass\">${result.status}</td>")
                     appendLine("    </tr>")
@@ -87,6 +87,13 @@ object HtmlReportGenerator {
         file.writeText(html)
         return file
     }
+
+    private fun escapeHtml(text: String): String =
+        text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
 
     private fun StringBuilder.appendSummaryStat(
         label: String,

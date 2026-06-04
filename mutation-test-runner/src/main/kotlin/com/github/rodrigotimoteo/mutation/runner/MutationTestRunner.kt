@@ -54,18 +54,19 @@ class MutationTestRunner(
         val result = mutableMapOf<String, ByteArray>()
         if (!dir.exists() || !dir.isDirectory) return result
 
-        Files.walk(dir.toPath())
-            .filter { it.toString().endsWith(".class") }
-            .forEach { path ->
-                val relativePath = dir.toPath().relativize(path)
-                val className =
-                    relativePath.toString()
-                        .replace(".class", "")
-                        .replace("/", ".")
-                        .replace("\\", ".")
-                val bytes = Files.readAllBytes(path)
-                result[className.replace('.', '/')] = bytes
-            }
+        Files.walk(dir.toPath()).use { stream ->
+            stream.filter { it.toString().endsWith(".class") }
+                .forEach { path ->
+                    val relativePath = dir.toPath().relativize(path)
+                    val className =
+                        relativePath.toString()
+                            .replace(".class", "")
+                            .replace("/", ".")
+                            .replace("\\", ".")
+                    val bytes = Files.readAllBytes(path)
+                    result[className.replace('.', '/')] = bytes
+                }
+        }
         return result
     }
 
@@ -73,19 +74,20 @@ class MutationTestRunner(
         val result = mutableListOf<String>()
         if (!dir.exists() || !dir.isDirectory) return result
 
-        Files.walk(dir.toPath())
-            .filter { it.toString().endsWith(".class") }
-            .forEach { path ->
-                val relativePath = dir.toPath().relativize(path)
-                val className =
-                    relativePath.toString()
-                        .replace(".class", "")
-                        .replace("/", ".")
-                        .replace("\\", ".")
-                if (className.endsWith("Test") || className.contains("test")) {
-                    result.add(className)
+        Files.walk(dir.toPath()).use { stream ->
+            stream.filter { it.toString().endsWith(".class") }
+                .forEach { path ->
+                    val relativePath = dir.toPath().relativize(path)
+                    val className =
+                        relativePath.toString()
+                            .replace(".class", "")
+                            .replace("/", ".")
+                            .replace("\\", ".")
+                    if (className.endsWith("Test") || className.contains("test")) {
+                        result.add(className)
+                    }
                 }
-            }
+        }
         return result
     }
 }

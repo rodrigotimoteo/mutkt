@@ -1,8 +1,9 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.1.10" apply false
-    id("org.jetbrains.kotlinx.kover") version "0.7.6" apply false
-    id("io.gitlab.arturbosch.detekt") version "1.23.7" apply false
-    id("org.jlleitschuh.gradle.ktlint") version "12.1.1" apply false
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kover) apply false
+    alias(libs.plugins.dokka) apply false
+    alias(libs.plugins.detekt) apply false
+    alias(libs.plugins.ktlint) apply false
 }
 
 allprojects {
@@ -16,13 +17,13 @@ allprojects {
 }
 
 subprojects {
-    // Skip publishing for sample module
     if (name == "mutation-sample") return@subprojects
 
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
     apply(plugin = "org.jetbrains.kotlinx.kover")
+    apply(plugin = "org.jetbrains.dokka")
     apply(plugin = "io.gitlab.arturbosch.detekt")
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
@@ -93,16 +94,15 @@ subprojects {
             val publishing = extensions.getByType<PublishingExtension>()
             sign(publishing.publications["maven"])
         } else {
-            // Skip signing if no key provided
             isRequired = false
         }
     }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         kotlinOptions {
-            jvmTarget = "21"
+            jvmTarget = libs.versions.jvmTarget.get()
             freeCompilerArgs += listOf(
-                "-Xopt-in=kotlin.RequiresOptIn",
+                "-opt-in=kotlin.RequiresOptIn",
                 "-Xjsr305=strict"
             )
         }

@@ -54,6 +54,12 @@ abstract class MutationTask : DefaultTask() {
 
     @Input
     @Optional
+    val reportFormats: SetProperty<String> =
+        project.objects.setProperty(String::class.java)
+            .convention(setOf("html"))
+
+    @Input
+    @Optional
     val outputDir: Property<String> =
         project.objects.property(String::class.java)
             .convention("build/reports/mutation")
@@ -170,16 +176,37 @@ abstract class MutationTask : DefaultTask() {
 
     private fun generateReports(report: MutationReport) {
         val outputDirPath = outputDir.get()
-        val outputDirFile = File(project.rootDir, outputDirPath)
+        val outputDirFile =
+            if (File(outputDirPath).isAbsolute) {
+                File(outputDirPath)
+            } else {
+                File(project.buildDir, outputDirPath.removePrefix("build/"))
+            }
         outputDirFile.mkdirs()
 
-        // Generate HTML report
-        val htmlReport = HtmlReportGenerator.generate(report, outputDirFile)
-        logger.lifecycle("HTML report: $htmlReport")
+        val formats = reportFormats.get().ifEmpty { setOf(reportFormat.get()) }
 
-        // Generate console report
-        val consoleReport = ConsoleReportGenerator.generate(report)
-        println(consoleReport)
+        for (format in formats) {
+            when (format.lowercase()) {
+                "html" -> {
+                    val htmlReport = HtmlReportGenerator.generate(report, outputDirFile)
+                    logger.lifecycle("HTML report: $htmlReport")
+                }
+                "console" -> {
+                    val consoleReport = ConsoleReportGenerator.generate(report)
+                    println(consoleReport)
+                }
+                else -> {
+                    logger.warn("Unknown report format: $format (supported: html, console)")
+                }
+            }
+        }
+
+        // Always generate console output
+        if (!formats.contains("console")) {
+            val consoleReport = ConsoleReportGenerator.generate(report)
+            println(consoleReport)
+        }
     }
 
     private fun printSummary(report: MutationReport) {

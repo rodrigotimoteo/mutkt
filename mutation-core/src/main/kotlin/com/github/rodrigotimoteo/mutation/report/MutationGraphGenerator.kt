@@ -150,7 +150,7 @@ object MutationGraphGenerator {
         // Add test nodes
         val testClasses = report.results.map { it.mutation.className }.distinct()
         for (testClass in testClasses) {
-            nodes.add("{\"id\": \"$testClass\", \"type\": \"test\"}")
+            nodes.add("""{"id": "${escapeJson(testClass)}", "type": "test"}""")
         }
 
         // Add mutation nodes
@@ -161,7 +161,7 @@ object MutationGraphGenerator {
                     result.isSurvived -> "survived"
                     else -> "error"
                 }
-            nodes.add("{\"id\": \"${result.mutation.id}\", \"type\": \"mutation\", \"status\": \"$status\"}")
+            nodes.add("""{"id": "${escapeJson(result.mutation.id)}", "type": "mutation", "status": "$status"}""")
         }
 
         return "[${nodes.joinToString(",")}]"
@@ -172,9 +172,21 @@ object MutationGraphGenerator {
 
         for (result in report.results) {
             val status = if (result.isKilled) "killed" else "survived"
-            edges.add("{\"source\": \"${result.mutation.className}\", \"target\": \"${result.mutation.id}\", \"status\": \"$status\"}")
+            edges.add(
+                """{"source": "${escapeJson(
+                    result.mutation.className,
+                )}", "target": "${escapeJson(result.mutation.id)}", "status": "$status"}""",
+            )
         }
 
         return "[${edges.joinToString(",")}]"
     }
+
+    private fun escapeJson(text: String): String =
+        text
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
 }

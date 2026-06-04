@@ -11,21 +11,38 @@ import java.util.concurrent.atomic.AtomicLong
 object MutationRegistry {
     private val active = AtomicBoolean(false)
     private val threads = ConcurrentHashMap<Long, ThreadState>()
+    private val classThreads = ConcurrentHashMap<String, MutableSet<Long>>()
 
     private val timeoutMs = AtomicLong(30_000L)
 
     class ThreadState {
         val mutationsEnabled = AtomicBoolean(true)
-        var currentMutationIndex = AtomicLong(0)
-        val triggeredMutations = mutableSetOf<String>()
+        val startTimeMs = AtomicLong(0)
+        val triggeredMutations = ConcurrentHashMap.newKeySet<String>()
     }
 
     /**
      * Get or create state for current thread.
      */
     fun current(): ThreadState {
-        return threads.computeIfAbsent(Thread.currentThread().id) {
+        return threads.computeIfAbsent(Thread.currentThread().threadId()) {
             ThreadState()
+        }
+    }
+
+    /**
+     * Begin tracking mutations for a test class.
+     */
+    fun beginClass(className: String) {
+        classThreads.computeIfAbsent(className) { ConcurrentHashMap.newKeySet() }
+    }
+
+    /**
+     * Reset state for a specific test class (thread-safe).
+     */
+    fun resetClass(className: String) {
+        classThreads.remove(className)?.forEach { threadId ->
+            threads.remove(threadId)
         }
     }
 
@@ -65,9 +82,16 @@ object MutationRegistry {
      * Returns true if current thread has been running longer than the timeout.
      */
     fun checkTimeout(): Boolean {
-        val state = threads[Thread.currentThread().id] ?: return false
-        val elapsed = System.currentTimeMillis() - state.currentMutationIndex.get()
+        val state = threads[Thread.currentThread().threadId()] ?: return false
+        val elapsed = System.currentTimeMillis() - state.startTimeMs.get()
         return elapsed > timeoutMs.get()
+    }
+
+    /**
+     * Mark the start time for the current mutation.
+     */
+    fun markStartTime() {
+        current().startTimeMs.set(System.currentTimeMillis())
     }
 
     /**
@@ -89,12 +113,13 @@ object MutationRegistry {
      */
     fun reset() {
         threads.clear()
+        classThreads.clear()
     }
 
     /**
      * Clean up state for the current thread.
      */
     fun cleanup() {
-        threads.remove(Thread.currentThread().id)
+        threads.remove(Thread.currentThread().threadId())
     }
 }

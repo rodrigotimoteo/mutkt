@@ -1,13 +1,14 @@
 package com.github.rodrigotimoteo.mutation.coverage
 
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
-import org.jacoco.core.data.ExecutionDataStore
-import org.jacoco.core.tools.ExecFileLoader
 import java.io.File
 
 /**
- * Analyzes JaCoCo coverage data to map tests to mutations.
+ * Analyzes coverage data to map tests to mutations.
  * Used for coverage-guided test selection (only run tests that cover a mutation).
+ *
+ * Currently a pass-through stub. When Kover generates .exec files,
+ * add JaCoCo dependency back to read them for real coverage filtering.
  */
 class CoverageAnalyzer {
     data class TestCoverage(
@@ -22,26 +23,23 @@ class CoverageAnalyzer {
     )
 
     /**
-     * Loads JaCoCo execution data from .exec file.
+     * Placeholder for loading execution data.
+     * Replace with JaCoCo's ExecFileLoader when implementing real coverage filtering.
      */
-    fun loadExecutionData(execFile: File): ExecutionDataStore {
-        val loader = ExecFileLoader()
-        loader.load(execFile)
-        return loader.executionDataStore
+    fun loadExecutionData(execFile: File): Map<String, Any> {
+        return emptyMap()
     }
 
     /**
      * Analyzes coverage for a specific class and maps mutations to covering tests.
-     * Simplified implementation for MVP.
+     * Pass-through: treats all mutations as covered until real JaCoCo integration.
      */
     fun analyzeCoverage(
         classBytes: ByteArray,
         className: String,
-        executionData: ExecutionDataStore,
+        executionData: Map<String, Any>,
         mutations: List<MutationInfo>,
     ): List<MutationCoverage> {
-        // For MVP, just return all mutations with empty covering tests
-        // Full implementation would use JaCoCo's analysis APIs
-        return mutations.map { MutationCoverage(it, emptyList()) }
+        return mutations.map { MutationCoverage(it, listOf("all")) }
     }
 }

@@ -1,29 +1,23 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.1.10"
+    alias(libs.plugins.kotlin.jvm)
 }
 
 dependencies {
     implementation(project(":mutation-core"))
 
     // JUnit Platform for test execution
-    implementation("org.junit.platform:junit-platform-launcher:1.10.2")
-    implementation("org.junit.platform:junit-platform-engine:1.10.2")
-    implementation("org.junit.jupiter:junit-jupiter-engine:5.10.2")
-
-    // Kotlin test support
-    implementation("org.jetbrains.kotlin:kotlin-test-junit5:2.1.10")
+    implementation(libs.junit.platform.launcher)
+    implementation(libs.junit.jupiter)
 
     // Logging
-    implementation("org.slf4j:slf4j-api:2.0.13")
-    implementation("ch.qos.logback:logback-classic:1.5.12")
+    implementation(libs.slf4j.api)
 
     // Testing
-    testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    testImplementation("org.assertj:assertj-core:3.25.3")
-    testImplementation("org.mockito:mockito-core:5.12.0")
-    testImplementation("org.ow2.asm:asm:9.7.1")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.assertj.core)
+    testImplementation(libs.asm.core)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 kotlin {
@@ -31,7 +25,7 @@ kotlin {
     compilerOptions {
         freeCompilerArgs.addAll(
             listOf(
-                "-Xopt-in=kotlin.RequiresOptIn",
+                "-opt-in=kotlin.RequiresOptIn",
                 "-Xjsr305=strict",
             ),
         )

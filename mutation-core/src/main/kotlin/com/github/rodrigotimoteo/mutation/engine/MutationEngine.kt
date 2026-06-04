@@ -76,6 +76,11 @@ class MutationEngine(
         coverageExecFile: File,
     ): List<Pair<MutationInfo, ByteArray>> {
         val executionData = coverageAnalyzer.loadExecutionData(coverageExecFile)
+        if (executionData.isEmpty()) {
+            logger.warn("Empty coverage data, skipping coverage filtering")
+            return allMutations
+        }
+
         val filtered = mutableListOf<Pair<MutationInfo, ByteArray>>()
 
         for ((mutation, mutatedBytes) in allMutations) {
@@ -106,24 +111,41 @@ class MutationEngine(
 
         try {
             val futures =
-                mutations.map { (mutation, mutatedBytes) ->
-                    executor.submit(
-                        Callable {
-                            runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames)
-                        },
-                    )
+                mutations.mapIndexed { index, (mutation, mutatedBytes) ->
+                    index to
+                        executor.submit(
+                            Callable {
+                                runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames)
+                            },
+                        )
                 }
 
-            for (future in futures) {
+            for ((index, future) in futures) {
                 try {
                     val result = future.get(timeoutMs, TimeUnit.MILLISECONDS) as MutationResult
                     results.add(result)
-                } catch (e: Exception) {
-                    logger.error("Mutant execution failed", e)
-                    val mutation = mutations[futures.indexOf(future)].first
+                } catch (e: java.util.concurrent.TimeoutException) {
+                    future.cancel(true)
                     results.add(
                         MutationResult(
-                            mutation = toMutation(mutation),
+                            mutation = toMutation(mutations[index].first),
+                            status = MutationStatus.TIMEOUT,
+                            executionTimeMs = timeoutMs,
+                            errorMessage = "Timeout after ${timeoutMs}ms",
+                        ),
+                    )
+                } catch (e: java.util.concurrent.ExecutionException) {
+                    results.add(
+                        MutationResult(
+                            mutation = toMutation(mutations[index].first),
+                            status = MutationStatus.ERROR,
+                            errorMessage = "${e.cause?.javaClass?.simpleName}: ${e.cause?.message}",
+                        ),
+                    )
+                } catch (e: Exception) {
+                    results.add(
+                        MutationResult(
+                            mutation = toMutation(mutations[index].first),
                             status = MutationStatus.ERROR,
                             errorMessage = e.message,
                         ),
@@ -132,7 +154,10 @@ class MutationEngine(
             }
         } finally {
             executor.shutdown()
-            executor.awaitTermination(10, TimeUnit.SECONDS)
+            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                executor.shutdownNow()
+                executor.awaitTermination(5, TimeUnit.SECONDS)
+            }
         }
 
         return results
@@ -146,14 +171,11 @@ class MutationEngine(
     ): MutationResult {
         val startTime = System.currentTimeMillis()
 
-        // Create classloader with mutated class
-        val mutatedClassFiles = classFiles.toMutableMap()
-        mutatedClassFiles[mutation.className.replace('.', '/')] = mutatedBytes
-
+        // Don't pre-mutate — let MutantClassLoader apply the mutation
         val classLoader =
             MutantClassLoaderFactory.create(
                 this.javaClass.classLoader,
-                mutatedClassFiles,
+                classFiles,
                 mutation,
                 mutator,
             )

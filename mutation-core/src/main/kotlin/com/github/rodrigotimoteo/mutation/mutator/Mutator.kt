@@ -788,10 +788,10 @@ private object ArithmeticMutator {
             Opcodes.DMUL -> Opcodes.DDIV
             Opcodes.DDIV -> Opcodes.DMUL
             Opcodes.DREM -> Opcodes.DMUL
-            Opcodes.INEG -> Opcodes.NOP
-            Opcodes.LNEG -> Opcodes.NOP
-            Opcodes.FNEG -> Opcodes.NOP
-            Opcodes.DNEG -> Opcodes.NOP
+            Opcodes.INEG -> Opcodes.INEG // Skip unary negation — stack-unsafe to replace with NOP
+            Opcodes.LNEG -> Opcodes.LNEG
+            Opcodes.FNEG -> Opcodes.FNEG
+            Opcodes.DNEG -> Opcodes.DNEG
             else -> opcode
         }
 }

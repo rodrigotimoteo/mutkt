@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.lang.reflect.Method
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * JUnit 5 extension for mutation testing.
@@ -34,8 +35,8 @@ class MutKtExtension : InvocationInterceptor {
     private val logger = LoggerFactory.getLogger(MutKtExtension::class.java)
 
     companion object {
-        private var triggerCount = 0
-        private var skipCount = 0
+        private val triggerCount = AtomicInteger(0)
+        private val skipCount = AtomicInteger(0)
     }
 
     override fun interceptBeforeAllMethod(
@@ -88,8 +89,8 @@ class MutKtExtension : InvocationInterceptor {
             sb.appendLine("  MutKt Mutation Testing Report")
             sb.appendLine("=".repeat(60))
             sb.appendLine("  Triggered mutations: ${triggered.size}")
-            sb.appendLine("  Total triggers: $triggerCount")
-            sb.appendLine("  Total skips: $skipCount")
+            sb.appendLine("  Total triggers: ${triggerCount.get()}")
+            sb.appendLine("  Total skips: ${skipCount.get()}")
             sb.appendLine("=".repeat(60))
             logger.info(sb.toString())
 
@@ -99,8 +100,8 @@ class MutKtExtension : InvocationInterceptor {
         } finally {
             MutationRegistry.disable()
             MutationRegistry.reset()
-            triggerCount = 0
-            skipCount = 0
+            triggerCount.set(0)
+            skipCount.set(0)
         }
 
         invocation.proceed()
@@ -112,14 +113,14 @@ class MutKtExtension : InvocationInterceptor {
         extensionContext: ExtensionContext,
     ) {
         if (!MutationRegistry.isActive()) {
-            skipCount++
+            skipCount.incrementAndGet()
             invocation.proceed()
             return
         }
 
-        triggerCount++
+        triggerCount.incrementAndGet()
         val state = MutationRegistry.current()
-        state.currentMutationIndex.set(System.currentTimeMillis())
+        state.startTimeMs.set(System.currentTimeMillis())
 
         try {
             invocation.proceed()
@@ -147,17 +148,18 @@ class MutKtExtension : InvocationInterceptor {
     private fun scanClasses(): Map<String, ByteArray> {
         val dir = findClassesDir() ?: return emptyMap()
         val result = mutableMapOf<String, ByteArray>()
-        Files.walk(dir.toPath())
-            .filter { it.toString().endsWith(".class") }
-            .forEach { path ->
-                val relativePath = dir.toPath().relativize(path)
-                val className =
-                    relativePath.toString()
-                        .replace(".class", "")
-                        .replace("/", ".")
-                        .replace("\\", ".")
-                result[className.replace('.', '/')] = Files.readAllBytes(path)
-            }
+        Files.walk(dir.toPath()).use { stream ->
+            stream.filter { it.toString().endsWith(".class") }
+                .forEach { path ->
+                    val relativePath = dir.toPath().relativize(path)
+                    val className =
+                        relativePath.toString()
+                            .replace(".class", "")
+                            .replace("/", ".")
+                            .replace("\\", ".")
+                    result[className.replace('.', '/')] = Files.readAllBytes(path)
+                }
+        }
         return result
     }
 
