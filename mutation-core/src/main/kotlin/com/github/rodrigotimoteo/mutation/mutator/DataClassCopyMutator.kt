@@ -19,7 +19,6 @@ import org.objectweb.asm.Opcodes
  * - copy(age = 0) → zero age
  */
 object DataClassCopyMutator {
-
     /**
      * Checks if a class is a data class by examining its methods.
      * Data classes have copy(), componentN(), toString(), hashCode(), equals().
@@ -47,7 +46,7 @@ object DataClassCopyMutator {
     fun generateMutations(
         className: String,
         method: MethodInfo,
-        lineNumber: Int
+        lineNumber: Int,
     ): List<MutationInfo> {
         val mutations = mutableListOf<MutationInfo>()
 
@@ -63,21 +62,24 @@ object DataClassCopyMutator {
 
             // Create mutation info for replacing this parameter with default
             val defaultValue = getDefaultValue(paramType)
-            mutations.add(MutationInfo(
-                operator = MutationOperator.DATA_CLASS_COPY,
-                className = className,
-                methodName = method.name,
-                methodDescriptor = method.descriptor,
-                lineNumber = lineNumber,
-                description = "Copy param $i: ${paramType.className} -> $defaultValue",
-                originalOpcode = Opcodes.INVOKEVIRTUAL,
-                mutatedOpcode = Opcodes.INVOKEVIRTUAL,
-                metadata = mapOf(
-                    "parameterIndex" to i.toString(),
-                    "parameterType" to paramType.descriptor,
-                    "defaultValue" to defaultValue
-                )
-            ))
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.DATA_CLASS_COPY,
+                    className = className,
+                    methodName = method.name,
+                    methodDescriptor = method.descriptor,
+                    lineNumber = lineNumber,
+                    description = "Copy param $i: ${paramType.className} -> $defaultValue",
+                    originalOpcode = Opcodes.INVOKEVIRTUAL,
+                    mutatedOpcode = Opcodes.INVOKEVIRTUAL,
+                    metadata =
+                        mapOf(
+                            "parameterIndex" to i.toString(),
+                            "parameterType" to paramType.descriptor,
+                            "defaultValue" to defaultValue,
+                        ),
+                ),
+            )
         }
 
         return mutations
@@ -97,8 +99,11 @@ object DataClassCopyMutator {
             org.objectweb.asm.Type.DOUBLE -> "0.0"
             org.objectweb.asm.Type.ARRAY -> "[]"
             org.objectweb.asm.Type.OBJECT -> {
-                if (type.className == "java.lang.String") "\"\""
-                else "null"
+                if (type.className == "java.lang.String") {
+                    "\"\""
+                } else {
+                    "null"
+                }
             }
             else -> "null"
         }
@@ -112,7 +117,7 @@ data class MethodInfo(
     val name: String,
     val descriptor: String,
     val access: Int,
-    val signature: String? = null
+    val signature: String? = null,
 ) {
     val isStatic: Boolean get() = (access and Opcodes.ACC_STATIC) != 0
     val isSynthetic: Boolean get() = (access and Opcodes.ACC_SYNTHETIC) != 0

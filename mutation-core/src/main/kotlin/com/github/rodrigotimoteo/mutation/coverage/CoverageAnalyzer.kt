@@ -3,7 +3,6 @@ package com.github.rodrigotimoteo.mutation.coverage
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import org.jacoco.core.data.ExecutionDataStore
 import org.jacoco.core.tools.ExecFileLoader
-
 import java.io.File
 
 /**
@@ -11,16 +10,15 @@ import java.io.File
  * Used for coverage-guided test selection (only run tests that cover a mutation).
  */
 class CoverageAnalyzer {
-
     data class TestCoverage(
         val testClassName: String,
         val coveredLines: Set<Int>,
-        val coveredMethods: Set<String>
+        val coveredMethods: Set<String>,
     )
 
     data class MutationCoverage(
         val mutation: MutationInfo,
-        val coveringTests: List<String>
+        val coveringTests: List<String>,
     )
 
     /**
@@ -40,7 +38,7 @@ class CoverageAnalyzer {
         classBytes: ByteArray,
         className: String,
         executionData: ExecutionDataStore,
-        mutations: List<MutationInfo>
+        mutations: List<MutationInfo>,
     ): List<MutationCoverage> {
         // For MVP, just return all mutations with empty covering tests
         // Full implementation would use JaCoCo's analysis APIs

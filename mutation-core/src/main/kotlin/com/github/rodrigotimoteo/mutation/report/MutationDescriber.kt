@@ -8,7 +8,6 @@ import org.objectweb.asm.Opcodes
  * Provides human-readable descriptions for mutations.
  */
 object MutationDescriber {
-
     /**
      * Get a readable description for a mutation.
      */

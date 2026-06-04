@@ -12,5 +12,5 @@ data class MutationInfo(
     val description: String,
     val originalOpcode: Int,
     val mutatedOpcode: Int,
-    val metadata: Map<String, String> = emptyMap()
+    val metadata: Map<String, String> = emptyMap(),
 )

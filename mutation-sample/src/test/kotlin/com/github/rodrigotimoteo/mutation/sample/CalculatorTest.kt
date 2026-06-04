@@ -11,7 +11,6 @@ import kotlin.test.assertTrue
  * These tests should KILL most mutants.
  */
 class CalculatorTest {
-
     private val calc = Calculator()
 
     @Test
@@ -175,9 +174,9 @@ class CalculatorTest {
 
     @Test
     fun `processWithHelper should add then multiply`() {
-        assertEquals(10, calc.processWithHelper(2, 3))  // (2+3)*2 = 10
-        assertEquals(6, calc.processWithHelper(1, 2))   // (1+2)*2 = 6
-        assertEquals(0, calc.processWithHelper(-1, 1))  // (-1+1)*2 = 0
+        assertEquals(10, calc.processWithHelper(2, 3)) // (2+3)*2 = 10
+        assertEquals(6, calc.processWithHelper(1, 2)) // (1+2)*2 = 6
+        assertEquals(0, calc.processWithHelper(-1, 1)) // (-1+1)*2 = 0
     }
 }
 

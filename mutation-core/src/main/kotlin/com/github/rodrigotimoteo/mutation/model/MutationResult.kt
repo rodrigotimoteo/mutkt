@@ -7,7 +7,7 @@ data class MutationResult(
     val mutation: Mutation,
     val status: MutationStatus,
     val executionTimeMs: Long = 0,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 ) {
     val isKilled: Boolean get() = status == MutationStatus.KILLED
     val isSurvived: Boolean get() = status == MutationStatus.SURVIVED
@@ -23,7 +23,7 @@ data class ClassMutationScore(
     val survivedMutations: Int,
     val weakMutations: Int = 0,
     val subsumedMutations: Int = 0,
-    val score: Int = if (totalMutations > 0) (killedMutations * 100) / totalMutations else 0
+    val score: Int = if (totalMutations > 0) (killedMutations * 100) / totalMutations else 0,
 )
 
 /**
@@ -37,7 +37,7 @@ data class MutationReport(
     val errorMutations: Int,
     val timeoutMutations: Int,
     val noCoverageMutations: Int,
-    val totalExecutionTimeMs: Long
+    val totalExecutionTimeMs: Long,
 ) {
     val killedPercentage: Int get() =
         if (totalMutations > 0) (killedMutations * 100) / totalMutations else 0
@@ -56,7 +56,7 @@ data class MutationReport(
                     className = className,
                     totalMutations = classResults.size,
                     killedMutations = classResults.count { it.isKilled },
-                    survivedMutations = classResults.count { it.isSurvived }
+                    survivedMutations = classResults.count { it.isSurvived },
                 )
             }
             .sortedByDescending { it.score }

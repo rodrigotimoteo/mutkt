@@ -9,17 +9,20 @@ import java.security.MessageDigest
  * Caches mutation results to avoid re-running analysis on unchanged code.
  */
 class MutationHistoryManager(
-    private val historyFile: File = File(".mutation-history")
+    private val historyFile: File = File(".mutation-history"),
 ) {
-
     /**
      * Data class for storing mutation history.
+     *
+     * @property classHashes className -> SHA-256 of bytecode
+     * @property testHashes testName -> SHA-256 of bytecode
+     * @property results mutationId -> result
      */
     data class MutationHistory(
         val timestamp: Long = System.currentTimeMillis(),
-        val classHashes: Map<String, String> = emptyMap(),  // className -> SHA-256 of bytecode
-        val testHashes: Map<String, String> = emptyMap(),   // testName -> SHA-256 of bytecode
-        val results: Map<String, MutationStatusResult> = emptyMap()  // mutationId -> result
+        val classHashes: Map<String, String> = emptyMap(),
+        val testHashes: Map<String, String> = emptyMap(),
+        val results: Map<String, MutationStatusResult> = emptyMap(),
     )
 
     /**
@@ -28,7 +31,7 @@ class MutationHistoryManager(
     data class MutationStatusResult(
         val status: MutationStatus,
         val timestamp: Long = System.currentTimeMillis(),
-        val executionTimeMs: Long = 0
+        val executionTimeMs: Long = 0,
     )
 
     /**
@@ -75,7 +78,7 @@ class MutationHistoryManager(
     fun getReusableResults(
         classBytes: ByteArray,
         testBytes: ByteArray,
-        oldHistory: MutationHistory
+        oldHistory: MutationHistory,
     ): Map<String, MutationStatus> {
         val classHash = computeHash(classBytes)
         val testHash = computeHash(testBytes)
@@ -108,7 +111,7 @@ class MutationHistoryManager(
         testName: String,
         classBytes: ByteArray,
         testBytes: ByteArray,
-        newResults: Map<String, MutationStatus>
+        newResults: Map<String, MutationStatus>,
     ): MutationHistory {
         val classHash = computeHash(classBytes)
         val testHash = computeHash(testBytes)
@@ -121,17 +124,18 @@ class MutationHistoryManager(
 
         val updatedResults = oldHistory.results.toMutableMap()
         for ((mutationId, status) in newResults) {
-            updatedResults[mutationId] = MutationStatusResult(
-                status = status,
-                timestamp = System.currentTimeMillis()
-            )
+            updatedResults[mutationId] =
+                MutationStatusResult(
+                    status = status,
+                    timestamp = System.currentTimeMillis(),
+                )
         }
 
         return MutationHistory(
             timestamp = System.currentTimeMillis(),
             classHashes = updatedClassHashes,
             testHashes = updatedTestHashes,
-            results = updatedResults
+            results = updatedResults,
         )
     }
 
@@ -170,19 +174,21 @@ class MutationHistoryManager(
                     val parts = line.substringAfter(":").split(":")
                     if (parts.size >= 4) {
                         val mutationId = parts[0]
-                        val status = try {
-                            MutationStatus.valueOf(parts[1])
-                        } catch (e: Exception) {
-                            MutationStatus.ERROR
-                        }
+                        val status =
+                            try {
+                                MutationStatus.valueOf(parts[1])
+                            } catch (e: Exception) {
+                                MutationStatus.ERROR
+                            }
                         val resultTimestamp = parts[2].toLongOrNull() ?: System.currentTimeMillis()
                         val executionTimeMs = parts[3].toLongOrNull() ?: 0
 
-                        results[mutationId] = MutationStatusResult(
-                            status = status,
-                            timestamp = resultTimestamp,
-                            executionTimeMs = executionTimeMs
-                        )
+                        results[mutationId] =
+                            MutationStatusResult(
+                                status = status,
+                                timestamp = resultTimestamp,
+                                executionTimeMs = executionTimeMs,
+                            )
                     }
                 }
             }
@@ -192,7 +198,7 @@ class MutationHistoryManager(
             timestamp = timestamp,
             classHashes = classHashes,
             testHashes = testHashes,
-            results = results
+            results = results,
         )
     }
 

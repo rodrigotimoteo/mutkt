@@ -9,7 +9,6 @@ import org.objectweb.asm.Opcodes
  * Used to detect Kotlin-specific constructs and synthetic methods.
  */
 object KotlinMetadataParser {
-
     data class KotlinClassInfo(
         val className: String,
         val isKotlinClass: Boolean,
@@ -18,7 +17,7 @@ object KotlinMetadataParser {
         val isInlineClass: Boolean = false,
         val isObject: Boolean = false,
         val isInterface: Boolean = false,
-        val isEnumClass: Boolean = false
+        val isEnumClass: Boolean = false,
     )
 
     fun parse(classBytes: ByteArray): KotlinClassInfo {
@@ -31,12 +30,12 @@ object KotlinMetadataParser {
     fun isKotlinSyntheticMethod(name: String): Boolean {
         return name.contains("\$") && (
             name.contains("copy\$default") ||
-            name.contains("component") ||
-            name.contains("\$serializer") ||
-            name.contains("<init>\$default") ||
-            name.contains("toString") ||
-            name.contains("hashCode") ||
-            name.contains("equals")
+                name.contains("component") ||
+                name.contains("\$serializer") ||
+                name.contains("<init>\$default") ||
+                name.contains("toString") ||
+                name.contains("hashCode") ||
+                name.contains("equals")
         )
     }
 
@@ -45,9 +44,12 @@ object KotlinMetadataParser {
         private var metadataFound = false
 
         override fun visit(
-            version: Int, access: Int, name: String,
-            signature: String?, superName: String?,
-            interfaces: Array<out String>?
+            version: Int,
+            access: Int,
+            name: String,
+            signature: String?,
+            superName: String?,
+            interfaces: Array<out String>?,
         ) {
             val className = name.replace('/', '.')
             val isKotlin = false // Will be set in visitAnnotation
@@ -55,15 +57,19 @@ object KotlinMetadataParser {
             val isData = (access and Opcodes.ACC_FINAL) != 0 // Heuristic
             val isInterface = (access and Opcodes.ACC_INTERFACE) != 0
 
-            classInfo = classInfo.copy(
-                className = className,
-                isInterface = isInterface,
-                isDataClass = isData
-            )
+            classInfo =
+                classInfo.copy(
+                    className = className,
+                    isInterface = isInterface,
+                    isDataClass = isData,
+                )
             super.visit(version, access, name, signature, superName, interfaces)
         }
 
-        override fun visitAnnotation(desc: String, visible: Boolean): org.objectweb.asm.AnnotationVisitor? {
+        override fun visitAnnotation(
+            desc: String,
+            visible: Boolean,
+        ): org.objectweb.asm.AnnotationVisitor? {
             if (desc == "Lkotlin/Metadata;") {
                 metadataFound = true
                 classInfo = classInfo.copy(isKotlinClass = true)

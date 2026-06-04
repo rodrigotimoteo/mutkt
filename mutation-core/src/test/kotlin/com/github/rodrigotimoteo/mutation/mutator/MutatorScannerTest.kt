@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertTrue
 
 class MutatorScannerTest {
-
     @Test
     fun `raw ASM should visit instructions`() {
         val classBytes = createAddClass()
@@ -12,18 +11,27 @@ class MutatorScannerTest {
         val reader = org.objectweb.asm.ClassReader(classBytes)
         var count = 0
 
-        reader.accept(object : org.objectweb.asm.ClassVisitor(org.objectweb.asm.Opcodes.ASM9) {
-            override fun visitMethod(access: Int, name: String, descriptor: String, signature: String?, exceptions: Array<out String>?): org.objectweb.asm.MethodVisitor? {
-                if (name == "<init>") return null
-                return object : org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9) {
-                    override fun visitInsn(opcode: Int) {
-                        count++
-                        println("  RAW visitInsn: opcode=$opcode")
-                        super.visitInsn(opcode)
+        reader.accept(
+            object : org.objectweb.asm.ClassVisitor(org.objectweb.asm.Opcodes.ASM9) {
+                override fun visitMethod(
+                    access: Int,
+                    name: String,
+                    descriptor: String,
+                    signature: String?,
+                    exceptions: Array<out String>?,
+                ): org.objectweb.asm.MethodVisitor? {
+                    if (name == "<init>") return null
+                    return object : org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9) {
+                        override fun visitInsn(opcode: Int) {
+                            count++
+                            println("  RAW visitInsn: opcode=$opcode")
+                            super.visitInsn(opcode)
+                        }
                     }
                 }
-            }
-        }, 0)
+            },
+            0,
+        )
 
         println("RAW count: $count")
         assertTrue(count > 0, "Raw ASM should visit instructions, got $count")
@@ -38,7 +46,9 @@ class MutatorScannerTest {
         val mutations = mutator.scanMutations(classBytes)
 
         println("Found ${mutations.size} mutations")
-        mutations.forEach { println("  ${it.operator.operatorName} ${it.methodName}:${it.originalOpcode} -> ${it.mutatedOpcode} - ${it.description}") }
+        mutations.forEach {
+            println("  ${it.operator.operatorName} ${it.methodName}:${it.originalOpcode} -> ${it.mutatedOpcode} - ${it.description}")
+        }
 
         assertTrue(mutations.isNotEmpty(), "Should find at least one mutation")
     }

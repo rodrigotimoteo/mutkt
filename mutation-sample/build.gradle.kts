@@ -16,9 +16,11 @@ dependencies {
 kotlin {
     jvmToolchain(21)
     compilerOptions {
-        freeCompilerArgs.addAll(listOf(
-            "-Xopt-in=kotlin.RequiresOptIn",
-            "-Xjsr305=strict"
-        ))
+        freeCompilerArgs.addAll(
+            listOf(
+                "-Xopt-in=kotlin.RequiresOptIn",
+                "-Xjsr305=strict",
+            ),
+        )
     }
 }

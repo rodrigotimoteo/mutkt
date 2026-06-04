@@ -1,15 +1,18 @@
 package com.github.rodrigotimoteo.mutation.gradle
 
 import com.github.rodrigotimoteo.mutation.model.MutationReport
-import com.github.rodrigotimoteo.mutation.runner.MutationTestRunnerFactory
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
+import com.github.rodrigotimoteo.mutation.runner.MutationTestRunnerFactory
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
-import org.gradle.api.tasks.*
-
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.TaskAction
 import java.io.File
 
 /**
@@ -17,7 +20,6 @@ import java.io.File
  * This is the main entry point - just add the plugin and run `gradlew mutationTest`.
  */
 abstract class MutationTask : DefaultTask() {
-
     @InputFiles
     @Optional
     val targetClasses: ConfigurableFileCollection = project.objects.fileCollection()
@@ -52,8 +54,9 @@ abstract class MutationTask : DefaultTask() {
 
     @Input
     @Optional
-    val outputDir: Property<String> = project.objects.property(String::class.java)
-        .convention("build/reports/mutation")
+    val outputDir: Property<String> =
+        project.objects.property(String::class.java)
+            .convention("build/reports/mutation")
 
     @Input
     @Optional
@@ -79,17 +82,19 @@ abstract class MutationTask : DefaultTask() {
         val classpathFiles = classpath.files.toList()
 
         // Find coverage file
-        val coverageFile = if (coverageExecFile.isPresent) {
-            coverageExecFile.get().asFile
-        } else {
-            // Auto-detect JaCoCo coverage file
-            val possiblePaths = listOf(
-                File(project.buildDir, "jacoco/test.exec"),
-                File(project.buildDir, "jacoco/jacocoTestReport.exec"),
-                File(project.buildDir, "reports/jacoco/test/jacocoTestReport.exec")
-            )
-            possiblePaths.firstOrNull { it.exists() }
-        }
+        val coverageFile =
+            if (coverageExecFile.isPresent) {
+                coverageExecFile.get().asFile
+            } else {
+                // Auto-detect JaCoCo coverage file
+                val possiblePaths =
+                    listOf(
+                        File(project.buildDir, "jacoco/test.exec"),
+                        File(project.buildDir, "jacoco/jacocoTestReport.exec"),
+                        File(project.buildDir, "reports/jacoco/test/jacocoTestReport.exec"),
+                    )
+                possiblePaths.firstOrNull { it.exists() }
+            }
 
         logger.lifecycle("Classes dir: $classesDir")
         logger.lifecycle("Test classes dir: $testClassesDir")
@@ -117,20 +122,22 @@ abstract class MutationTask : DefaultTask() {
         logger.lifecycle("Timeout: ${timeoutMs.get()}ms, Max parallel mutants: ${maxParallelMutants.get()}")
 
         // Create runner
-        val runner = MutationTestRunnerFactory.create(
-            timeoutMs = timeoutMs.get(),
-            maxParallelMutants = maxParallelMutants.get(),
-            enabledOperators = operators.toSet()
-        )
+        val runner =
+            MutationTestRunnerFactory.create(
+                timeoutMs = timeoutMs.get(),
+                maxParallelMutants = maxParallelMutants.get(),
+                enabledOperators = operators.toSet(),
+            )
 
         // Run mutation testing
-        val report = runner.run(
-            classesDir = classesDir,
-            testClassesDir = testClassesDir,
-            classpath = classpathFiles,
-            coverageExecFile = coverageFile,
-            enabledOperators = operators.toSet()
-        )
+        val report =
+            runner.run(
+                classesDir = classesDir,
+                testClassesDir = testClassesDir,
+                classpath = classpathFiles,
+                coverageExecFile = coverageFile,
+                enabledOperators = operators.toSet(),
+            )
 
         // Generate reports
         generateReports(report)

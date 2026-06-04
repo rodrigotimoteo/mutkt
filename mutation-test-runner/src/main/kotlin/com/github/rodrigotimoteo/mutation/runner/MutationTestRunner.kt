@@ -4,21 +4,17 @@ import com.github.rodrigotimoteo.mutation.engine.MutationEngine
 import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import org.slf4j.LoggerFactory
-
 import java.io.File
-import java.net.URL
 import java.net.URLClassLoader
 import java.nio.file.Files
-import java.nio.file.Path
 
 /**
  * Test runner that executes mutation testing using JUnit Platform.
  * Can be used standalone or via Gradle plugin.
  */
 class MutationTestRunner(
-    private val engine: MutationEngine
+    private val engine: MutationEngine,
 ) {
-
     private val logger = LoggerFactory.getLogger(MutationTestRunner::class.java)
 
     /**
@@ -29,7 +25,7 @@ class MutationTestRunner(
         testClassesDir: File,
         classpath: List<File>,
         coverageExecFile: File? = null,
-        enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS
+        enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     ): MutationReport {
         logger.info("Loading classes from: $classesDir")
         logger.info("Loading test classes from: $testClassesDir")
@@ -62,10 +58,11 @@ class MutationTestRunner(
             .filter { it.toString().endsWith(".class") }
             .forEach { path ->
                 val relativePath = dir.toPath().relativize(path)
-                val className = relativePath.toString()
-                    .replace(".class", "")
-                    .replace("/", ".")
-                    .replace("\\", ".")
+                val className =
+                    relativePath.toString()
+                        .replace(".class", "")
+                        .replace("/", ".")
+                        .replace("\\", ".")
                 val bytes = Files.readAllBytes(path)
                 result[className.replace('.', '/')] = bytes
             }
@@ -80,10 +77,11 @@ class MutationTestRunner(
             .filter { it.toString().endsWith(".class") }
             .forEach { path ->
                 val relativePath = dir.toPath().relativize(path)
-                val className = relativePath.toString()
-                    .replace(".class", "")
-                    .replace("/", ".")
-                    .replace("\\", ".")
+                val className =
+                    relativePath.toString()
+                        .replace(".class", "")
+                        .replace("/", ".")
+                        .replace("\\", ".")
                 if (className.endsWith("Test") || className.contains("test")) {
                     result.add(className)
                 }
@@ -96,17 +94,17 @@ class MutationTestRunner(
  * Factory for creating MutationTestRunner with default configuration.
  */
 object MutationTestRunnerFactory {
-
     fun create(
         timeoutMs: Long = 30000,
         maxParallelMutants: Int = 4,
-        enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS
+        enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     ): MutationTestRunner {
-        val engine = MutationEngine(
-            enabledOperators = enabledOperators,
-            timeoutMs = timeoutMs,
-            maxParallelMutants = maxParallelMutants
-        )
+        val engine =
+            MutationEngine(
+                enabledOperators = enabledOperators,
+                timeoutMs = timeoutMs,
+                maxParallelMutants = maxParallelMutants,
+            )
         return MutationTestRunner(engine)
     }
 }

@@ -8,7 +8,7 @@ import com.github.rodrigotimoteo.mutation.annotation.SuppressMutations
 data class User(
     val name: String,
     val age: Int,
-    val email: String
+    val email: String,
 )
 
 /**
@@ -16,7 +16,9 @@ data class User(
  */
 sealed class Result {
     data class Success(val data: String) : Result()
+
     data class Error(val message: String) : Result()
+
     object Loading : Result()
 }
 
@@ -24,11 +26,12 @@ sealed class Result {
  * Functions that use sealed class and data class.
  */
 class UserService {
-    fun handleResult(result: Result): String = when (result) {
-        is Result.Success -> result.data
-        is Result.Error -> "Error: ${result.message}"
-        is Result.Loading -> "Loading..."
-    }
+    fun handleResult(result: Result): String =
+        when (result) {
+            is Result.Success -> result.data
+            is Result.Error -> "Error: ${result.message}"
+            is Result.Loading -> "Loading..."
+        }
 
     fun processUser(user: User): User {
         return user.copy(age = user.age + 1)
@@ -39,30 +42,41 @@ class UserService {
  * Sample calculator class to demonstrate mutation testing.
  */
 class Calculator {
-
     /**
      * Adds two numbers.
      * Demonstrates: ARITHMETIC operator (+ -> -, *, /)
      */
-    fun add(a: Int, b: Int): Int = a + b
+    fun add(
+        a: Int,
+        b: Int,
+    ): Int = a + b
 
     /**
      * Subtracts two numbers.
      * Demonstrates: ARITHMETIC operator (- -> +, *)
      */
-    fun subtract(a: Int, b: Int): Int = a - b
+    fun subtract(
+        a: Int,
+        b: Int,
+    ): Int = a - b
 
     /**
      * Multiplies two numbers.
      * Demonstrates: ARITHMETIC operator (* -> +, -)
      */
-    fun multiply(a: Int, b: Int): Int = a * b
+    fun multiply(
+        a: Int,
+        b: Int,
+    ): Int = a * b
 
     /**
      * Divides two numbers.
      * Demonstrates: CONDITIONALS_BOUNDARY, ARITHMETIC
      */
-    fun divide(a: Int, b: Int): Int {
+    fun divide(
+        a: Int,
+        b: Int,
+    ): Int {
         if (b == 0) throw IllegalArgumentException("Cannot divide by zero")
         return a / b
     }
@@ -77,7 +91,11 @@ class Calculator {
      * Checks if number is in range.
      * Demonstrates: CONDITIONALS_BOUNDARY (>= -> >, <= -> <)
      */
-    fun isInRange(value: Int, min: Int, max: Int): Boolean {
+    fun isInRange(
+        value: Int,
+        min: Int,
+        max: Int,
+    ): Boolean {
         return value >= min && value <= max
     }
 
@@ -85,7 +103,10 @@ class Calculator {
      * Returns the larger of two numbers.
      * Demonstrates: RETURN_VALS (return a -> return b)
      */
-    fun max(a: Int, b: Int): Int {
+    fun max(
+        a: Int,
+        b: Int,
+    ): Int {
         return if (a > b) a else b
     }
 
@@ -167,7 +188,10 @@ class Calculator {
      */
     var lastOperation: String = ""
 
-    fun performAdd(a: Int, b: Int): Int {
+    fun performAdd(
+        a: Int,
+        b: Int,
+    ): Int {
         lastOperation = "add"
         return a + b
     }
@@ -184,8 +208,11 @@ class Calculator {
      * Non-void method call.
      * Demonstrates: NON_VOID_METHOD_CALLS operator
      */
-    fun processWithHelper(a: Int, b: Int): Int {
-        val result = add(a, b)  // Non-void call that can be removed
+    fun processWithHelper(
+        a: Int,
+        b: Int,
+    ): Int {
+        val result = add(a, b) // Non-void call that can be removed
         return multiply(result, 2)
     }
 }
@@ -208,5 +235,8 @@ class PartialSuppression {
     fun getValue(): Int = 42
 
     // This method CAN be mutated
-    fun calculate(a: Int, b: Int): Int = a + b
+    fun calculate(
+        a: Int,
+        b: Int,
+    ): Int = a + b
 }

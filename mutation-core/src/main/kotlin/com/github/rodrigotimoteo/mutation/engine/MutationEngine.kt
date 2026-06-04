@@ -1,23 +1,19 @@
 package com.github.rodrigotimoteo.mutation.engine
 
+import com.github.rodrigotimoteo.mutation.classloader.MutantClassLoaderFactory
 import com.github.rodrigotimoteo.mutation.coverage.CoverageAnalyzer
-import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
-import com.github.rodrigotimoteo.mutation.mutator.Mutator
-import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import com.github.rodrigotimoteo.mutation.model.Mutation
 import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.model.MutationResult
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
-import com.github.rodrigotimoteo.mutation.classloader.MutantClassLoaderFactory
+import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
+import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
+import com.github.rodrigotimoteo.mutation.mutator.Mutator
 import org.slf4j.LoggerFactory
-
 import java.io.File
-import java.lang.reflect.Method
-import java.net.URLClassLoader
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 
 /**
@@ -27,9 +23,8 @@ import java.util.concurrent.TimeUnit
 class MutationEngine(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     private val timeoutMs: Long = 30000,
-    private val maxParallelMutants: Int = 4
+    private val maxParallelMutants: Int = 4,
 ) {
-
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators)
     private val coverageAnalyzer = CoverageAnalyzer()
@@ -41,7 +36,7 @@ class MutationEngine(
         classFiles: Map<String, ByteArray>,
         testClassNames: List<String>,
         testClassBytes: Map<String, ByteArray> = emptyMap(),
-        coverageExecFile: File? = null
+        coverageExecFile: File? = null,
     ): MutationReport {
         val startTime = System.currentTimeMillis()
         val allMutations = generateAllMutations(classFiles)
@@ -51,11 +46,12 @@ class MutationEngine(
         val allClassFiles = classFiles + testClassBytes
 
         // Filter mutations by coverage if available
-        val mutationsToTest = if (coverageExecFile != null && coverageExecFile.exists()) {
-            filterByCoverage(allMutations, classFiles, coverageExecFile)
-        } else {
-            allMutations
-        }
+        val mutationsToTest =
+            if (coverageExecFile != null && coverageExecFile.exists()) {
+                filterByCoverage(allMutations, classFiles, coverageExecFile)
+            } else {
+                allMutations
+            }
         logger.info("Testing ${mutationsToTest.size} mutations after coverage filtering")
 
         // Run tests against each mutant
@@ -77,7 +73,7 @@ class MutationEngine(
     private fun filterByCoverage(
         allMutations: List<Pair<MutationInfo, ByteArray>>,
         classFiles: Map<String, ByteArray>,
-        coverageExecFile: File
+        coverageExecFile: File,
     ): List<Pair<MutationInfo, ByteArray>> {
         val executionData = coverageAnalyzer.loadExecutionData(coverageExecFile)
         val filtered = mutableListOf<Pair<MutationInfo, ByteArray>>()
@@ -85,12 +81,13 @@ class MutationEngine(
         for ((mutation, mutatedBytes) in allMutations) {
             val classBytes = classFiles[mutation.className.replace('.', '/')]
             if (classBytes != null) {
-                val coverage = coverageAnalyzer.analyzeCoverage(
-                    classBytes,
-                    mutation.className,
-                    executionData,
-                    listOf(mutation)
-                )
+                val coverage =
+                    coverageAnalyzer.analyzeCoverage(
+                        classBytes,
+                        mutation.className,
+                        executionData,
+                        listOf(mutation),
+                    )
                 if (coverage.first().coveringTests.isNotEmpty()) {
                     filtered.add(mutation to mutatedBytes)
                 }
@@ -102,17 +99,20 @@ class MutationEngine(
     private fun runMutants(
         mutations: List<Pair<MutationInfo, ByteArray>>,
         classFiles: Map<String, ByteArray>,
-        testClassNames: List<String>
+        testClassNames: List<String>,
     ): List<MutationResult> {
         val results = mutableListOf<MutationResult>()
         val executor: ExecutorService = Executors.newFixedThreadPool(maxParallelMutants)
 
         try {
-            val futures = mutations.map { (mutation, mutatedBytes) ->
-                executor.submit(Callable {
-                    runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames)
-                })
-            }
+            val futures =
+                mutations.map { (mutation, mutatedBytes) ->
+                    executor.submit(
+                        Callable {
+                            runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames)
+                        },
+                    )
+                }
 
             for (future in futures) {
                 try {
@@ -121,11 +121,13 @@ class MutationEngine(
                 } catch (e: Exception) {
                     logger.error("Mutant execution failed", e)
                     val mutation = mutations[futures.indexOf(future)].first
-                    results.add(MutationResult(
-                        mutation = toMutation(mutation),
-                        status = MutationStatus.ERROR,
-                        errorMessage = e.message
-                    ))
+                    results.add(
+                        MutationResult(
+                            mutation = toMutation(mutation),
+                            status = MutationStatus.ERROR,
+                            errorMessage = e.message,
+                        ),
+                    )
                 }
             }
         } finally {
@@ -140,7 +142,7 @@ class MutationEngine(
         mutation: MutationInfo,
         mutatedBytes: ByteArray,
         classFiles: Map<String, ByteArray>,
-        testClassNames: List<String>
+        testClassNames: List<String>,
     ): MutationResult {
         val startTime = System.currentTimeMillis()
 
@@ -148,35 +150,37 @@ class MutationEngine(
         val mutatedClassFiles = classFiles.toMutableMap()
         mutatedClassFiles[mutation.className.replace('.', '/')] = mutatedBytes
 
-        val classLoader = MutantClassLoaderFactory.create(
-            this.javaClass.classLoader,
-            mutatedClassFiles,
-            mutation,
-            mutator
-        )
+        val classLoader =
+            MutantClassLoaderFactory.create(
+                this.javaClass.classLoader,
+                mutatedClassFiles,
+                mutation,
+                mutator,
+            )
 
         // Run tests with mutant classloader
-        val status = try {
-            runTestsWithClassLoader(classLoader, testClassNames)
-        } catch (e: Exception) {
-            return MutationResult(
-                mutation = toMutation(mutation),
-                status = MutationStatus.ERROR,
-                executionTimeMs = System.currentTimeMillis() - startTime,
-                errorMessage = e.message
-            )
-        }
+        val status =
+            try {
+                runTestsWithClassLoader(classLoader, testClassNames)
+            } catch (e: Exception) {
+                return MutationResult(
+                    mutation = toMutation(mutation),
+                    status = MutationStatus.ERROR,
+                    executionTimeMs = System.currentTimeMillis() - startTime,
+                    errorMessage = e.message,
+                )
+            }
 
         return MutationResult(
             mutation = toMutation(mutation),
             status = status,
-            executionTimeMs = System.currentTimeMillis() - startTime
+            executionTimeMs = System.currentTimeMillis() - startTime,
         )
     }
 
     private fun runTestsWithClassLoader(
         classLoader: ClassLoader,
-        testClassNames: List<String>
+        testClassNames: List<String>,
     ): MutationStatus {
         // Simplified test execution - in real implementation use JUnit Platform
         // For MVP, we'll use reflection to run test methods
@@ -186,10 +190,11 @@ class MutationEngine(
         for (testClassName in testClassNames) {
             try {
                 val testClass = classLoader.loadClass(testClassName)
-                val testMethods = testClass.declaredMethods.filter {
-                    it.getAnnotation(org.junit.jupiter.api.Test::class.java) != null
-                }
-                
+                val testMethods =
+                    testClass.declaredMethods.filter {
+                        it.getAnnotation(org.junit.jupiter.api.Test::class.java) != null
+                    }
+
                 for (method in testMethods) {
                     hasTests = true
                     val instance = testClass.getDeclaredConstructor().newInstance()
@@ -224,11 +229,14 @@ class MutationEngine(
             lineNumber = info.lineNumber,
             originalBytecode = ByteArray(0),
             mutatedBytecode = ByteArray(0),
-            description = info.description
+            description = info.description,
         )
     }
 
-    private fun buildReport(results: List<MutationResult>, totalTime: Long): MutationReport {
+    private fun buildReport(
+        results: List<MutationResult>,
+        totalTime: Long,
+    ): MutationReport {
         val killed = results.count { it.isKilled }
         val survived = results.count { it.isSurvived }
         val errors = results.count { it.status == MutationStatus.ERROR }
@@ -243,7 +251,7 @@ class MutationEngine(
             errorMutations = errors,
             timeoutMutations = timeouts,
             noCoverageMutations = noCoverage,
-            totalExecutionTimeMs = totalTime
+            totalExecutionTimeMs = totalTime,
         )
     }
 }

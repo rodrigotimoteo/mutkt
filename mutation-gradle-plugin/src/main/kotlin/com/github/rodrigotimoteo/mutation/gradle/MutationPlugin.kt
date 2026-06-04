@@ -25,14 +25,14 @@ import org.gradle.api.tasks.SourceSetContainer
  * ```
  */
 class MutationPlugin : Plugin<Project> {
-
     override fun apply(project: Project) {
         // Register extension for DSL configuration
-        val extension = project.extensions.create(
-            "mutationTest",
-            MutationPluginExtension::class.java,
-            project
-        )
+        val extension =
+            project.extensions.create(
+                "mutationTest",
+                MutationPluginExtension::class.java,
+                project,
+            )
 
         // Auto-detect sourceSets after project evaluation
         project.afterEvaluate {
@@ -42,35 +42,39 @@ class MutationPlugin : Plugin<Project> {
         }
 
         // Register mutation test task
-        val mutationTask = project.tasks.register(
-            "mutationTest",
-            MutationTask::class.java
-        ) { task ->
-            task.group = "verification"
-            task.description = "Runs mutation testing analysis"
+        val mutationTask =
+            project.tasks.register(
+                "mutationTest",
+                MutationTask::class.java,
+            ) { task ->
+                task.group = "verification"
+                task.description = "Runs mutation testing analysis"
 
-            // Wire extension properties to task
-            project.afterEvaluate {
-                task.targetClasses.from(extension.targetClasses)
-                task.testClasses.from(extension.testClasses)
-                task.classpath.from(extension.classpath)
-                task.coverageExecFile.set(extension.coverageExecFile)
-                task.enabledOperators.set(extension.enabledOperators)
-                task.timeoutMs.set(extension.timeoutMs)
-                task.maxParallelMutants.set(extension.maxParallelMutants)
-                task.reportFormat.set(extension.reportFormat)
-                task.outputDir.set(extension.outputDir)
-                task.failOnSurvived.set(extension.failOnSurvived)
-                task.excludedClasses.set(extension.excludedClasses)
-                task.excludedMethods.set(extension.excludedMethods)
+                // Wire extension properties to task
+                project.afterEvaluate {
+                    task.targetClasses.from(extension.targetClasses)
+                    task.testClasses.from(extension.testClasses)
+                    task.classpath.from(extension.classpath)
+                    task.coverageExecFile.set(extension.coverageExecFile)
+                    task.enabledOperators.set(extension.enabledOperators)
+                    task.timeoutMs.set(extension.timeoutMs)
+                    task.maxParallelMutants.set(extension.maxParallelMutants)
+                    task.reportFormat.set(extension.reportFormat)
+                    task.outputDir.set(extension.outputDir)
+                    task.failOnSurvived.set(extension.failOnSurvived)
+                    task.excludedClasses.set(extension.excludedClasses)
+                    task.excludedMethods.set(extension.excludedMethods)
+                }
             }
-        }
 
         // Don't auto-depend on check - mutationTest is opt-in
         // Users run: ./gradlew mutationTest
     }
 
-    private fun autoDetectSourceSets(project: Project, extension: MutationPluginExtension) {
+    private fun autoDetectSourceSets(
+        project: Project,
+        extension: MutationPluginExtension,
+    ) {
         try {
             val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
 
@@ -92,7 +96,10 @@ class MutationPlugin : Plugin<Project> {
         }
     }
 
-    private fun autoDetectJaCoCo(project: Project, extension: MutationPluginExtension) {
+    private fun autoDetectJaCoCo(
+        project: Project,
+        extension: MutationPluginExtension,
+    ) {
         if (!extension.autoRunJaCoCo.get()) return
 
         try {
@@ -108,7 +115,10 @@ class MutationPlugin : Plugin<Project> {
         }
     }
 
-    private fun autoDetectClasspath(project: Project, extension: MutationPluginExtension) {
+    private fun autoDetectClasspath(
+        project: Project,
+        extension: MutationPluginExtension,
+    ) {
         try {
             // Auto-detect testRuntimeClasspath
             val testRuntimeClasspath = project.configurations.findByName("testRuntimeClasspath")

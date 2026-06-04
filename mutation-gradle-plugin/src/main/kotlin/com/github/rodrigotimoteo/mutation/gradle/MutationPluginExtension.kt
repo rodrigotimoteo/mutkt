@@ -22,7 +22,6 @@ import org.gradle.api.tasks.Optional
  * ```
  */
 open class MutationPluginExtension(project: Project) {
-
     /**
      * Target classes to mutate. Auto-detected from sourceSets.main.output.
      */
@@ -48,17 +47,18 @@ open class MutationPluginExtension(project: Project) {
      */
     @Input
     @Optional
-    val enabledOperators: SetProperty<String> = project.objects.setProperty(String::class.java).convention(
-        setOf(
-            "CONDITIONALS_BOUNDARY",
-            "NEGATE_CONDITIONALS",
-            "ARITHMETIC",
-            "RETURN_VALS",
-            "NULL_RETURNS",
-            "EMPTY_RETURNS",
-            "INVERT_NEGS"
+    val enabledOperators: SetProperty<String> =
+        project.objects.setProperty(String::class.java).convention(
+            setOf(
+                "CONDITIONALS_BOUNDARY",
+                "NEGATE_CONDITIONALS",
+                "ARITHMETIC",
+                "RETURN_VALS",
+                "NULL_RETURNS",
+                "EMPTY_RETURNS",
+                "INVERT_NEGS",
+            ),
         )
-    )
 
     /**
      * Timeout in milliseconds for each mutant test execution.
@@ -72,8 +72,9 @@ open class MutationPluginExtension(project: Project) {
      */
     @Input
     @Optional
-    val maxParallelMutants: Property<Int> = project.objects.property(Int::class.java)
-        .convention(Runtime.getRuntime().availableProcessors())
+    val maxParallelMutants: Property<Int> =
+        project.objects.property(Int::class.java)
+            .convention(Runtime.getRuntime().availableProcessors())
 
     /**
      * Report format: "html", "xml", "json", "console"
@@ -87,8 +88,9 @@ open class MutationPluginExtension(project: Project) {
      */
     @Input
     @Optional
-    val outputDir: Property<String> = project.objects.property(String::class.java)
-        .convention("build/reports/mutation")
+    val outputDir: Property<String> =
+        project.objects.property(String::class.java)
+            .convention("build/reports/mutation")
 
     /**
      * Whether to fail the build if any mutants survive.
@@ -103,41 +105,43 @@ open class MutationPluginExtension(project: Project) {
      */
     @Input
     @Optional
-    val excludedClasses: SetProperty<String> = project.objects.setProperty(String::class.java).convention(
-        setOf(
-            "**/*Test",
-            "**/*Tests",
-            "**/*_",
-            "**/BuildConfig",
-            "**/R.class",
-            "**/databinding/**",
-            "**/BR.class",
-            "**/*_Factory",
-            "**/*_MembersInjector",
-            "**/*Module_*",
-            "**/*_Impl",
-            "**/META-INF/**",
-            "**/*.kotlin_module",
-            "**/*\$Lambda\$*",
-            "**/*\$inlined\$*"
+    val excludedClasses: SetProperty<String> =
+        project.objects.setProperty(String::class.java).convention(
+            setOf(
+                "**/*Test",
+                "**/*Tests",
+                "**/*_",
+                "**/BuildConfig",
+                "**/R.class",
+                "**/databinding/**",
+                "**/BR.class",
+                "**/*_Factory",
+                "**/*_MembersInjector",
+                "**/*Module_*",
+                "**/*_Impl",
+                "**/META-INF/**",
+                "**/*.kotlin_module",
+                "**/*\$Lambda\$*",
+                "**/*\$inlined\$*",
+            ),
         )
-    )
 
     /**
      * Methods to exclude from mutation testing.
      */
     @Input
     @Optional
-    val excludedMethods: SetProperty<String> = project.objects.setProperty(String::class.java).convention(
-        setOf(
-            "main",
-            "toString",
-            "hashCode",
-            "equals",
-            "clone",
-            "finalize"
+    val excludedMethods: SetProperty<String> =
+        project.objects.setProperty(String::class.java).convention(
+            setOf(
+                "main",
+                "toString",
+                "hashCode",
+                "equals",
+                "clone",
+                "finalize",
+            ),
         )
-    )
 
     /**
      * Whether to run JaCoCo agent automatically for coverage analysis.
@@ -254,9 +258,10 @@ open class MutationPluginExtension(project: Project) {
      */
     @Input
     @Optional
-    val reportFormats: SetProperty<String> = project.objects.setProperty(String::class.java).convention(
-        setOf("html", "csv")
-    )
+    val reportFormats: SetProperty<String> =
+        project.objects.setProperty(String::class.java).convention(
+            setOf("html", "csv"),
+        )
 
     /**
      * Generate per-class mutation scores in reports.

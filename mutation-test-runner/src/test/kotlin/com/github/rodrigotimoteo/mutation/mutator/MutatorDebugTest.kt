@@ -8,7 +8,6 @@ import kotlin.test.assertTrue
  * Debug test to verify mutation scanning works.
  */
 class MutatorDebugTest {
-
     @Test
     fun `scanner should find mutations in Calculator class`() {
         // Find the compiled class

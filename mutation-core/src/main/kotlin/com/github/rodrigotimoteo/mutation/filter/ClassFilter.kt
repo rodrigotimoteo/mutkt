@@ -9,9 +9,8 @@ class ClassFilter(
     private val targetPatterns: List<Regex> = emptyList(),
     private val excludePatterns: List<Regex> = emptyList(),
     private val targetTestPatterns: List<Regex> = emptyList(),
-    private val excludeTestPatterns: List<Regex> = emptyList()
+    private val excludeTestPatterns: List<Regex> = emptyList(),
 ) {
-
     /**
      * Check if a class should be mutated.
      *
@@ -38,7 +37,7 @@ class ClassFilter(
     private fun matchesTarget(
         name: String,
         targets: List<Regex>,
-        excludes: List<Regex>
+        excludes: List<Regex>,
     ): Boolean {
         // If no target patterns, match everything
         val matchesTarget = targets.isEmpty() || targets.any { it.matches(name) }
@@ -65,13 +64,13 @@ class ClassFilter(
             targetClasses: List<String> = emptyList(),
             excludeClasses: List<String> = emptyList(),
             targetTests: List<String> = emptyList(),
-            excludeTests: List<String> = emptyList()
+            excludeTests: List<String> = emptyList(),
         ): ClassFilter {
             return ClassFilter(
                 targetPatterns = targetClasses.map { Regex(it) },
                 excludePatterns = excludeClasses.map { Regex(it) },
                 targetTestPatterns = targetTests.map { Regex(it) },
-                excludeTestPatterns = excludeTests.map { Regex(it) }
+                excludeTestPatterns = excludeTests.map { Regex(it) },
             )
         }
 

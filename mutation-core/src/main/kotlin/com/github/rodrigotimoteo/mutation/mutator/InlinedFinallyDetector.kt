@@ -2,9 +2,9 @@ package com.github.rodrigotimoteo.mutation.mutator
 
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.tree.ClassNode
+import org.objectweb.asm.tree.LabelNode
 import org.objectweb.asm.tree.MethodNode
 import org.objectweb.asm.tree.TryCatchBlockNode
-import org.objectweb.asm.tree.LabelNode
 
 /**
  * Detects inlined finally blocks in bytecode.
@@ -14,7 +14,6 @@ import org.objectweb.asm.tree.LabelNode
  * duplications to avoid creating redundant mutations.
  */
 class InlinedFinallyDetector {
-
     /**
      * Represents an inlined finally block.
      */
@@ -23,7 +22,8 @@ class InlinedFinallyDetector {
         val startLine: Int,
         val endLine: Int,
         val handlerLine: Int,
-        val duplicatedAt: List<Int> // Lines where finally block is duplicated
+        // Lines where finally block is duplicated
+        val duplicatedAt: List<Int>,
     )
 
     /**
@@ -54,9 +54,10 @@ class InlinedFinallyDetector {
         val inlinedBlocks = mutableListOf<InlinedFinallyBlock>()
 
         // Find finally handlers (TryCatchBlock with null type)
-        val finallyHandlers = methodNode.tryCatchBlocks?.filter { block ->
-            block.type == null // null type = finally handler
-        } ?: return inlinedBlocks
+        val finallyHandlers =
+            methodNode.tryCatchBlocks?.filter { block ->
+                block.type == null // null type = finally handler
+            } ?: return inlinedBlocks
 
         for (handler in finallyHandlers) {
             val block = analyzeFinallyBlock(methodNode, handler)
@@ -73,7 +74,7 @@ class InlinedFinallyDetector {
      */
     private fun analyzeFinallyBlock(
         methodNode: MethodNode,
-        handler: TryCatchBlockNode
+        handler: TryCatchBlockNode,
     ): InlinedFinallyBlock? {
         // Get line numbers for the handler
         val handlerStart = getLineNumber(methodNode, handler.handler)
@@ -96,14 +97,17 @@ class InlinedFinallyDetector {
             startLine = handlerStart,
             endLine = handlerEnd,
             handlerLine = handlerStart,
-            duplicatedAt = duplicatedAt
+            duplicatedAt = duplicatedAt,
         )
     }
 
     /**
      * Get line number for an instruction.
      */
-    private fun getLineNumber(methodNode: MethodNode, label: LabelNode): Int? {
+    private fun getLineNumber(
+        methodNode: MethodNode,
+        label: LabelNode,
+    ): Int? {
         val instructions = methodNode.instructions?.toArray() ?: return null
 
         for (insn in instructions) {
@@ -122,7 +126,10 @@ class InlinedFinallyDetector {
     /**
      * Find the end line of a handler.
      */
-    private fun findHandlerEnd(methodNode: MethodNode, handlerStart: LabelNode): Int? {
+    private fun findHandlerEnd(
+        methodNode: MethodNode,
+        handlerStart: LabelNode,
+    ): Int? {
         val instructions = methodNode.instructions?.toArray() ?: return null
         var startFound = false
         var lastLineNumber: Int? = null
@@ -139,15 +146,17 @@ class InlinedFinallyDetector {
                 }
                 startFound && insn is org.objectweb.asm.tree.InsnNode -> {
                     val opcode = insn.opcode
-                    if (opcode in listOf(
-                        org.objectweb.asm.Opcodes.RETURN,
-                        org.objectweb.asm.Opcodes.ARETURN,
-                        org.objectweb.asm.Opcodes.IRETURN,
-                        org.objectweb.asm.Opcodes.LRETURN,
-                        org.objectweb.asm.Opcodes.FRETURN,
-                        org.objectweb.asm.Opcodes.DRETURN,
-                        org.objectweb.asm.Opcodes.ATHROW
-                    )) {
+                    if (opcode in
+                        listOf(
+                            org.objectweb.asm.Opcodes.RETURN,
+                            org.objectweb.asm.Opcodes.ARETURN,
+                            org.objectweb.asm.Opcodes.IRETURN,
+                            org.objectweb.asm.Opcodes.LRETURN,
+                            org.objectweb.asm.Opcodes.FRETURN,
+                            org.objectweb.asm.Opcodes.DRETURN,
+                            org.objectweb.asm.Opcodes.ATHROW,
+                        )
+                    ) {
                         return lastLineNumber
                     }
                 }
@@ -162,7 +171,7 @@ class InlinedFinallyDetector {
      */
     private fun findDuplicatedExitPoints(
         methodNode: MethodNode,
-        handler: TryCatchBlockNode
+        handler: TryCatchBlockNode,
     ): List<Int> {
         val exitPoints = mutableListOf<Int>()
         val instructions = methodNode.instructions?.toArray() ?: return exitPoints
@@ -179,15 +188,17 @@ class InlinedFinallyDetector {
                 }
             } else if (insn is org.objectweb.asm.tree.InsnNode) {
                 val opcode = insn.opcode
-                if (opcode in listOf(
-                    org.objectweb.asm.Opcodes.RETURN,
-                    org.objectweb.asm.Opcodes.ARETURN,
-                    org.objectweb.asm.Opcodes.IRETURN,
-                    org.objectweb.asm.Opcodes.LRETURN,
-                    org.objectweb.asm.Opcodes.FRETURN,
-                    org.objectweb.asm.Opcodes.DRETURN,
-                    org.objectweb.asm.Opcodes.ATHROW
-                )) {
+                if (opcode in
+                    listOf(
+                        org.objectweb.asm.Opcodes.RETURN,
+                        org.objectweb.asm.Opcodes.ARETURN,
+                        org.objectweb.asm.Opcodes.IRETURN,
+                        org.objectweb.asm.Opcodes.LRETURN,
+                        org.objectweb.asm.Opcodes.FRETURN,
+                        org.objectweb.asm.Opcodes.DRETURN,
+                        org.objectweb.asm.Opcodes.ATHROW,
+                    )
+                ) {
                     val line = getLineNumber(methodNode, insn)
                     if (line != null) {
                         exitPoints.add(line)
@@ -202,7 +213,10 @@ class InlinedFinallyDetector {
     /**
      * Get line number for an instruction.
      */
-    private fun getLineNumber(methodNode: MethodNode, insn: org.objectweb.asm.tree.AbstractInsnNode): Int? {
+    private fun getLineNumber(
+        methodNode: MethodNode,
+        insn: org.objectweb.asm.tree.AbstractInsnNode,
+    ): Int? {
         var current = insn
         while (current != null) {
             if (current is org.objectweb.asm.tree.LineNumberNode) {
@@ -218,7 +232,7 @@ class InlinedFinallyDetector {
      */
     fun isInInlinedBlock(
         mutationLine: Int,
-        inlinedBlocks: List<InlinedFinallyBlock>
+        inlinedBlocks: List<InlinedFinallyBlock>,
     ): Boolean {
         return inlinedBlocks.any { block ->
             mutationLine in block.startLine..block.endLine
@@ -230,7 +244,7 @@ class InlinedFinallyDetector {
      */
     fun countSkippedMutations(
         mutations: List<MutationInfo>,
-        inlinedBlocks: List<InlinedFinallyBlock>
+        inlinedBlocks: List<InlinedFinallyBlock>,
     ): Int {
         return mutations.count { mutation ->
             isInInlinedBlock(mutation.lineNumber, inlinedBlocks)

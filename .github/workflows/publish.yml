@@ -34,7 +34,7 @@ jobs:
       - name: Publish to GitHub Packages
         run: ./gradlew publishMavenPublicationToGitHubPackagesRepository
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
 
   publish-maven-central:
     name: Publish to Maven Central

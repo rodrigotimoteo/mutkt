@@ -10,7 +10,6 @@ import java.util.ServiceLoader
  * Custom mutators are discovered via ServiceLoader (SPI pattern).
  */
 interface CustomMutator {
-
     /**
      * Name of the mutation operator.
      */
@@ -44,14 +43,16 @@ interface CustomMutator {
      * @param mutation The mutation to apply
      * @return The mutated method node
      */
-    fun applyMutation(methodNode: MethodNode, mutation: MutationInfo): MethodNode
+    fun applyMutation(
+        methodNode: MethodNode,
+        mutation: MutationInfo,
+    ): MethodNode
 }
 
 /**
  * Registry for custom mutators.
  */
 class CustomMutatorRegistry {
-
     private val mutators = mutableListOf<CustomMutator>()
 
     /**

@@ -21,7 +21,6 @@ import org.objectweb.asm.Opcodes
  * - ?: "default" → ?: "" (empty default)
  */
 object NullSafetyMutator {
-
     /**
      * Detects safe call operator (?.method()).
      * In bytecode, this appears as:
@@ -106,80 +105,90 @@ object NullSafetyMutator {
         methodName: String,
         methodDescriptor: String,
         instruction: InstructionInfo,
-        type: NullSafetyType
+        type: NullSafetyType,
     ): List<MutationInfo> {
         val mutations = mutableListOf<MutationInfo>()
 
         when (type) {
             NullSafetyType.SAFE_CALL -> {
                 // Mutant 1: Remove null check (direct call)
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.NULL_SAFETY,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = instruction.lineNumber,
-                    description = "Remove null check (safe call -> direct call)",
-                    originalOpcode = instruction.opcode,
-                    mutatedOpcode = instruction.opcode,
-                    metadata = mapOf("mutationType" to "REMOVE_NULL_CHECK")
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.NULL_SAFETY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = instruction.lineNumber,
+                        description = "Remove null check (safe call -> direct call)",
+                        originalOpcode = instruction.opcode,
+                        mutatedOpcode = instruction.opcode,
+                        metadata = mapOf("mutationType" to "REMOVE_NULL_CHECK"),
+                    ),
+                )
 
                 // Mutant 2: Always return null
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.NULL_SAFETY,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = instruction.lineNumber,
-                    description = "Always return null (safe call -> null)",
-                    originalOpcode = instruction.opcode,
-                    mutatedOpcode = instruction.opcode,
-                    metadata = mapOf("mutationType" to "ALWAYS_NULL")
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.NULL_SAFETY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = instruction.lineNumber,
+                        description = "Always return null (safe call -> null)",
+                        originalOpcode = instruction.opcode,
+                        mutatedOpcode = instruction.opcode,
+                        metadata = mapOf("mutationType" to "ALWAYS_NULL"),
+                    ),
+                )
             }
 
             NullSafetyType.NOT_NULL_ASSERTION -> {
                 // Mutant: Remove assertion (allow null)
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.NULL_SAFETY,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = instruction.lineNumber,
-                    description = "Remove not-null assertion (!! -> .)",
-                    originalOpcode = instruction.opcode,
-                    mutatedOpcode = instruction.opcode,
-                    metadata = mapOf("mutationType" to "REMOVE_ASSERTION")
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.NULL_SAFETY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = instruction.lineNumber,
+                        description = "Remove not-null assertion (!! -> .)",
+                        originalOpcode = instruction.opcode,
+                        mutatedOpcode = instruction.opcode,
+                        metadata = mapOf("mutationType" to "REMOVE_ASSERTION"),
+                    ),
+                )
             }
 
             NullSafetyType.ELVIS -> {
                 // Mutant 1: Use empty default
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.NULL_SAFETY,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = instruction.lineNumber,
-                    description = "Use empty default (elvis -> empty)",
-                    originalOpcode = instruction.opcode,
-                    mutatedOpcode = instruction.opcode,
-                    metadata = mapOf("mutationType" to "EMPTY_DEFAULT")
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.NULL_SAFETY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = instruction.lineNumber,
+                        description = "Use empty default (elvis -> empty)",
+                        originalOpcode = instruction.opcode,
+                        mutatedOpcode = instruction.opcode,
+                        metadata = mapOf("mutationType" to "EMPTY_DEFAULT"),
+                    ),
+                )
 
                 // Mutant 2: Always use default
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.NULL_SAFETY,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = instruction.lineNumber,
-                    description = "Always use default (elvis -> default)",
-                    originalOpcode = instruction.opcode,
-                    mutatedOpcode = instruction.opcode,
-                    metadata = mapOf("mutationType" to "ALWAYS_DEFAULT")
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.NULL_SAFETY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = instruction.lineNumber,
+                        description = "Always use default (elvis -> default)",
+                        originalOpcode = instruction.opcode,
+                        mutatedOpcode = instruction.opcode,
+                        metadata = mapOf("mutationType" to "ALWAYS_DEFAULT"),
+                    ),
+                )
             }
         }
 
@@ -191,7 +200,7 @@ object NullSafetyMutator {
  * Types of null-safety operators.
  */
 enum class NullSafetyType {
-    SAFE_CALL,        // ?.
+    SAFE_CALL, // ?.
     NOT_NULL_ASSERTION, // !!
-    ELVIS             // ?:
+    ELVIS, // ?:
 }

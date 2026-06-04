@@ -14,7 +14,7 @@ data class Mutation(
     val lineNumber: Int,
     val originalBytecode: ByteArray,
     val mutatedBytecode: ByteArray,
-    val description: String
+    val description: String,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

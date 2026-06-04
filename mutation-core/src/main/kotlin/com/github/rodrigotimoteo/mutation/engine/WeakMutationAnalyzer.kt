@@ -11,13 +11,12 @@ import java.nio.file.Files
  * Weak mutants can be skipped because they can never be killed.
  */
 class WeakMutationAnalyzer {
-
     /**
      * Strength of a mutation.
      */
     enum class MutationStrength {
-        STRONG,  // Reaches execution point
-        WEAK     // Never reaches execution point
+        STRONG, // Reaches execution point
+        WEAK, // Never reaches execution point
     }
 
     /**
@@ -27,7 +26,7 @@ class WeakMutationAnalyzer {
         val weakMutations: List<Mutation>,
         val strongMutations: List<Mutation>,
         val weakCount: Int,
-        val strongCount: Int
+        val strongCount: Int,
     )
 
     /**
@@ -39,18 +38,19 @@ class WeakMutationAnalyzer {
      */
     fun analyze(
         mutations: List<Mutation>,
-        coverageData: File? = null
+        coverageData: File? = null,
     ): WeakAnalysisResult {
         val weakMutations = mutableListOf<Mutation>()
         val strongMutations = mutableListOf<Mutation>()
 
         // Load coverage data if available
-        val coveredLines = if (coverageData != null && coverageData.exists()) {
-            loadCoverageData(coverageData)
-        } else {
-            // No coverage data - assume all mutations are strong
-            emptyMap()
-        }
+        val coveredLines =
+            if (coverageData != null && coverageData.exists()) {
+                loadCoverageData(coverageData)
+            } else {
+                // No coverage data - assume all mutations are strong
+                emptyMap()
+            }
 
         for (mutation in mutations) {
             if (isWeakMutation(mutation, coveredLines)) {
@@ -64,7 +64,7 @@ class WeakMutationAnalyzer {
             weakMutations = weakMutations,
             strongMutations = strongMutations,
             weakCount = weakMutations.size,
-            strongCount = strongMutations.size
+            strongCount = strongMutations.size,
         )
     }
 
@@ -73,7 +73,7 @@ class WeakMutationAnalyzer {
      */
     private fun isWeakMutation(
         mutation: Mutation,
-        coveredLines: Map<String, Set<Int>>
+        coveredLines: Map<String, Set<Int>>,
     ): Boolean {
         // If no coverage data, assume strong
         if (coveredLines.isEmpty()) {
@@ -123,7 +123,10 @@ class WeakMutationAnalyzer {
     /**
      * Get strength for a mutation.
      */
-    fun getStrength(mutation: Mutation, coveredLines: Map<String, Set<Int>>): MutationStrength {
+    fun getStrength(
+        mutation: Mutation,
+        coveredLines: Map<String, Set<Int>>,
+    ): MutationStrength {
         return if (isWeakMutation(mutation, coveredLines)) {
             MutationStrength.WEAK
         } else {

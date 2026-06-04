@@ -11,14 +11,14 @@ import com.github.rodrigotimoteo.mutation.model.MutationStatus
  * M2 can be skipped because it's guaranteed to be killed if M1 is killed.
  */
 class SubsumptionAnalyzer {
-
     /**
      * Result of subsumption analysis.
      */
     data class SubsumptionResult(
         val subsumedMutations: List<Mutation>,
-        val subsumedBy: Map<String, String>, // M2 -> M1 (M1 subsumes M2)
-        val skippedCount: Int
+        // M2 -> M1 (M1 subsumes M2)
+        val subsumedBy: Map<String, String>,
+        val skippedCount: Int,
     )
 
     /**
@@ -66,14 +66,15 @@ class SubsumptionAnalyzer {
         }
 
         // Collect subsumed mutations
-        val subsumedMutations = results
-            .filter { it.mutation.id in subsumedBy }
-            .map { it.mutation }
+        val subsumedMutations =
+            results
+                .filter { it.mutation.id in subsumedBy }
+                .map { it.mutation }
 
         return SubsumptionResult(
             subsumedMutations = subsumedMutations,
             subsumedBy = subsumedBy,
-            skippedCount = subsumedMutations.size
+            skippedCount = subsumedMutations.size,
         )
     }
 

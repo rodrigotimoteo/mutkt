@@ -2,11 +2,8 @@ package com.github.rodrigotimoteo.mutation.runner
 
 import com.github.rodrigotimoteo.mutation.engine.MutationEngine
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
-import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import org.junit.jupiter.api.Test
 import java.io.File
-import java.net.URLClassLoader
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -14,11 +11,11 @@ import kotlin.test.assertTrue
  * against the sample Calculator class.
  */
 class MutationEngineIntegrationTest {
-
-    private val projectRoot = File(System.getProperty("user.dir")).let { dir ->
-        // user.dir may be the module directory, go up to project root
-        if (dir.name == "mutation-test-runner") dir.parentFile else dir
-    }
+    private val projectRoot =
+        File(System.getProperty("user.dir")).let { dir ->
+            // user.dir may be the module directory, go up to project root
+            if (dir.name == "mutation-test-runner") dir.parentFile else dir
+        }
     private val buildDir = File(projectRoot, "mutation-sample/build")
 
     @Test
@@ -35,20 +32,23 @@ class MutationEngineIntegrationTest {
         assertTrue(calculatorClassPath.toFile().exists(), "Calculator.class not found")
 
         val calculatorBytes = calculatorClassPath.toFile().readBytes()
-        val classFiles = mapOf(
-            "com/github/rodrigotimoteo/mutation/sample/Calculator" to calculatorBytes
-        )
+        val classFiles =
+            mapOf(
+                "com/github/rodrigotimoteo/mutation/sample/Calculator" to calculatorBytes,
+            )
 
         // Run mutation testing
-        val engine = MutationEngine(
-            enabledOperators = MutationOperator.MVP_OPERATORS,
-            timeoutMs = 10000,
-            maxParallelMutants = 2
-        )
+        val engine =
+            MutationEngine(
+                enabledOperators = MutationOperator.MVP_OPERATORS,
+                timeoutMs = 10000,
+                maxParallelMutants = 2,
+            )
 
-        val testClassNames = listOf(
-            "com.github.rodrigotimoteo.mutation.sample.CalculatorTest"
-        )
+        val testClassNames =
+            listOf(
+                "com.github.rodrigotimoteo.mutation.sample.CalculatorTest",
+            )
 
         val testClassBytes = loadTestClassFiles(testClassesDir)
         val report = engine.runMutationTesting(classFiles, testClassNames, testClassBytes)
@@ -61,7 +61,12 @@ class MutationEngineIntegrationTest {
 
         // Print detailed results
         for (result in report.results) {
-            println("  ${result.mutation.operator.operatorName} ${result.mutation.className}.${result.mutation.methodName}:${result.mutation.lineNumber} -> ${result.status}")
+            val mutation = result.mutation
+            println(
+                "  ${mutation.operator.operatorName}" +
+                    " ${mutation.className}.${mutation.methodName}" +
+                    ":${mutation.lineNumber} -> ${result.status}",
+            )
         }
 
         // All mutations should be killed (our tests are comprehensive)
@@ -73,16 +78,18 @@ class MutationEngineIntegrationTest {
         val classesDir = findClassesDir()
         val calculatorClassPath = classesDir.toPath().resolve("com/github/rodrigotimoteo/mutation/sample/Calculator.class")
         val calculatorBytes = calculatorClassPath.toFile().readBytes()
-        val classFiles = mapOf(
-            "com/github/rodrigotimoteo/mutation/sample/Calculator" to calculatorBytes
-        )
+        val classFiles =
+            mapOf(
+                "com/github/rodrigotimoteo/mutation/sample/Calculator" to calculatorBytes,
+            )
 
         // Test with only arithmetic operators
-        val engine = MutationEngine(
-            enabledOperators = setOf(MutationOperator.ARITHMETIC),
-            timeoutMs = 10000,
-            maxParallelMutants = 2
-        )
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                timeoutMs = 10000,
+                maxParallelMutants = 2,
+            )
 
         val report = engine.runMutationTesting(classFiles, emptyList(), emptyMap())
 
@@ -98,10 +105,11 @@ class MutationEngineIntegrationTest {
             .filter { it.toString().endsWith(".class") }
             .forEach { path ->
                 val relativePath = dir.toPath().relativize(path)
-                val className = relativePath.toString()
-                    .replace(".class", "")
-                    .replace("/", ".")
-                    .replace("\\", ".")
+                val className =
+                    relativePath.toString()
+                        .replace(".class", "")
+                        .replace("/", ".")
+                        .replace("\\", ".")
                 result[className.replace('.', '/')] = path.toFile().readBytes()
             }
         return result
@@ -109,20 +117,22 @@ class MutationEngineIntegrationTest {
 
     private fun findClassesDir(): File {
         // Try different build output locations
-        val candidates = listOf(
-            File(buildDir, "classes/kotlin/main"),
-            File(buildDir, "classes/java/main"),
-            File(buildDir, "classes")
-        )
+        val candidates =
+            listOf(
+                File(buildDir, "classes/kotlin/main"),
+                File(buildDir, "classes/java/main"),
+                File(buildDir, "classes"),
+            )
         return candidates.firstOrNull { it.exists() } ?: File(buildDir, "classes/kotlin/main")
     }
 
     private fun findTestClassesDir(): File {
-        val candidates = listOf(
-            File(buildDir, "classes/kotlin/test"),
-            File(buildDir, "test-classes"),
-            File(buildDir, "classes/java/test")
-        )
+        val candidates =
+            listOf(
+                File(buildDir, "classes/kotlin/test"),
+                File(buildDir, "test-classes"),
+                File(buildDir, "classes/java/test"),
+            )
         return candidates.firstOrNull { it.exists() } ?: File(buildDir, "classes/kotlin/test")
     }
 }

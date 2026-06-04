@@ -10,14 +10,13 @@ import com.github.rodrigotimoteo.mutation.model.MutationStatus
  * This provides faster feedback on mutation score.
  */
 class TestOrderingStrategy {
-
     /**
      * Test kill statistics.
      */
     data class TestKillCount(
         val testId: String,
         val killCount: Int,
-        val lastRun: Long = System.currentTimeMillis()
+        val lastRun: Long = System.currentTimeMillis(),
     )
 
     /**
@@ -29,7 +28,7 @@ class TestOrderingStrategy {
      */
     fun orderTests(
         testIds: List<String>,
-        history: Map<String, TestKillCount> = emptyMap()
+        history: Map<String, TestKillCount> = emptyMap(),
     ): List<String> {
         return testIds.sortedByDescending { testId ->
             history[testId]?.killCount ?: 0
@@ -47,7 +46,7 @@ class TestOrderingStrategy {
     fun getTopKTests(
         testIds: List<String>,
         history: Map<String, TestKillCount>,
-        k: Int = 5
+        k: Int = 5,
     ): List<String> {
         return orderTests(testIds, history).take(k)
     }
@@ -61,7 +60,7 @@ class TestOrderingStrategy {
      */
     fun updateHistory(
         history: Map<String, TestKillCount>,
-        results: List<MutationResult>
+        results: List<MutationResult>,
     ): Map<String, TestKillCount> {
         val updatedHistory = history.toMutableMap()
 
@@ -71,11 +70,12 @@ class TestOrderingStrategy {
                 val current = updatedHistory[testId]
                 val newKillCount = (current?.killCount ?: 0) + 1
 
-                updatedHistory[testId] = TestKillCount(
-                    testId = testId,
-                    killCount = newKillCount,
-                    lastRun = System.currentTimeMillis()
-                )
+                updatedHistory[testId] =
+                    TestKillCount(
+                        testId = testId,
+                        killCount = newKillCount,
+                        lastRun = System.currentTimeMillis(),
+                    )
             }
         }
 
@@ -96,9 +96,7 @@ class TestOrderingStrategy {
      * @param history Test kill counts
      * @return Map of test ID to kill percentage
      */
-    fun getKillPercentages(
-        history: Map<String, TestKillCount>
-    ): Map<String, Double> {
+    fun getKillPercentages(history: Map<String, TestKillCount>): Map<String, Double> {
         val totalKills = history.values.sumOf { it.killCount }
         if (totalKills == 0) return emptyMap()
 

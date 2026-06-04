@@ -12,14 +12,16 @@ import org.objectweb.asm.Type
  * Uses ASM to visit and transform bytecode instructions.
  */
 class Mutator(
-    private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS
+    private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
 ) {
-
     /**
      * Scans a class for mutation points without applying mutations.
      * Returns list of potential mutations.
      */
-    fun scanMutations(classBytes: ByteArray, sourceFiles: Map<String, String> = emptyMap()): List<MutationInfo> {
+    fun scanMutations(
+        classBytes: ByteArray,
+        sourceFiles: Map<String, String> = emptyMap(),
+    ): List<MutationInfo> {
         val mutations = mutableListOf<MutationInfo>()
         val reader = ClassReader(classBytes)
         val visitor = MutationScannerVisitor(mutations, enabledOperators, sourceFiles)
@@ -33,7 +35,7 @@ class Mutator(
      */
     fun applyMutation(
         classBytes: ByteArray,
-        targetMutation: MutationInfo
+        targetMutation: MutationInfo,
     ): ByteArray {
         val writer = ClassWriter(ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES)
         val reader = ClassReader(classBytes)
@@ -61,9 +63,8 @@ class Mutator(
 private class MutationScannerVisitor(
     private val mutations: MutableList<MutationInfo>,
     private val enabledOperators: Set<MutationOperator>,
-    private val sourceFiles: Map<String, String> = emptyMap()
+    private val sourceFiles: Map<String, String> = emptyMap(),
 ) : ClassVisitor(Opcodes.ASM9) {
-
     private var currentClassName = ""
     private var isKotlinClass = false
     private var classSuppressed = false
@@ -93,7 +94,7 @@ private class MutationScannerVisitor(
         name: String,
         signature: String?,
         superName: String?,
-        interfaces: Array<out String>?
+        interfaces: Array<out String>?,
     ) {
         currentClassName = name.replace('/', '.')
         // Check for Kotlin @Metadata annotation
@@ -101,7 +102,10 @@ private class MutationScannerVisitor(
         super.visit(version, access, name, signature, superName, interfaces)
     }
 
-    override fun visitAnnotation(desc: String, visible: Boolean): org.objectweb.asm.AnnotationVisitor? {
+    override fun visitAnnotation(
+        desc: String,
+        visible: Boolean,
+    ): org.objectweb.asm.AnnotationVisitor? {
         if (desc == "Lkotlin/Metadata;") {
             isKotlinClass = true
         }
@@ -117,7 +121,7 @@ private class MutationScannerVisitor(
         name: String,
         descriptor: String,
         signature: String?,
-        exceptions: Array<out String>?
+        exceptions: Array<out String>?,
     ): MethodVisitor? {
         // Always visit methods - don't rely on super.visitMethod() which returns null
         // when no delegate ClassVisitor is set.
@@ -130,20 +134,26 @@ private class MutationScannerVisitor(
         // Skip Kotlin synthetic methods
         if (isKotlinClass && isKotlinSynthetic(name)) return null
 
-        return MutationScannerMethodVisitor(className = currentClassName, methodName = name,
-            methodDescriptor = descriptor, mutations = mutations, enabledOperators = enabledOperators,
-            classSuppressed = classSuppressed, suppressedOperators = suppressedOperators)
+        return MutationScannerMethodVisitor(
+            className = currentClassName,
+            methodName = name,
+            methodDescriptor = descriptor,
+            mutations = mutations,
+            enabledOperators = enabledOperators,
+            classSuppressed = classSuppressed,
+            suppressedOperators = suppressedOperators,
+        )
     }
 
     private fun isKotlinSynthetic(name: String): Boolean {
         return name.contains("\$") && (
             name.contains("copy\$default") ||
-            name.contains("component") ||
-            name.contains("\$serializer") ||
-            name.contains("<init>\$default") ||
-            name.contains("toString") ||
-            name.contains("hashCode") ||
-            name.contains("equals")
+                name.contains("component") ||
+                name.contains("\$serializer") ||
+                name.contains("<init>\$default") ||
+                name.contains("toString") ||
+                name.contains("hashCode") ||
+                name.contains("equals")
         )
     }
 }
@@ -158,9 +168,8 @@ private class MutationScannerMethodVisitor(
     private val mutations: MutableList<MutationInfo>,
     private val enabledOperators: Set<MutationOperator>,
     private val classSuppressed: Boolean = false,
-    private val suppressedOperators: Set<String> = emptySet()
+    private val suppressedOperators: Set<String> = emptySet(),
 ) : MethodVisitor(Opcodes.ASM9) {
-
     private var currentLineNumber = -1
 
     /**
@@ -172,12 +181,18 @@ private class MutationScannerMethodVisitor(
         return false
     }
 
-    override fun visitLineNumber(line: Int, start: org.objectweb.asm.Label?) {
+    override fun visitLineNumber(
+        line: Int,
+        start: org.objectweb.asm.Label?,
+    ) {
         currentLineNumber = line
         super.visitLineNumber(line, start)
     }
 
-    override fun visitJumpInsn(opcode: Int, label: org.objectweb.asm.Label) {
+    override fun visitJumpInsn(
+        opcode: Int,
+        label: org.objectweb.asm.Label,
+    ) {
         checkConditionalMutations(opcode)
         super.visitJumpInsn(opcode, label)
     }
@@ -189,7 +204,10 @@ private class MutationScannerMethodVisitor(
         super.visitInsn(opcode)
     }
 
-    override fun visitIincInsn(varIndex: Int, increment: Int) {
+    override fun visitIincInsn(
+        varIndex: Int,
+        increment: Int,
+    ) {
         checkArithmeticIinc(increment)
         checkIncrementMutations(increment)
         super.visitIincInsn(varIndex, increment)
@@ -200,7 +218,7 @@ private class MutationScannerMethodVisitor(
         owner: String,
         name: String,
         descriptor: String,
-        isInterface: Boolean
+        isInterface: Boolean,
     ) {
         checkVoidMethodCallMutations(opcode, owner, name, descriptor)
         checkConstructorCallMutations(opcode, owner, name)
@@ -212,46 +230,52 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.CONDITIONALS_BOUNDARY in enabledOperators) {
             val mutated = ConditionalMutator.mutateBoundaryStatic(opcode)
             if (mutated != opcode) {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.CONDITIONALS_BOUNDARY,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = currentLineNumber,
-                    description = "Boundary: $opcode -> $mutated",
-                    originalOpcode = opcode,
-                    mutatedOpcode = mutated
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.CONDITIONALS_BOUNDARY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Boundary: $opcode -> $mutated",
+                        originalOpcode = opcode,
+                        mutatedOpcode = mutated,
+                    ),
+                )
             }
         }
         if (MutationOperator.NEGATE_CONDITIONALS in enabledOperators) {
             val mutated = ConditionalMutator.mutateNegateStatic(opcode)
             if (mutated != opcode) {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.NEGATE_CONDITIONALS,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = currentLineNumber,
-                    description = "Negate: $opcode -> $mutated",
-                    originalOpcode = opcode,
-                    mutatedOpcode = mutated
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.NEGATE_CONDITIONALS,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Negate: $opcode -> $mutated",
+                        originalOpcode = opcode,
+                        mutatedOpcode = mutated,
+                    ),
+                )
             }
         }
         if (MutationOperator.INVERT_NEGS in enabledOperators) {
             val mutated = InvertNegsMutator.mutateStatic(opcode)
             if (mutated != opcode) {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.INVERT_NEGS,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = currentLineNumber,
-                    description = "Invert: $opcode -> $mutated",
-                    originalOpcode = opcode,
-                    mutatedOpcode = mutated
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.INVERT_NEGS,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Invert: $opcode -> $mutated",
+                        originalOpcode = opcode,
+                        mutatedOpcode = mutated,
+                    ),
+                )
             }
         }
     }
@@ -260,38 +284,43 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.ARITHMETIC in enabledOperators) {
             val mutated = ArithmeticMutator.mutateStatic(opcode)
             if (mutated != opcode) {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.ARITHMETIC,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = currentLineNumber,
-                    description = "Arithmetic: $opcode -> $mutated",
-                    originalOpcode = opcode,
-                    mutatedOpcode = mutated
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.ARITHMETIC,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Arithmetic: $opcode -> $mutated",
+                        originalOpcode = opcode,
+                        mutatedOpcode = mutated,
+                    ),
+                )
             }
         }
     }
 
     private fun checkArithmeticIinc(increment: Int) {
         if (MutationOperator.ARITHMETIC in enabledOperators) {
-            val mutated = when (increment) {
-                1 -> -1
-                -1 -> 1
-                else -> increment
-            }
+            val mutated =
+                when (increment) {
+                    1 -> -1
+                    -1 -> 1
+                    else -> increment
+                }
             if (mutated != increment) {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.ARITHMETIC,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = currentLineNumber,
-                    description = "IINC: $increment -> $mutated",
-                    originalOpcode = Opcodes.IINC,
-                    mutatedOpcode = Opcodes.IINC
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.ARITHMETIC,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "IINC: $increment -> $mutated",
+                        originalOpcode = Opcodes.IINC,
+                        mutatedOpcode = Opcodes.IINC,
+                    ),
+                )
             }
         }
     }
@@ -302,72 +331,82 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.RETURN_VALS in enabledOperators) {
             val mutated = ReturnValueMutator.mutateReturnStatic(opcode, returnType)
             if (mutated != opcode) {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.RETURN_VALS,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = currentLineNumber,
-                    description = "Return: $opcode -> constant",
-                    originalOpcode = opcode,
-                    mutatedOpcode = mutated
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.RETURN_VALS,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Return: $opcode -> constant",
+                        originalOpcode = opcode,
+                        mutatedOpcode = mutated,
+                    ),
+                )
             }
         }
 
         if (MutationOperator.NULL_RETURNS in enabledOperators && opcode == Opcodes.ARETURN) {
-            mutations.add(MutationInfo(
-                operator = MutationOperator.NULL_RETURNS,
-                className = className,
-                methodName = methodName,
-                methodDescriptor = methodDescriptor,
-                lineNumber = currentLineNumber,
-                description = "Return null",
-                originalOpcode = opcode,
-                mutatedOpcode = opcode
-            ))
-        }
-
-        if (MutationOperator.EMPTY_RETURNS in enabledOperators && opcode == Opcodes.ARETURN) {
-            if (ReturnValueMutator.isCollectionOrArrayStatic(returnType)) {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.EMPTY_RETURNS,
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.NULL_RETURNS,
                     className = className,
                     methodName = methodName,
                     methodDescriptor = methodDescriptor,
                     lineNumber = currentLineNumber,
-                    description = "Return empty collection/array",
+                    description = "Return null",
                     originalOpcode = opcode,
-                    mutatedOpcode = opcode
-                ))
+                    mutatedOpcode = opcode,
+                ),
+            )
+        }
+
+        if (MutationOperator.EMPTY_RETURNS in enabledOperators && opcode == Opcodes.ARETURN) {
+            if (ReturnValueMutator.isCollectionOrArrayStatic(returnType)) {
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.EMPTY_RETURNS,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Return empty collection/array",
+                        originalOpcode = opcode,
+                        mutatedOpcode = opcode,
+                    ),
+                )
             }
         }
     }
 
     private fun checkBooleanReturnMutations(opcode: Int) {
         if (MutationOperator.TRUE_RETURNS in enabledOperators && opcode == Opcodes.ICONST_1) {
-            mutations.add(MutationInfo(
-                operator = MutationOperator.TRUE_RETURNS,
-                className = className,
-                methodName = methodName,
-                methodDescriptor = methodDescriptor,
-                lineNumber = currentLineNumber,
-                description = "Boolean return: true -> false",
-                originalOpcode = opcode,
-                mutatedOpcode = Opcodes.ICONST_0
-            ))
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.TRUE_RETURNS,
+                    className = className,
+                    methodName = methodName,
+                    methodDescriptor = methodDescriptor,
+                    lineNumber = currentLineNumber,
+                    description = "Boolean return: true -> false",
+                    originalOpcode = opcode,
+                    mutatedOpcode = Opcodes.ICONST_0,
+                ),
+            )
         }
         if (MutationOperator.FALSE_RETURNS in enabledOperators && opcode == Opcodes.ICONST_0) {
-            mutations.add(MutationInfo(
-                operator = MutationOperator.FALSE_RETURNS,
-                className = className,
-                methodName = methodName,
-                methodDescriptor = methodDescriptor,
-                lineNumber = currentLineNumber,
-                description = "Boolean return: false -> true",
-                originalOpcode = opcode,
-                mutatedOpcode = Opcodes.ICONST_1
-            ))
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.FALSE_RETURNS,
+                    className = className,
+                    methodName = methodName,
+                    methodDescriptor = methodDescriptor,
+                    lineNumber = currentLineNumber,
+                    description = "Boolean return: false -> true",
+                    originalOpcode = opcode,
+                    mutatedOpcode = Opcodes.ICONST_1,
+                ),
+            )
         }
     }
 
@@ -375,67 +414,89 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.INCREMENTS in enabledOperators) {
             val mutated = -increment
             if (mutated != increment) {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.INCREMENTS,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = currentLineNumber,
-                    description = "Increment: $increment -> $mutated",
-                    originalOpcode = Opcodes.IINC,
-                    mutatedOpcode = Opcodes.IINC
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.INCREMENTS,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Increment: $increment -> $mutated",
+                        originalOpcode = Opcodes.IINC,
+                        mutatedOpcode = Opcodes.IINC,
+                    ),
+                )
             }
         }
     }
 
-    private fun checkVoidMethodCallMutations(opcode: Int, owner: String, name: String, descriptor: String) {
+    private fun checkVoidMethodCallMutations(
+        opcode: Int,
+        owner: String,
+        name: String,
+        descriptor: String,
+    ) {
         if (MutationOperator.VOID_METHOD_CALLS in enabledOperators) {
             val returnType = Type.getReturnType(descriptor)
             if (returnType.sort == Type.VOID && name != "<init>" && name != "<clinit>") {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.VOID_METHOD_CALLS,
-                    className = className,
-                    methodName = methodName,
-                    methodDescriptor = methodDescriptor,
-                    lineNumber = currentLineNumber,
-                    description = "Remove void call: $owner.$name",
-                    originalOpcode = opcode,
-                    mutatedOpcode = opcode
-                ))
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.VOID_METHOD_CALLS,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Remove void call: $owner.$name",
+                        originalOpcode = opcode,
+                        mutatedOpcode = opcode,
+                    ),
+                )
             }
         }
     }
 
-    private fun checkConstructorCallMutations(opcode: Int, owner: String, name: String) {
+    private fun checkConstructorCallMutations(
+        opcode: Int,
+        owner: String,
+        name: String,
+    ) {
         if (MutationOperator.CONSTRUCTOR_CALLS in enabledOperators && name == "<init>") {
-            mutations.add(MutationInfo(
-                operator = MutationOperator.CONSTRUCTOR_CALLS,
-                className = className,
-                methodName = methodName,
-                methodDescriptor = methodDescriptor,
-                lineNumber = currentLineNumber,
-                description = "Remove constructor call: $owner.<init>",
-                originalOpcode = opcode,
-                mutatedOpcode = opcode
-            ))
-        }
-    }
-
-    private fun checkNonVoidMethodCallMutations(opcode: Int, owner: String, name: String, descriptor: String) {
-        if (MutationOperator.NON_VOID_METHOD_CALLS in enabledOperators) {
-            val returnType = Type.getReturnType(descriptor)
-            if (returnType.sort != Type.VOID && name != "<init>" && name != "<clinit>") {
-                mutations.add(MutationInfo(
-                    operator = MutationOperator.NON_VOID_METHOD_CALLS,
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.CONSTRUCTOR_CALLS,
                     className = className,
                     methodName = methodName,
                     methodDescriptor = methodDescriptor,
                     lineNumber = currentLineNumber,
-                    description = "Remove non-void call: $owner.$name",
+                    description = "Remove constructor call: $owner.<init>",
                     originalOpcode = opcode,
-                    mutatedOpcode = opcode
-                ))
+                    mutatedOpcode = opcode,
+                ),
+            )
+        }
+    }
+
+    private fun checkNonVoidMethodCallMutations(
+        opcode: Int,
+        owner: String,
+        name: String,
+        descriptor: String,
+    ) {
+        if (MutationOperator.NON_VOID_METHOD_CALLS in enabledOperators) {
+            val returnType = Type.getReturnType(descriptor)
+            if (returnType.sort != Type.VOID && name != "<init>" && name != "<clinit>") {
+                mutations.add(
+                    MutationInfo(
+                        operator = MutationOperator.NON_VOID_METHOD_CALLS,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Remove non-void call: $owner.$name",
+                        originalOpcode = opcode,
+                        mutatedOpcode = opcode,
+                    ),
+                )
             }
         }
     }
@@ -447,9 +508,8 @@ private class MutationScannerMethodVisitor(
 private class MutationApplierVisitor(
     writer: ClassWriter,
     private val targetMutation: MutationInfo,
-    private val enabledOperators: Set<MutationOperator>
+    private val enabledOperators: Set<MutationOperator>,
 ) : ClassVisitor(Opcodes.ASM9, writer) {
-
     private var currentClassName = ""
     private var isKotlinClass = false
     private var mutationApplied = false
@@ -460,13 +520,16 @@ private class MutationApplierVisitor(
         name: String,
         signature: String?,
         superName: String?,
-        interfaces: Array<out String>?
+        interfaces: Array<out String>?,
     ) {
         currentClassName = name.replace('/', '.')
         super.visit(version, access, name, signature, superName, interfaces)
     }
 
-    override fun visitAnnotation(desc: String, visible: Boolean): org.objectweb.asm.AnnotationVisitor? {
+    override fun visitAnnotation(
+        desc: String,
+        visible: Boolean,
+    ): org.objectweb.asm.AnnotationVisitor? {
         if (desc == "Lkotlin/Metadata;") {
             isKotlinClass = true
         }
@@ -478,7 +541,7 @@ private class MutationApplierVisitor(
         name: String,
         descriptor: String,
         signature: String?,
-        exceptions: Array<out String>?
+        exceptions: Array<out String>?,
     ): MethodVisitor? {
         val mv = super.visitMethod(access, name, descriptor, signature, exceptions)
         if (mv == null) return null
@@ -494,7 +557,7 @@ private class MutationApplierVisitor(
             name,
             descriptor,
             targetMutation,
-            enabledOperators
+            enabledOperators,
         )
     }
 }
@@ -508,18 +571,23 @@ private class MutationApplierMethodVisitor(
     private val methodName: String,
     private val methodDescriptor: String,
     private val targetMutation: MutationInfo,
-    private val enabledOperators: Set<MutationOperator>
+    private val enabledOperators: Set<MutationOperator>,
 ) : MethodVisitor(Opcodes.ASM9, mv) {
-
     private var currentLineNumber = -1
     private var applied = false
 
-    override fun visitLineNumber(line: Int, start: org.objectweb.asm.Label?) {
+    override fun visitLineNumber(
+        line: Int,
+        start: org.objectweb.asm.Label?,
+    ) {
         currentLineNumber = line
         super.visitLineNumber(line, start)
     }
 
-    override fun visitJumpInsn(opcode: Int, label: org.objectweb.asm.Label) {
+    override fun visitJumpInsn(
+        opcode: Int,
+        label: org.objectweb.asm.Label,
+    ) {
         if (!applied && currentLineNumber == targetMutation.lineNumber && opcode == targetMutation.originalOpcode) {
             val mutatedOpcode = getMutatedOpcode(opcode)
             if (mutatedOpcode != opcode) {
@@ -538,7 +606,8 @@ private class MutationApplierMethodVisitor(
                 // For return mutations, we need special handling
                 if (targetMutation.operator == MutationOperator.RETURN_VALS ||
                     targetMutation.operator == MutationOperator.NULL_RETURNS ||
-                    targetMutation.operator == MutationOperator.EMPTY_RETURNS) {
+                    targetMutation.operator == MutationOperator.EMPTY_RETURNS
+                ) {
                     applyReturnMutation(opcode)
                     applied = true
                     return
@@ -552,14 +621,19 @@ private class MutationApplierMethodVisitor(
         super.visitInsn(opcode)
     }
 
-    override fun visitIincInsn(varIndex: Int, increment: Int) {
+    override fun visitIincInsn(
+        varIndex: Int,
+        increment: Int,
+    ) {
         if (!applied && currentLineNumber == targetMutation.lineNumber &&
-            targetMutation.operator == MutationOperator.ARITHMETIC) {
-            val mutated = when (increment) {
-                1 -> -1
-                -1 -> 1
-                else -> increment
-            }
+            targetMutation.operator == MutationOperator.ARITHMETIC
+        ) {
+            val mutated =
+                when (increment) {
+                    1 -> -1
+                    -1 -> 1
+                    else -> increment
+                }
             if (mutated != increment) {
                 super.visitIincInsn(varIndex, mutated)
                 applied = true
@@ -584,11 +658,26 @@ private class MutationApplierMethodVisitor(
         when (targetMutation.operator) {
             MutationOperator.RETURN_VALS -> {
                 when (opcode) {
-                    Opcodes.IRETURN -> { mv.visitInsn(Opcodes.ICONST_0); mv.visitInsn(Opcodes.IRETURN) }
-                    Opcodes.LRETURN -> { mv.visitInsn(Opcodes.LCONST_0); mv.visitInsn(Opcodes.LRETURN) }
-                    Opcodes.FRETURN -> { mv.visitInsn(Opcodes.FCONST_0); mv.visitInsn(Opcodes.FRETURN) }
-                    Opcodes.DRETURN -> { mv.visitInsn(Opcodes.DCONST_0); mv.visitInsn(Opcodes.DRETURN) }
-                    Opcodes.ARETURN -> { mv.visitInsn(Opcodes.ACONST_NULL); mv.visitInsn(Opcodes.ARETURN) }
+                    Opcodes.IRETURN -> {
+                        mv.visitInsn(Opcodes.ICONST_0)
+                        mv.visitInsn(Opcodes.IRETURN)
+                    }
+                    Opcodes.LRETURN -> {
+                        mv.visitInsn(Opcodes.LCONST_0)
+                        mv.visitInsn(Opcodes.LRETURN)
+                    }
+                    Opcodes.FRETURN -> {
+                        mv.visitInsn(Opcodes.FCONST_0)
+                        mv.visitInsn(Opcodes.FRETURN)
+                    }
+                    Opcodes.DRETURN -> {
+                        mv.visitInsn(Opcodes.DCONST_0)
+                        mv.visitInsn(Opcodes.DRETURN)
+                    }
+                    Opcodes.ARETURN -> {
+                        mv.visitInsn(Opcodes.ACONST_NULL)
+                        mv.visitInsn(Opcodes.ARETURN)
+                    }
                     Opcodes.RETURN -> mv.visitInsn(Opcodes.RETURN)
                 }
             }
@@ -639,91 +728,99 @@ private class MutationApplierMethodVisitor(
 
 // Static helper functions for mutation logic
 private object ConditionalMutator {
-    fun mutateBoundaryStatic(opcode: Int): Int = when (opcode) {
-        Opcodes.IFGE -> Opcodes.IFGT
-        Opcodes.IFGT -> Opcodes.IFGE
-        Opcodes.IFLE -> Opcodes.IFLT
-        Opcodes.IFLT -> Opcodes.IFLE
-        Opcodes.IF_ICMPGE -> Opcodes.IF_ICMPGT
-        Opcodes.IF_ICMPGT -> Opcodes.IF_ICMPGE
-        Opcodes.IF_ICMPLE -> Opcodes.IF_ICMPLT
-        Opcodes.IF_ICMPLT -> Opcodes.IF_ICMPLE
-        Opcodes.IF_ACMPEQ -> Opcodes.IF_ACMPNE
-        Opcodes.IF_ACMPNE -> Opcodes.IF_ACMPEQ
-        else -> opcode
-    }
+    fun mutateBoundaryStatic(opcode: Int): Int =
+        when (opcode) {
+            Opcodes.IFGE -> Opcodes.IFGT
+            Opcodes.IFGT -> Opcodes.IFGE
+            Opcodes.IFLE -> Opcodes.IFLT
+            Opcodes.IFLT -> Opcodes.IFLE
+            Opcodes.IF_ICMPGE -> Opcodes.IF_ICMPGT
+            Opcodes.IF_ICMPGT -> Opcodes.IF_ICMPGE
+            Opcodes.IF_ICMPLE -> Opcodes.IF_ICMPLT
+            Opcodes.IF_ICMPLT -> Opcodes.IF_ICMPLE
+            Opcodes.IF_ACMPEQ -> Opcodes.IF_ACMPNE
+            Opcodes.IF_ACMPNE -> Opcodes.IF_ACMPEQ
+            else -> opcode
+        }
 
-    fun mutateNegateStatic(opcode: Int): Int = when (opcode) {
-        Opcodes.IFEQ -> Opcodes.IFNE
-        Opcodes.IFNE -> Opcodes.IFEQ
-        Opcodes.IFLT -> Opcodes.IFGE
-        Opcodes.IFGE -> Opcodes.IFLT
-        Opcodes.IFGT -> Opcodes.IFLE
-        Opcodes.IFLE -> Opcodes.IFGT
-        Opcodes.IF_ICMPEQ -> Opcodes.IF_ICMPNE
-        Opcodes.IF_ICMPNE -> Opcodes.IF_ICMPEQ
-        Opcodes.IF_ICMPLT -> Opcodes.IF_ICMPGE
-        Opcodes.IF_ICMPGE -> Opcodes.IF_ICMPLT
-        Opcodes.IF_ICMPGT -> Opcodes.IF_ICMPLE
-        Opcodes.IF_ICMPLE -> Opcodes.IF_ICMPGT
-        Opcodes.IF_ACMPEQ -> Opcodes.IF_ACMPNE
-        Opcodes.IF_ACMPNE -> Opcodes.IF_ACMPEQ
-        Opcodes.IFNULL -> Opcodes.IFNONNULL
-        Opcodes.IFNONNULL -> Opcodes.IFNULL
-        else -> opcode
-    }
+    fun mutateNegateStatic(opcode: Int): Int =
+        when (opcode) {
+            Opcodes.IFEQ -> Opcodes.IFNE
+            Opcodes.IFNE -> Opcodes.IFEQ
+            Opcodes.IFLT -> Opcodes.IFGE
+            Opcodes.IFGE -> Opcodes.IFLT
+            Opcodes.IFGT -> Opcodes.IFLE
+            Opcodes.IFLE -> Opcodes.IFGT
+            Opcodes.IF_ICMPEQ -> Opcodes.IF_ICMPNE
+            Opcodes.IF_ICMPNE -> Opcodes.IF_ICMPEQ
+            Opcodes.IF_ICMPLT -> Opcodes.IF_ICMPGE
+            Opcodes.IF_ICMPGE -> Opcodes.IF_ICMPLT
+            Opcodes.IF_ICMPGT -> Opcodes.IF_ICMPLE
+            Opcodes.IF_ICMPLE -> Opcodes.IF_ICMPGT
+            Opcodes.IF_ACMPEQ -> Opcodes.IF_ACMPNE
+            Opcodes.IF_ACMPNE -> Opcodes.IF_ACMPEQ
+            Opcodes.IFNULL -> Opcodes.IFNONNULL
+            Opcodes.IFNONNULL -> Opcodes.IFNULL
+            else -> opcode
+        }
 }
 
 private object ArithmeticMutator {
-    fun mutateStatic(opcode: Int): Int = when (opcode) {
-        Opcodes.IADD -> Opcodes.ISUB
-        Opcodes.ISUB -> Opcodes.IADD
-        Opcodes.IMUL -> Opcodes.IDIV
-        Opcodes.IDIV -> Opcodes.IMUL
-        Opcodes.IREM -> Opcodes.IMUL
-        Opcodes.LADD -> Opcodes.LSUB
-        Opcodes.LSUB -> Opcodes.LADD
-        Opcodes.LMUL -> Opcodes.LDIV
-        Opcodes.LDIV -> Opcodes.LMUL
-        Opcodes.LREM -> Opcodes.LMUL
-        Opcodes.FADD -> Opcodes.FSUB
-        Opcodes.FSUB -> Opcodes.FADD
-        Opcodes.FMUL -> Opcodes.FDIV
-        Opcodes.FDIV -> Opcodes.FMUL
-        Opcodes.FREM -> Opcodes.FMUL
-        Opcodes.DADD -> Opcodes.DSUB
-        Opcodes.DSUB -> Opcodes.DADD
-        Opcodes.DMUL -> Opcodes.DDIV
-        Opcodes.DDIV -> Opcodes.DMUL
-        Opcodes.DREM -> Opcodes.DMUL
-        Opcodes.INEG -> Opcodes.NOP
-        Opcodes.LNEG -> Opcodes.NOP
-        Opcodes.FNEG -> Opcodes.NOP
-        Opcodes.DNEG -> Opcodes.NOP
-        else -> opcode
-    }
+    fun mutateStatic(opcode: Int): Int =
+        when (opcode) {
+            Opcodes.IADD -> Opcodes.ISUB
+            Opcodes.ISUB -> Opcodes.IADD
+            Opcodes.IMUL -> Opcodes.IDIV
+            Opcodes.IDIV -> Opcodes.IMUL
+            Opcodes.IREM -> Opcodes.IMUL
+            Opcodes.LADD -> Opcodes.LSUB
+            Opcodes.LSUB -> Opcodes.LADD
+            Opcodes.LMUL -> Opcodes.LDIV
+            Opcodes.LDIV -> Opcodes.LMUL
+            Opcodes.LREM -> Opcodes.LMUL
+            Opcodes.FADD -> Opcodes.FSUB
+            Opcodes.FSUB -> Opcodes.FADD
+            Opcodes.FMUL -> Opcodes.FDIV
+            Opcodes.FDIV -> Opcodes.FMUL
+            Opcodes.FREM -> Opcodes.FMUL
+            Opcodes.DADD -> Opcodes.DSUB
+            Opcodes.DSUB -> Opcodes.DADD
+            Opcodes.DMUL -> Opcodes.DDIV
+            Opcodes.DDIV -> Opcodes.DMUL
+            Opcodes.DREM -> Opcodes.DMUL
+            Opcodes.INEG -> Opcodes.NOP
+            Opcodes.LNEG -> Opcodes.NOP
+            Opcodes.FNEG -> Opcodes.NOP
+            Opcodes.DNEG -> Opcodes.NOP
+            else -> opcode
+        }
 }
 
 private object InvertNegsMutator {
-    fun mutateStatic(opcode: Int): Int = when (opcode) {
-        Opcodes.IFEQ -> Opcodes.IFNE
-        Opcodes.IFNE -> Opcodes.IFEQ
-        else -> opcode
-    }
+    fun mutateStatic(opcode: Int): Int =
+        when (opcode) {
+            Opcodes.IFEQ -> Opcodes.IFNE
+            Opcodes.IFNE -> Opcodes.IFEQ
+            else -> opcode
+        }
 }
 
 private object ReturnValueMutator {
-    fun mutateReturnStatic(opcode: Int, returnType: Type): Int = when (opcode) {
-        Opcodes.IRETURN, Opcodes.LRETURN, Opcodes.FRETURN, Opcodes.DRETURN, Opcodes.ARETURN -> opcode
-        else -> opcode
-    }
+    fun mutateReturnStatic(
+        opcode: Int,
+        returnType: Type,
+    ): Int =
+        when (opcode) {
+            Opcodes.IRETURN, Opcodes.LRETURN, Opcodes.FRETURN, Opcodes.DRETURN, Opcodes.ARETURN -> opcode
+            else -> opcode
+        }
 
     fun isCollectionOrArrayStatic(type: Type): Boolean {
         return type.sort == Type.ARRAY ||
-               type.className.startsWith("java/util/List") ||
-               type.className.startsWith("java/util/Set") ||
-               type.className.startsWith("java/util/Collection") ||
-               type.className.startsWith("kotlin/collections/")
+            type.className.startsWith("java/util/List") ||
+            type.className.startsWith("java/util/Set") ||
+            type.className.startsWith("java/util/Collection") ||
+            type.className.startsWith("kotlin/collections/")
     }
 }
 
@@ -733,11 +830,11 @@ private object ReturnValueMutator {
 private fun isKotlinSyntheticMethod(name: String): Boolean {
     return name.contains("\$") && (
         name.contains("copy\$default") ||
-        name.contains("component") ||
-        name.contains("\$serializer") ||
-        name.contains("<init>\$default") ||
-        name.contains("toString") ||
-        name.contains("hashCode") ||
-        name.contains("equals")
+            name.contains("component") ||
+            name.contains("\$serializer") ||
+            name.contains("<init>\$default") ||
+            name.contains("toString") ||
+            name.contains("hashCode") ||
+            name.contains("equals")
     )
 }

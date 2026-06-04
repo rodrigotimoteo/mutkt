@@ -19,9 +19,8 @@ annotation class SuppressMutations(
      * Specific operators to suppress. Empty array = suppress all operators.
      */
     val operators: Array<String> = [],
-
     /**
      * Reason for suppression (for documentation/reporting).
      */
-    val reason: String = ""
+    val reason: String = "",
 )

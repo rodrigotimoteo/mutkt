@@ -30,6 +30,12 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Run ktlint
+        run: ./gradlew ktlintCheck
+
+      - name: Run detekt
+        run: ./gradlew detekt
+
       - name: Run tests
         run: ./gradlew test
 
@@ -88,14 +94,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Generate coverage report
-        run: ./gradlew jacocoTestReport || echo "JaCoCo not configured, skipping"
+        run: ./gradlew koverHtmlReport || echo "Kover not configured, skipping"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: success()
         with:
           files: |
-            **/build/reports/jacoco/test/jacocoTestReport.xml
+            **/build/reports/kover/html/**/*.xml
           flags: unittests
           name: codecov-mutation-kotlin
           fail_ci_if_error: false

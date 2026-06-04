@@ -27,7 +27,6 @@ import org.objectweb.asm.Opcodes
  * - Remove Error branch → throw IllegalStateException
  */
 object SealedClassWhenMutator {
-
     /**
      * Checks if a class is sealed by examining its metadata.
      * Sealed classes have isSealed = true in Kotlin metadata.
@@ -55,46 +54,52 @@ object SealedClassWhenMutator {
         methodName: String,
         methodDescriptor: String,
         whenInstruction: InstructionInfo,
-        branchCount: Int
+        branchCount: Int,
     ): List<MutationInfo> {
         val mutations = mutableListOf<MutationInfo>()
 
         // For each branch, create a mutation that removes it
         for (i in 0 until branchCount) {
-            mutations.add(MutationInfo(
-                operator = MutationOperator.SEALED_WHEN,
-                className = className,
-                methodName = methodName,
-                methodDescriptor = methodDescriptor,
-                lineNumber = whenInstruction.lineNumber,
-                description = "Remove when branch $i of $branchCount",
-                originalOpcode = whenInstruction.opcode,
-                mutatedOpcode = whenInstruction.opcode,
-                metadata = mapOf(
-                    "branchIndex" to i.toString(),
-                    "branchCount" to branchCount.toString(),
-                    "mutationType" to "REMOVE_BRANCH"
-                )
-            ))
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.SEALED_WHEN,
+                    className = className,
+                    methodName = methodName,
+                    methodDescriptor = methodDescriptor,
+                    lineNumber = whenInstruction.lineNumber,
+                    description = "Remove when branch $i of $branchCount",
+                    originalOpcode = whenInstruction.opcode,
+                    mutatedOpcode = whenInstruction.opcode,
+                    metadata =
+                        mapOf(
+                            "branchIndex" to i.toString(),
+                            "branchCount" to branchCount.toString(),
+                            "mutationType" to "REMOVE_BRANCH",
+                        ),
+                ),
+            )
         }
 
         // Also create a mutation that returns wrong value for each branch
         for (i in 0 until branchCount) {
-            mutations.add(MutationInfo(
-                operator = MutationOperator.SEALED_WHEN,
-                className = className,
-                methodName = methodName,
-                methodDescriptor = methodDescriptor,
-                lineNumber = whenInstruction.lineNumber,
-                description = "Return wrong value for when branch $i",
-                originalOpcode = whenInstruction.opcode,
-                mutatedOpcode = whenInstruction.opcode,
-                metadata = mapOf(
-                    "branchIndex" to i.toString(),
-                    "branchCount" to branchCount.toString(),
-                    "mutationType" to "WRONG_RETURN"
-                )
-            ))
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.SEALED_WHEN,
+                    className = className,
+                    methodName = methodName,
+                    methodDescriptor = methodDescriptor,
+                    lineNumber = whenInstruction.lineNumber,
+                    description = "Return wrong value for when branch $i",
+                    originalOpcode = whenInstruction.opcode,
+                    mutatedOpcode = whenInstruction.opcode,
+                    metadata =
+                        mapOf(
+                            "branchIndex" to i.toString(),
+                            "branchCount" to branchCount.toString(),
+                            "mutationType" to "WRONG_RETURN",
+                        ),
+                ),
+            )
         }
 
         return mutations
@@ -107,5 +112,5 @@ object SealedClassWhenMutator {
 data class InstructionInfo(
     val opcode: Int,
     val lineNumber: Int,
-    val label: org.objectweb.asm.Label? = null
+    val label: org.objectweb.asm.Label? = null,
 )

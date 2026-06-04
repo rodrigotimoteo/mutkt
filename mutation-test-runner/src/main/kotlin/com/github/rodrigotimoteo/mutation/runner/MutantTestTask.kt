@@ -4,10 +4,8 @@ import com.github.rodrigotimoteo.mutation.classloader.MutantClassLoaderFactory
 import com.github.rodrigotimoteo.mutation.model.MutationResult
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
-import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
 import org.slf4j.LoggerFactory
-
 import java.util.concurrent.Callable
 
 /**
@@ -19,9 +17,8 @@ class MutantTestTask(
     private val mutatedBytes: ByteArray,
     private val classFiles: Map<String, ByteArray>,
     private val testClassNames: List<String>,
-    private val parentClassLoader: ClassLoader
+    private val parentClassLoader: ClassLoader,
 ) : Callable<MutationResult> {
-
     private val logger = LoggerFactory.getLogger(MutantTestTask::class.java)
 
     override fun call(): MutationResult {
@@ -33,12 +30,13 @@ class MutantTestTask(
             mutatedClassFiles[mutation.className.replace('.', '/')] = mutatedBytes
 
             val mutator = Mutator(setOf(mutation.operator))
-            val classLoader = MutantClassLoaderFactory.create(
-                parentClassLoader,
-                mutatedClassFiles,
-                mutation,
-                mutator
-            )
+            val classLoader =
+                MutantClassLoaderFactory.create(
+                    parentClassLoader,
+                    mutatedClassFiles,
+                    mutation,
+                    mutator,
+                )
 
             // Run tests with mutant classloader
             val status = runTests(classLoader, testClassNames)
@@ -46,7 +44,7 @@ class MutantTestTask(
             MutationResult(
                 mutation = toMutation(mutation),
                 status = status,
-                executionTimeMs = System.currentTimeMillis() - startTime
+                executionTimeMs = System.currentTimeMillis() - startTime,
             )
         } catch (e: Exception) {
             logger.debug("Mutant execution error: ${e.message}", e)
@@ -54,21 +52,25 @@ class MutantTestTask(
                 mutation = toMutation(mutation),
                 status = MutationStatus.ERROR,
                 executionTimeMs = System.currentTimeMillis() - startTime,
-                errorMessage = e.message
+                errorMessage = e.message,
             )
         }
     }
 
-    private fun runTests(classLoader: ClassLoader, testClassNames: List<String>): MutationStatus {
+    private fun runTests(
+        classLoader: ClassLoader,
+        testClassNames: List<String>,
+    ): MutationStatus {
         var hasTests = false
         var hasFailures = false
 
         for (testClassName in testClassNames) {
             try {
                 val testClass = classLoader.loadClass(testClassName)
-                val testMethods = testClass.declaredMethods.filter {
-                    it.getAnnotation(org.junit.jupiter.api.Test::class.java) != null
-                }
+                val testMethods =
+                    testClass.declaredMethods.filter {
+                        it.getAnnotation(org.junit.jupiter.api.Test::class.java) != null
+                    }
 
                 for (method in testMethods) {
                     hasTests = true
@@ -102,7 +104,7 @@ class MutantTestTask(
             lineNumber = info.lineNumber,
             originalBytecode = ByteArray(0),
             mutatedBytecode = ByteArray(0),
-            description = info.description
+            description = info.description,
         )
     }
 }

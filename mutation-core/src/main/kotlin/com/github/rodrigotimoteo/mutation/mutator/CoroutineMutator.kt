@@ -24,7 +24,6 @@ import org.objectweb.asm.Opcodes
  * - Remove withContext → run on wrong dispatcher
  */
 object CoroutineMutator {
-
     /**
      * Checks if a function is a suspend function.
      * Suspend functions have ACC_SYNCHRONIZED flag in bytecode.
@@ -38,15 +37,16 @@ object CoroutineMutator {
      * Common coroutine builders: runBlocking, launch, async, withContext
      */
     fun isCoroutineBuilder(methodName: String): Boolean {
-        return methodName in setOf(
-            "runBlocking",
-            "launch",
-            "async",
-            "withContext",
-            "coroutineScope",
-            "supervisorScope",
-            "runTest"
-        )
+        return methodName in
+            setOf(
+                "runBlocking",
+                "launch",
+                "async",
+                "withContext",
+                "coroutineScope",
+                "supervisorScope",
+                "runTest",
+            )
     }
 
     /**
@@ -71,54 +71,61 @@ object CoroutineMutator {
     fun generateMutations(
         className: String,
         method: MethodInfo,
-        lineNumber: Int
+        lineNumber: Int,
     ): List<MutationInfo> {
         val mutations = mutableListOf<MutationInfo>()
 
         if (isSuspendFunction(method.access)) {
             // Mutant 1: Skip suspend function body (return default)
-            mutations.add(MutationInfo(
-                operator = MutationOperator.COROUTINE,
-                className = className,
-                methodName = method.name,
-                methodDescriptor = method.descriptor,
-                lineNumber = lineNumber,
-                description = "Skip suspend function body",
-                originalOpcode = Opcodes.INVOKEVIRTUAL,
-                mutatedOpcode = Opcodes.INVOKEVIRTUAL,
-                metadata = mapOf(
-                    "mutationType" to "SKIP_SUSPEND_BODY",
-                    "returnType" to getReturnType(method.descriptor)
-                )
-            ))
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.COROUTINE,
+                    className = className,
+                    methodName = method.name,
+                    methodDescriptor = method.descriptor,
+                    lineNumber = lineNumber,
+                    description = "Skip suspend function body",
+                    originalOpcode = Opcodes.INVOKEVIRTUAL,
+                    mutatedOpcode = Opcodes.INVOKEVIRTUAL,
+                    metadata =
+                        mapOf(
+                            "mutationType" to "SKIP_SUSPEND_BODY",
+                            "returnType" to getReturnType(method.descriptor),
+                        ),
+                ),
+            )
 
             // Mutant 2: Throw CancellationException
-            mutations.add(MutationInfo(
-                operator = MutationOperator.COROUTINE,
-                className = className,
-                methodName = method.name,
-                methodDescriptor = method.descriptor,
-                lineNumber = lineNumber,
-                description = "Throw CancellationException",
-                originalOpcode = Opcodes.INVOKEVIRTUAL,
-                mutatedOpcode = Opcodes.INVOKEVIRTUAL,
-                metadata = mapOf("mutationType" to "THROW_CANCELLATION")
-            ))
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.COROUTINE,
+                    className = className,
+                    methodName = method.name,
+                    methodDescriptor = method.descriptor,
+                    lineNumber = lineNumber,
+                    description = "Throw CancellationException",
+                    originalOpcode = Opcodes.INVOKEVIRTUAL,
+                    mutatedOpcode = Opcodes.INVOKEVIRTUAL,
+                    metadata = mapOf("mutationType" to "THROW_CANCELLATION"),
+                ),
+            )
         }
 
         if (isCoroutineBuilder(method.name)) {
             // Mutant: Skip coroutine builder body
-            mutations.add(MutationInfo(
-                operator = MutationOperator.COROUTINE,
-                className = className,
-                methodName = method.name,
-                methodDescriptor = method.descriptor,
-                lineNumber = lineNumber,
-                description = "Skip coroutine builder body",
-                originalOpcode = Opcodes.INVOKEVIRTUAL,
-                mutatedOpcode = Opcodes.INVOKEVIRTUAL,
-                metadata = mapOf("mutationType" to "SKIP_BUILDER_BODY")
-            ))
+            mutations.add(
+                MutationInfo(
+                    operator = MutationOperator.COROUTINE,
+                    className = className,
+                    methodName = method.name,
+                    methodDescriptor = method.descriptor,
+                    lineNumber = lineNumber,
+                    description = "Skip coroutine builder body",
+                    originalOpcode = Opcodes.INVOKEVIRTUAL,
+                    mutatedOpcode = Opcodes.INVOKEVIRTUAL,
+                    metadata = mapOf("mutationType" to "SKIP_BUILDER_BODY"),
+                ),
+            )
         }
 
         return mutations

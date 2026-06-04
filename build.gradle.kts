@@ -1,5 +1,8 @@
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.1.10" apply false
+    id("org.jetbrains.kotlinx.kover") version "0.7.6" apply false
+    id("io.gitlab.arturbosch.detekt") version "1.23.7" apply false
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.1" apply false
 }
 
 allprojects {
@@ -16,6 +19,9 @@ subprojects {
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
+    apply(plugin = "org.jetbrains.kotlinx.kover")
+    apply(plugin = "io.gitlab.arturbosch.detekt")
+    apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
     extensions.configure<JavaPluginExtension> {
         withSourcesJar()
@@ -61,8 +67,8 @@ subprojects {
                 name = "GitHubPackages"
                 url = uri("https://maven.pkg.github.com/rodrigotimoteo/mutkt")
                 credentials {
-                    username = System.getenv("GITHUB_ACTOR") ?: "rodrigotimoteo"
-                    password = System.getenv("GITHUB_TOKEN")
+                    username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String? ?: "rodrigotimoteo"
+                    password = System.getenv("GH_PACKAGES_TOKEN") ?: System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String? ?: ""
                 }
             }
         }
