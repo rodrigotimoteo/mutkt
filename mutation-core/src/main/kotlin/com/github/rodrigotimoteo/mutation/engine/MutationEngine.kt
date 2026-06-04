@@ -18,7 +18,26 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Main mutation testing engine.
+ *
  * Orchestrates mutation generation, test execution, and result aggregation.
+ * The engine scans classes for mutation points, generates mutants, runs tests
+ * against each mutant, and reports which mutations were killed or survived.
+ *
+ * Example:
+ * ```kotlin
+ * val engine = MutationEngine(
+ *     enabledOperators = MutationOperator.MVP_OPERATORS,
+ *     timeoutMs = 30000,
+ *     maxParallelMutants = 4,
+ * )
+ * val report = engine.runMutationTesting(classFiles, testClassNames)
+ * println("Score: ${report.killedPercentage}%")
+ * ```
+ *
+ * @property enabledOperators Mutation operators to apply
+ * @property timeoutMs Timeout per mutant in milliseconds
+ * @property maxParallelMutants Number of parallel mutant executions
+ * @see MutationReport for result details
  */
 class MutationEngine(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
@@ -128,7 +147,7 @@ class MutationEngine(
                     future.cancel(true)
                     results.add(
                         MutationResult(
-                            mutation = toMutation(mutations[index].first),
+                            mutation = toMutation(mutations[index].first, mutatedBytes = mutations[index].second),
                             status = MutationStatus.TIMEOUT,
                             executionTimeMs = timeoutMs,
                             errorMessage = "Timeout after ${timeoutMs}ms",
@@ -137,7 +156,7 @@ class MutationEngine(
                 } catch (e: java.util.concurrent.ExecutionException) {
                     results.add(
                         MutationResult(
-                            mutation = toMutation(mutations[index].first),
+                            mutation = toMutation(mutations[index].first, mutatedBytes = mutations[index].second),
                             status = MutationStatus.ERROR,
                             errorMessage = "${e.cause?.javaClass?.simpleName}: ${e.cause?.message}",
                         ),
@@ -145,7 +164,7 @@ class MutationEngine(
                 } catch (e: Exception) {
                     results.add(
                         MutationResult(
-                            mutation = toMutation(mutations[index].first),
+                            mutation = toMutation(mutations[index].first, mutatedBytes = mutations[index].second),
                             status = MutationStatus.ERROR,
                             errorMessage = e.message,
                         ),
@@ -241,7 +260,11 @@ class MutationEngine(
         }
     }
 
-    private fun toMutation(info: MutationInfo): Mutation {
+    private fun toMutation(
+        info: MutationInfo,
+        originalBytes: ByteArray = ByteArray(0),
+        mutatedBytes: ByteArray = ByteArray(0),
+    ): Mutation {
         return Mutation(
             id = "${info.operator.operatorName}_${info.className}_${info.methodName}_${info.lineNumber}",
             className = info.className,
@@ -249,8 +272,8 @@ class MutationEngine(
             methodDescriptor = info.methodDescriptor,
             operator = info.operator,
             lineNumber = info.lineNumber,
-            originalBytecode = ByteArray(0),
-            mutatedBytecode = ByteArray(0),
+            originalBytecode = originalBytes,
+            mutatedBytecode = mutatedBytes,
             description = info.description,
         )
     }

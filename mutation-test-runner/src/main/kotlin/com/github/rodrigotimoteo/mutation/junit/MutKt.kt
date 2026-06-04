@@ -5,12 +5,12 @@ import com.github.rodrigotimoteo.mutation.registry.MutationRegistry
 /**
  * Entry point for mutation testing in JUnit 5 tests.
  *
- * Provides the `underTest` method that registers code blocks for
+ * Provides the [underTest] method that registers code blocks for
  * mutation analysis. When mutation testing is active (enabled via
- * MutKtExtension + @MutKtTest), the current mutation is tracked.
+ * [MutKtExtension] + [@MutKtTest]), the current mutation is tracked.
  *
- * Usage:
- * ```
+ * Example:
+ * ```kotlin
  * @ExtendWith(MutKtExtension::class)
  * @MutKtTest
  * class CalculatorTest {
@@ -19,8 +19,17 @@ import com.github.rodrigotimoteo.mutation.registry.MutationRegistry
  *         val calc = Calculator()
  *         assertEquals(4, calc.add(2, 2))
  *     }
+ *
+ *     @Test
+ *     fun testDivide() = MutKt.underTest("divide-mutation") {
+ *         val calc = Calculator()
+ *         assertEquals(5, calc.divide(10, 2))
+ *     }
  * }
  * ```
+ *
+ * @see MutKtExtension for automatic test execution
+ * @see MutationRegistry for state management
  */
 object MutKt {
     /**

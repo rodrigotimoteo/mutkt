@@ -5,8 +5,30 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Thread-local registry for tracking mutation testing state.
+ * Thread-safe registry for tracking mutation testing state.
+ *
  * Enables per-thread mutation control without modifying test code.
+ * Used by [MutKtExtension] and [MutKt] to coordinate mutation tracking
+ * across test executions.
+ *
+ * Thread Safety:
+ * - All operations use atomic variables and concurrent collections
+ * - Per-class thread tracking prevents cross-test interference
+ * - Safe for parallel JUnit execution
+ *
+ * Example:
+ * ```kotlin
+ * MutationRegistry.enable()
+ * MutationRegistry.markStartTime()
+ * // ... run test ...
+ * if (MutationRegistry.checkTimeout()) {
+ *     // Handle timeout
+ * }
+ * MutationRegistry.cleanup()
+ * ```
+ *
+ * @see MutKtExtension
+ * @see MutKt
  */
 object MutationRegistry {
     private val active = AtomicBoolean(false)

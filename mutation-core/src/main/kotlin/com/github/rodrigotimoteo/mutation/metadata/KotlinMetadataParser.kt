@@ -28,15 +28,14 @@ object KotlinMetadataParser {
     }
 
     fun isKotlinSyntheticMethod(name: String): Boolean {
-        return name.contains("\$") && (
-            name.contains("copy\$default") ||
-                name.contains("component") ||
-                name.contains("\$serializer") ||
-                name.contains("<init>\$default") ||
-                name.contains("toString") ||
-                name.contains("hashCode") ||
-                name.contains("equals")
-        )
+        // Only match known compiler-generated patterns
+        return name == "copy\$default" ||
+            name.startsWith("component") && name.endsWith("\$default") ||
+            name.endsWith("\$serializer") ||
+            name == "<init>\$default" ||
+            name == "toString\$default" ||
+            name == "hashCode\$default" ||
+            name == "equals\$default"
     }
 
     private class MetadataVisitor : ClassVisitor(Opcodes.ASM9) {
@@ -52,16 +51,14 @@ object KotlinMetadataParser {
             interfaces: Array<out String>?,
         ) {
             val className = name.replace('/', '.')
-            val isKotlin = false // Will be set in visitAnnotation
-
-            val isData = (access and Opcodes.ACC_FINAL) != 0 // Heuristic
             val isInterface = (access and Opcodes.ACC_INTERFACE) != 0
 
+            // isDataClass requires proper metadata parsing
             classInfo =
                 classInfo.copy(
                     className = className,
                     isInterface = isInterface,
-                    isDataClass = isData,
+                    isDataClass = false,
                 )
             super.visit(version, access, name, signature, superName, interfaces)
         }

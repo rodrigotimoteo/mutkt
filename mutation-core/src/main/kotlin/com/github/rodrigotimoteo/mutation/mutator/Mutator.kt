@@ -9,7 +9,21 @@ import org.objectweb.asm.Type
 
 /**
  * Main mutation engine that applies mutations to class bytecode.
- * Uses ASM to visit and transform bytecode instructions.
+ *
+ * Uses ASM to visit and transform bytecode instructions. Supports multiple
+ * mutation operators including arithmetic, conditional, return value, and
+ * Kotlin-specific mutations.
+ *
+ * Example:
+ * ```kotlin
+ * val mutator = Mutator(MutationOperator.MVP_OPERATORS)
+ * val mutations = mutator.scanMutations(classBytes)
+ * val mutated = mutator.applyMutation(classBytes, mutations.first())
+ * ```
+ *
+ * @property enabledOperators Set of mutation operators to apply
+ * @see MutationOperator for available operators
+ * @see MutationInfo for mutation point details
  */
 class Mutator(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
@@ -112,6 +126,24 @@ private class MutationScannerVisitor(
         // Check for @SuppressMutations annotation
         if (desc == "Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;") {
             classSuppressed = true
+            // Parse the annotation to extract specific operators to suppress
+            return object : org.objectweb.asm.AnnotationVisitor(Opcodes.ASM9) {
+                override fun visitArray(name: String?): org.objectweb.asm.AnnotationVisitor? {
+                    if (name == "operators") {
+                        return object : org.objectweb.asm.AnnotationVisitor(Opcodes.ASM9) {
+                            override fun visit(
+                                name: String?,
+                                value: Any?,
+                            ) {
+                                if (value is String) {
+                                    suppressedOperators = suppressedOperators + value
+                                }
+                            }
+                        }
+                    }
+                    return super.visitArray(name)
+                }
+            }
         }
         return super.visitAnnotation(desc, visible)
     }
@@ -146,15 +178,14 @@ private class MutationScannerVisitor(
     }
 
     private fun isKotlinSynthetic(name: String): Boolean {
-        return name.contains("\$") && (
-            name.contains("copy\$default") ||
-                name.contains("component") ||
-                name.contains("\$serializer") ||
-                name.contains("<init>\$default") ||
-                name.contains("toString") ||
-                name.contains("hashCode") ||
-                name.contains("equals")
-        )
+        // Only match known compiler-generated patterns, not general substring matches
+        return name == "copy\$default" ||
+            name.startsWith("component") && name.endsWith("\$default") ||
+            name.endsWith("\$serializer") ||
+            name == "<init>\$default" ||
+            name == "toString\$default" ||
+            name == "hashCode\$default" ||
+            name == "equals\$default"
     }
 }
 
@@ -799,7 +830,8 @@ private object ArithmeticMutator {
 private object InvertNegsMutator {
     fun mutateStatic(opcode: Int): Int =
         when (opcode) {
-            Opcodes.IFEQ -> Opcodes.IFNE
+            // Only handle IFNE→IFEQ for negation operators (!x)
+            // IFEQ↔IFNE is already covered by ConditionalMutator
             Opcodes.IFNE -> Opcodes.IFEQ
             else -> opcode
         }
@@ -816,11 +848,19 @@ private object ReturnValueMutator {
         }
 
     fun isCollectionOrArrayStatic(type: Type): Boolean {
-        return type.sort == Type.ARRAY ||
-            type.className.startsWith("java/util/List") ||
-            type.className.startsWith("java/util/Set") ||
-            type.className.startsWith("java/util/Collection") ||
-            type.className.startsWith("kotlin/collections/")
+        if (type.sort == Type.ARRAY) return true
+        val cn = type.className
+        return cn == "java/util/List" ||
+            cn == "java/util/ArrayList" ||
+            cn == "java/util/LinkedList" ||
+            cn == "java/util/Set" ||
+            cn == "java/util/HashSet" ||
+            cn == "java/util/TreeSet" ||
+            cn == "java/util/Collection" ||
+            cn == "java/util/Map" ||
+            cn == "java/util/HashMap" ||
+            cn == "java/util/TreeMap" ||
+            cn.startsWith("kotlin/collections/")
     }
 }
 

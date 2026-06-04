@@ -6,14 +6,15 @@ import org.gradle.api.tasks.SourceSetContainer
 
 /**
  * Gradle plugin for Kotlin Mutation Testing.
- * Adds `mutationTest` task that runs PITest-style mutation testing.
  *
- * Zero-config usage:
+ * Adds `mutationTest` task that runs PITest-style mutation testing.
+ * Zero-config: just apply the plugin and run `./gradlew mutationTest`.
+ *
+ * Usage:
  * ```kotlin
  * plugins {
  *     id("com.github.rodrigotimoteo.mutation-kotlin") version "0.1.0"
  * }
- * // Run: ./gradlew mutationTest
  * ```
  *
  * Custom configuration:
@@ -21,6 +22,8 @@ import org.gradle.api.tasks.SourceSetContainer
  * mutationTest {
  *     timeoutMs.set(60000)
  *     maxParallelMutants.set(8)
+ *     reportFormats.set(setOf("html", "console"))
+ *     failOnScoreThreshold.set(70)
  * }
  * ```
  */
@@ -34,14 +37,7 @@ class MutationPlugin : Plugin<Project> {
                 project,
             )
 
-        // Auto-detect sourceSets after project evaluation
-        project.afterEvaluate {
-            autoDetectSourceSets(project, extension)
-            autoDetectJaCoCo(project, extension)
-            autoDetectClasspath(project, extension)
-        }
-
-        // Register mutation test task
+        // Register mutation test task with lazy property wiring
         val mutationTask =
             project.tasks.register(
                 "mutationTest",
@@ -50,22 +46,24 @@ class MutationPlugin : Plugin<Project> {
                 task.group = "verification"
                 task.description = "Runs mutation testing analysis"
 
-                // Wire extension properties to task
-                project.afterEvaluate {
-                    task.targetClasses.from(extension.targetClasses)
-                    task.testClasses.from(extension.testClasses)
-                    task.classpath.from(extension.classpath)
-                    task.coverageExecFile.set(extension.coverageExecFile)
-                    task.enabledOperators.set(extension.enabledOperators)
-                    task.timeoutMs.set(extension.timeoutMs)
-                    task.maxParallelMutants.set(extension.maxParallelMutants)
-                    task.reportFormat.set(extension.reportFormat)
-                    task.outputDir.set(extension.outputDir)
-                    task.failOnSurvived.set(extension.failOnSurvived)
-                    task.excludedClasses.set(extension.excludedClasses)
-                    task.excludedMethods.set(extension.excludedMethods)
-                }
+                // Wire extension properties lazily
+                task.targetClasses.from(extension.targetClasses)
+                task.testClasses.from(extension.testClasses)
+                task.classpath.from(extension.classpath)
+                task.enabledOperators.set(extension.enabledOperators)
+                task.timeoutMs.set(extension.timeoutMs)
+                task.maxParallelMutants.set(extension.maxParallelMutants)
+                task.reportFormats.set(extension.reportFormats)
+                task.failOnSurvived.set(extension.failOnSurvived)
+                task.excludedClasses.set(extension.excludedClasses)
+                task.excludedMethods.set(extension.excludedMethods)
             }
+
+        // Auto-detect sourceSets after project evaluation
+        project.afterEvaluate {
+            autoDetectSourceSets(project, extension)
+            autoDetectClasspath(project, extension)
+        }
 
         // Don't auto-depend on check - mutationTest is opt-in
         // Users run: ./gradlew mutationTest
@@ -93,25 +91,6 @@ class MutationPlugin : Plugin<Project> {
             }
         } catch (e: Exception) {
             project.logger.warn("Could not auto-detect sourceSets: ${e.message}")
-        }
-    }
-
-    private fun autoDetectJaCoCo(
-        project: Project,
-        extension: MutationPluginExtension,
-    ) {
-        if (!extension.autoRunJaCoCo.get()) return
-
-        try {
-            val jacocoPlugin = project.plugins.findPlugin("jacoco")
-            if (jacocoPlugin != null) {
-                // JaCoCo is applied - look for .exec file
-                val execFile = project.layout.buildDirectory.file("jacoco/test.exec")
-                extension.coverageExecFile.set(execFile)
-                project.logger.info("Auto-detected JaCoCo coverage file")
-            }
-        } catch (e: Exception) {
-            project.logger.info("JaCoCo not available, skipping coverage analysis")
         }
     }
 

@@ -2,6 +2,15 @@ package com.github.rodrigotimoteo.mutation.model
 
 /**
  * Result of testing a single mutation.
+ *
+ * Contains the mutation, its status after test execution, execution time,
+ * and any error message if the mutation caused an error.
+ *
+ * @property mutation The mutation that was tested
+ * @property status Status of the mutation (KILLED, SURVIVED, ERROR, TIMEOUT, NO_COVERAGE)
+ * @property executionTimeMs Time taken to execute tests against this mutation
+ * @property errorMessage Error message if status is ERROR
+ * @see MutationStatus for status details
  */
 data class MutationResult(
     val mutation: Mutation,

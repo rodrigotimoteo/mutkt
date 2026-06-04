@@ -11,15 +11,38 @@ import org.gradle.api.tasks.Optional
 /**
  * DSL extension for configuring mutation testing.
  *
- * Usage:
+ * Provides a declarative API for configuring mutation testing behavior,
+ * including operators, timeouts, reporting, and filtering.
+ *
+ * Example:
  * ```kotlin
  * mutationTest {
- *     // Auto-detected from sourceSets, override if needed
+ *     // Core settings
  *     timeoutMs.set(60000)
  *     maxParallelMutants.set(8)
- *     excludedClasses.addAll("com/example/Generated*", "com/example/BuildConfig")
+ *
+ *     // Reporting
+ *     reportFormats.set(setOf("html", "console"))
+ *     failOnScoreThreshold.set(70)
+ *
+ *     // Filtering
+ *     targetClassPatterns.set(listOf("com\\.example\\..*"))
+ *     excludeClassPatterns.set(listOf("com\\.example\\.generated\\..*"))
+ *
+ *     // Speed optimizations
+ *     enableSubsumption.set(true)
+ *     enableWeakMutation.set(true)
  * }
  * ```
+ *
+ * @property targetClasses Target classes to mutate (auto-detected from sourceSets)
+ * @property testClasses Test classes to run (auto-detected from sourceSets)
+ * @property classpath Classpath for test execution (auto-detected)
+ * @property enabledOperators Mutation operators to apply
+ * @property timeoutMs Timeout per mutant in milliseconds
+ * @property maxParallelMutants Number of parallel mutant executions
+ * @property reportFormats Report formats to generate
+ * @property failOnScoreThreshold Fail build if score below this (0-100)
  */
 open class MutationPluginExtension(project: Project) {
     /**
@@ -75,13 +98,6 @@ open class MutationPluginExtension(project: Project) {
     val maxParallelMutants: Property<Int> =
         project.objects.property(Int::class.java)
             .convention(Runtime.getRuntime().availableProcessors())
-
-    /**
-     * Report format: "html", "xml", "json", "console"
-     */
-    @Input
-    @Optional
-    val reportFormat: Property<String> = project.objects.property(String::class.java).convention("html")
 
     /**
      * Output directory for mutation test reports.

@@ -5,73 +5,92 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import com.github.rodrigotimoteo.mutation.runner.MutationTestRunnerFactory
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import java.io.File
 
 /**
  * Gradle task for running mutation testing analysis.
+ *
  * This is the main entry point - just add the plugin and run `gradlew mutationTest`.
+ *
+ * The task auto-detects:
+ * - Source sets (src/main/kotlin, src/main/java)
+ * - Classpath (test runtime dependencies)
+ * - Kotlin vs Java compilation
+ *
+ * Example:
+ * ```bash
+ * ./gradlew mutationTest
+ * ```
  */
 abstract class MutationTask : DefaultTask() {
+    /** Target classes to mutate. Auto-detected from sourceSets.main.output. */
     @InputFiles
     @Optional
     val targetClasses: ConfigurableFileCollection = project.objects.fileCollection()
 
+    /** Test classes to run against mutations. Auto-detected from sourceSets.test.output. */
     @InputFiles
     @Optional
     val testClasses: ConfigurableFileCollection = project.objects.fileCollection()
 
+    /** Classpath for test execution. Auto-detected from testRuntimeClasspath. */
     @InputFiles
     @Optional
     val classpath: ConfigurableFileCollection = project.objects.fileCollection()
 
-    @InputFile
+    /** JaCoCo execution file for coverage analysis. */
+    @Input
     @Optional
     val coverageExecFile: RegularFileProperty = project.objects.fileProperty()
 
+    /** Mutation operators to enable. Defaults to MVP_OPERATORS. */
     @Input
     @Optional
     val enabledOperators: SetProperty<String> = project.objects.setProperty(String::class.java)
 
+    /** Timeout in milliseconds for each mutant test execution. */
     @Input
     @Optional
     val timeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(30000)
 
+    /** Number of parallel mutant test executions. */
     @Input
     @Optional
     val maxParallelMutants: Property<Int> = project.objects.property(Int::class.java).convention(4)
 
-    @Input
-    @Optional
-    val reportFormat: Property<String> = project.objects.property(String::class.java).convention("html")
-
+    /** Report formats to generate: "html", "console". */
     @Input
     @Optional
     val reportFormats: SetProperty<String> =
         project.objects.setProperty(String::class.java)
             .convention(setOf("html"))
 
-    @Input
-    @Optional
-    val outputDir: Property<String> =
-        project.objects.property(String::class.java)
-            .convention("build/reports/mutation")
+    /** Output directory for mutation test reports. */
+    @OutputDirectory
+    val reportsDir: DirectoryProperty =
+        project.objects.directoryProperty()
+            .convention(project.layout.buildDirectory.dir("reports/mutation"))
 
+    /** Whether to fail the build if any mutants survive. */
     @Input
     @Optional
     val failOnSurvived: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 
+    /** Classes to exclude from mutation testing. */
     @Input
     @Optional
     val excludedClasses: SetProperty<String> = project.objects.setProperty(String::class.java)
 
+    /** Methods to exclude from mutation testing. */
     @Input
     @Optional
     val excludedMethods: SetProperty<String> = project.objects.setProperty(String::class.java)
@@ -92,12 +111,13 @@ abstract class MutationTask : DefaultTask() {
             if (coverageExecFile.isPresent) {
                 coverageExecFile.get().asFile
             } else {
-                // Auto-detect JaCoCo coverage file
+                // Auto-detect coverage file
+                val buildDir = reportsDir.get().asFile.parentFile?.parentFile ?: project.buildDir
                 val possiblePaths =
                     listOf(
-                        File(project.buildDir, "jacoco/test.exec"),
-                        File(project.buildDir, "jacoco/jacocoTestReport.exec"),
-                        File(project.buildDir, "reports/jacoco/test/jacocoTestReport.exec"),
+                        File(buildDir, "jacoco/test.exec"),
+                        File(buildDir, "jacoco/jacocoTestReport.exec"),
+                        File(buildDir, "reports/jacoco/test/jacocoTestReport.exec"),
                     )
                 possiblePaths.firstOrNull { it.exists() }
             }
@@ -166,7 +186,7 @@ abstract class MutationTask : DefaultTask() {
         // Find the first directory that contains .class files
         for (file in files) {
             if (file.isDirectory) {
-                val hasClasses = file.walkTopDown().any { it.extension == "class" }
+                val hasClasses = file.walkTopDown().maxDepth(5).any { it.extension == "class" }
                 if (hasClasses) return file
             }
         }
@@ -175,16 +195,10 @@ abstract class MutationTask : DefaultTask() {
     }
 
     private fun generateReports(report: MutationReport) {
-        val outputDirPath = outputDir.get()
-        val outputDirFile =
-            if (File(outputDirPath).isAbsolute) {
-                File(outputDirPath)
-            } else {
-                File(project.buildDir, outputDirPath.removePrefix("build/"))
-            }
+        val outputDirFile = reportsDir.get().asFile
         outputDirFile.mkdirs()
 
-        val formats = reportFormats.get().ifEmpty { setOf(reportFormat.get()) }
+        val formats = reportFormats.get()
 
         for (format in formats) {
             when (format.lowercase()) {

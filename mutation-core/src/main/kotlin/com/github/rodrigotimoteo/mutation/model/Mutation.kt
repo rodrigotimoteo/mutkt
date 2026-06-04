@@ -4,6 +4,20 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 
 /**
  * Represents a specific mutation (a change in the source code).
+ *
+ * Each mutation is identified by a unique ID and contains information
+ * about the original and mutated bytecode, the operator applied,
+ * and the location in the source code.
+ *
+ * @property id Unique identifier for this mutation
+ * @property className Fully qualified class name containing the mutation
+ * @property methodName Method name where the mutation was applied
+ * @property methodDescriptor JVM method descriptor
+ * @property operator The mutation operator applied
+ * @property lineNumber Source line number (0 if unknown)
+ * @property originalBytecode Original class bytecode before mutation
+ * @property mutatedBytecode Class bytecode after mutation
+ * @property description Human-readable description of the mutation
  */
 data class Mutation(
     val id: String,

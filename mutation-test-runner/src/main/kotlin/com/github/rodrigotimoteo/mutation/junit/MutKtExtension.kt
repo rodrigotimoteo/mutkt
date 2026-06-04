@@ -16,20 +16,32 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * JUnit 5 extension for mutation testing.
  *
- * When a test class is annotated with @MutKtTest, this extension:
- * 1. Scans for mutations in the target code
+ * When a test class is annotated with [@MutKtTest], this extension:
+ * 1. Enables mutation testing globally
  * 2. Tracks triggered mutations during test execution
  * 3. Reports which mutants were killed/survived
  *
+ * The extension automatically detects:
+ * - IDE vs command-line execution (skips in IDE for speed)
+ * - Test class and method boundaries
+ * - Timeout conditions
+ *
  * Usage:
- * ```
+ * ```kotlin
  * @ExtendWith(MutKtExtension::class)
  * @MutKtTest
  * class CalculatorTest {
  *     @Test
- *     fun testAdd() = MutKt.underTest { assertEquals(4, Calculator().add(2, 2)) }
+ *     fun testAdd() = MutKt.underTest {
+ *         val calc = Calculator()
+ *         assertEquals(4, calc.add(2, 2))
+ *     }
  * }
  * ```
+ *
+ * @see MutKtTest for annotation options
+ * @see MutKt for test scoping API
+ * @see MutationRegistry for state management
  */
 class MutKtExtension : InvocationInterceptor {
     private val logger = LoggerFactory.getLogger(MutKtExtension::class.java)
@@ -169,7 +181,19 @@ class MutKtExtension : InvocationInterceptor {
     }
 
     private fun isRunningSingleTest(): Boolean {
-        return System.getProperty("idea.test.cyclic.buffer.size") != null ||
-            System.getenv("IDEA_INITIAL_DIRECTORY") != null
+        // IntelliJ IDEA
+        if (System.getProperty("idea.test.cyclic.buffer.size") != null) return true
+        if (System.getenv("IDEA_INITIAL_DIRECTORY") != null) return true
+        // Eclipse
+        if (System.getProperty("eclipse.launcher") != null) return true
+        // VS Code
+        if (System.getenv("VSCODE_CWD") != null) return true
+        // Gradle --tests filter
+        if (System.getProperty("sun.java.command")?.contains("org.gradle.api.tasks.testing.Test") == true &&
+            System.getenv("GRADLE_TEST_FILTER") != null
+        ) {
+            return true
+        }
+        return false
     }
 }

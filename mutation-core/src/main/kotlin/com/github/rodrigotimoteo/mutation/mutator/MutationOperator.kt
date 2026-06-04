@@ -2,7 +2,18 @@ package com.github.rodrigotimoteo.mutation.mutator
 
 /**
  * Mutation operators supported by the engine.
- * MVP operators cover the most common and valuable mutations.
+ *
+ * Each operator defines a specific type of bytecode transformation.
+ * Operators are grouped into categories:
+ * - **MVP**: Core operators for basic mutation testing
+ * - **Kotlin**: Kotlin-specific mutations (data class, sealed when, etc.)
+ * - **Quick Win**: Additional PITest-style operators
+ *
+ * Example:
+ * ```kotlin
+ * val operators = MutationOperator.MVP_OPERATORS + MutationOperator.KOTLIN_OPERATORS
+ * val mutator = Mutator(operators)
+ * ```
  */
 enum class MutationOperator(val operatorName: String, val description: String) {
     // Conditional boundary mutations
