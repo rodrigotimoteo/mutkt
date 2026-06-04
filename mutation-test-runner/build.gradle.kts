@@ -15,12 +15,14 @@ dependencies {
 
     // Logging
     implementation("org.slf4j:slf4j-api:2.0.13")
+    implementation("ch.qos.logback:logback-classic:1.5.12")
 
     // Testing
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation("org.assertj:assertj-core:3.25.3")
     testImplementation("org.mockito:mockito-core:5.12.0")
+    testImplementation("org.ow2.asm:asm:9.7.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
 }
 

@@ -23,7 +23,7 @@ class Mutator(
         val mutations = mutableListOf<MutationInfo>()
         val reader = ClassReader(classBytes)
         val visitor = MutationScannerVisitor(mutations, enabledOperators)
-        reader.accept(visitor, ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES)
+        reader.accept(visitor, ClassReader.SKIP_FRAMES)
         return mutations
     }
 
@@ -38,7 +38,7 @@ class Mutator(
         val writer = ClassWriter(ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES)
         val reader = ClassReader(classBytes)
         val visitor = MutationApplierVisitor(writer, targetMutation, enabledOperators)
-        reader.accept(visitor, ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES)
+        reader.accept(visitor, ClassReader.SKIP_FRAMES)
         return writer.toByteArray()
     }
 
@@ -94,18 +94,19 @@ private class MutationScannerVisitor(
         signature: String?,
         exceptions: Array<out String>?
     ): MethodVisitor? {
-        val mv = super.visitMethod(access, name, descriptor, signature, exceptions)
-        if (mv == null) return null
+        // Always visit methods - don't rely on super.visitMethod() which returns null
+        // when no delegate ClassVisitor is set.
 
         // Skip synthetic, bridge, and constructor methods
-        if ((access and Opcodes.ACC_SYNTHETIC) != 0) return mv
-        if ((access and Opcodes.ACC_BRIDGE) != 0) return mv
-        if (name.startsWith("<")) return mv // Skip constructors and <clinit>
+        if ((access and Opcodes.ACC_SYNTHETIC) != 0) return null
+        if ((access and Opcodes.ACC_BRIDGE) != 0) return null
+        if (name.startsWith("<")) return null
 
         // Skip Kotlin synthetic methods
-        if (isKotlinClass && isKotlinSynthetic(name)) return mv
+        if (isKotlinClass && isKotlinSynthetic(name)) return null
 
-        return MutationScannerMethodVisitor(mv, currentClassName, name, descriptor, mutations, enabledOperators)
+        return MutationScannerMethodVisitor(className = currentClassName, methodName = name,
+            methodDescriptor = descriptor, mutations = mutations, enabledOperators = enabledOperators)
     }
 
     private fun isKotlinSynthetic(name: String): Boolean {
@@ -125,13 +126,12 @@ private class MutationScannerVisitor(
  * MethodVisitor that scans for mutation points.
  */
 private class MutationScannerMethodVisitor(
-    mv: MethodVisitor,
     private val className: String,
     private val methodName: String,
     private val methodDescriptor: String,
     private val mutations: MutableList<MutationInfo>,
     private val enabledOperators: Set<MutationOperator>
-) : MethodVisitor(Opcodes.ASM9, mv) {
+) : MethodVisitor(Opcodes.ASM9) {
 
     private var currentLineNumber = -1
 

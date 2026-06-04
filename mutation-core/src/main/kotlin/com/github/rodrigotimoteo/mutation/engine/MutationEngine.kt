@@ -14,8 +14,10 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.lang.reflect.Method
 import java.net.URLClassLoader
+import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 
 /**
@@ -38,11 +40,15 @@ class MutationEngine(
     fun runMutationTesting(
         classFiles: Map<String, ByteArray>,
         testClassNames: List<String>,
-        coverageExecFile: File?
+        testClassBytes: Map<String, ByteArray> = emptyMap(),
+        coverageExecFile: File? = null
     ): MutationReport {
         val startTime = System.currentTimeMillis()
         val allMutations = generateAllMutations(classFiles)
         logger.info("Generated ${allMutations.size} mutations")
+
+        // Combine class files with test class files
+        val allClassFiles = classFiles + testClassBytes
 
         // Filter mutations by coverage if available
         val mutationsToTest = if (coverageExecFile != null && coverageExecFile.exists()) {
@@ -53,7 +59,7 @@ class MutationEngine(
         logger.info("Testing ${mutationsToTest.size} mutations after coverage filtering")
 
         // Run tests against each mutant
-        val results = runMutants(mutationsToTest, classFiles, testClassNames)
+        val results = runMutants(mutationsToTest, allClassFiles, testClassNames)
 
         val totalTime = System.currentTimeMillis() - startTime
         return buildReport(results, totalTime)
@@ -103,9 +109,9 @@ class MutationEngine(
 
         try {
             val futures = mutations.map { (mutation, mutatedBytes) ->
-                executor.submit {
+                executor.submit(Callable {
                     runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames)
-                }
+                })
             }
 
             for (future in futures) {

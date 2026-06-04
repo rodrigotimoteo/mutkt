@@ -38,6 +38,10 @@ class MutationTestRunner(
         val classFiles = loadClassFiles(classesDir)
         logger.info("Loaded ${classFiles.size} class files")
 
+        // Load test class files
+        val testClassBytes = loadClassFiles(testClassesDir)
+        logger.info("Loaded ${testClassBytes.size} test class files")
+
         // Find test classes
         val testClassNames = findTestClasses(testClassesDir)
         logger.info("Found ${testClassNames.size} test classes: $testClassNames")
@@ -47,7 +51,7 @@ class MutationTestRunner(
         val projectClassLoader = URLClassLoader(urls, this.javaClass.classLoader)
 
         // Run mutation testing
-        return engine.runMutationTesting(classFiles, testClassNames, coverageExecFile)
+        return engine.runMutationTesting(classFiles, testClassNames, testClassBytes, coverageExecFile)
     }
 
     private fun loadClassFiles(dir: File): Map<String, ByteArray> {
