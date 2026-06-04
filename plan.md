@@ -837,3 +837,546 @@ af52557 feat(mvp): implement mutation testing MVP
 2. **GitHub Packages**: Need repo creation + GITHUB_TOKEN
 3. **Integration test with real project**: Test plugin on external project
 4. **CI/CD**: GitHub Actions workflow for automated publishing
+
+---
+
+# EXPANSION 2: Full Feature Parity
+
+## Decisions (Grilled)
+
+| Decision | Choice |
+|----------|--------|
+| Scope | All phases (full expansion) |
+| Operators priority | All 5: VOID_METHOD_CALLS, INCREMENTS, TRUE/FALSE_RETURNS, CONSTRUCTOR_CALLS, NON_VOID_METHOD_CALLS |
+| Suppression | All 3: annotation + comment + DSL config |
+| Incremental analysis | Both: file-based history + coverage-based skipping |
+| Timeout detection | Both: thread-based timeout + bytecode injection |
+| Report formats | HTML, XML, JSON |
+| Equivalent mutation detection | Hybrid: basic heuristics + optional dataflow |
+| Implementation order | Operators → suppression → incremental → reports |
+| Testing strategy | Unit + integration (hand-crafted bytecode + sample project) |
+| Session scope | Everything (full expansion) |
+
+## Phase 4: New Operators (Quick Wins)
+
+### 4.1 VOID_METHOD_CALLS
+
+**What:** Remove calls to void methods (side effects).
+
+**Why:** Catches tests that don't verify side effects. E.g., `userService.save(user)` → removed, test still passes = weak test.
+
+**Implementation:**
+```kotlin
+// In MutationScannerMethodVisitor
+override fun visitMethodInsn(opcode: Int, owner: String, name: String, descriptor: String, isInterface: Boolean) {
+    val returnType = Type.getReturnType(descriptor)
+    if (returnType.sort == Type.VOID && !isConstructor(name)) {
+        // This is a void method call - can be mutated
+        mutations.add(MutationInfo(
+            operator = MutationOperator.VOID_METHOD_CALLS,
+            ...
+        ))
+    }
+}
+```
+
+**Mutation:** Replace `INVOKEVIRTUAL` with `POP` (discard receiver) or `POP2` (for long/double).
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (add to scanner)
+- `mutation-core/src/test/kotlin/.../mutator/VoidMethodCallMutatorTest.kt`
+
+### 4.2 INCREMENTS
+
+**What:** Replace `++` with `--` and vice versa.
+
+**Why:** Simple but effective. Catches tests that don't verify loop counters.
+
+**Implementation:**
+```kotlin
+override fun visitIincInsn(varIndex: Int, increment: Int) {
+    if (MutationOperator.INCREMENTS in enabledOperators) {
+        val mutated = -increment
+        mutations.add(MutationInfo(
+            operator = MutationOperator.INCREMENTS,
+            ...
+            description = "IINC: $increment -> $mutated",
+            metadata = mapOf("originalIncrement" to increment.toString(), "mutatedIncrement" to mutated.toString())
+        ))
+    }
+}
+```
+
+**Mutation:** Replace `IINC var, 1` with `IINC var, -1`.
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (add to scanner)
+- `mutation-core/src/test/kotlin/.../mutator/IncrementMutatorTest.kt`
+
+### 4.3 TRUE_RETURNS / FALSE_RETURNS
+
+**What:** Replace boolean return values with true/false.
+
+**Why:** Catches weak boolean assertions. E.g., `fun isActive(): Boolean = true` → `return false`, test still passes.
+
+**Implementation:**
+```kotlin
+override fun visitInsn(opcode: Int) {
+    when (opcode) {
+        Opcodes.ICONST_0 -> {
+            if (MutationOperator.FALSE_RETURNS in enabledOperators) {
+                mutations.add(MutationInfo(operator = MutationOperator.FALSE_RETURNS, ...))
+            }
+        }
+        Opcodes.ICONST_1 -> {
+            if (MutationOperator.TRUE_RETURNS in enabledOperators) {
+                mutations.add(MutationInfo(operator = MutationOperator.TRUE_RETURNS, ...))
+            }
+        }
+    }
+}
+```
+
+**Mutation:** Replace `ICONST_0` with `ICONST_1` and vice versa.
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (add to scanner)
+- `mutation-core/src/test/kotlin/.../mutator/BooleanReturnMutatorTest.kt`
+
+### 4.4 CONSTRUCTOR_CALLS
+
+**What:** Remove constructor calls (object creation).
+
+**Why:** Catches tests that don't verify object creation. E.g., `val user = User("Alice")` → removed, test still passes.
+
+**Implementation:**
+```kotlin
+override fun visitMethodInsn(opcode: Int, owner: String, name: String, descriptor: String, isInterface: Boolean) {
+    if (name == "<init>" && MutationOperator.CONSTRUCTOR_CALLS in enabledOperators) {
+        // This is a constructor call - can be mutated
+        mutations.add(MutationInfo(
+            operator = MutationOperator.CONSTRUCTOR_CALLS,
+            ...
+        ))
+    }
+}
+```
+
+**Mutation:** Replace `INVOKESPECIAL <init>` with `POP` (discard uninitialized object).
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (add to scanner)
+- `mutation-core/src/test/kotlin/.../mutator/ConstructorCallMutatorTest.kt`
+
+### 4.5 NON_VOID_METHOD_CALLS
+
+**What:** Remove non-void method calls (ignore return value).
+
+**Why:** Catches tests that don't use return values. E.g., `val result = calculate()` → `calculate()`, test still passes.
+
+**Implementation:**
+```kotlin
+override fun visitMethodInsn(opcode: Int, owner: String, name: String, descriptor: String, isInterface: Boolean) {
+    val returnType = Type.getReturnType(descriptor)
+    if (returnType.sort != Type.VOID && !isConstructor(name)) {
+        // This is a non-void method call - can be mutated
+        mutations.add(MutationInfo(
+            operator = MutationOperator.NON_VOID_METHOD_CALLS,
+            ...
+        ))
+    }
+}
+```
+
+**Mutation:** Replace `INVOKEVIRTUAL` with `POP` (discard return value).
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (add to scanner)
+- `mutation-core/src/test/kotlin/.../mutator/NonVoidMethodCallMutatorTest.kt`
+
+### Update MutationOperator enum
+
+```kotlin
+// Add to MutationOperator.kt
+VOID_METHOD_CALLS("VOID_METHOD_CALLS", "Remove calls to void methods"),
+INCREMENTS("INCREMENTS", "Replace ++ with -- and vice versa"),
+TRUE_RETURNS("TRUE_RETURNS", "Replace boolean returns with true"),
+FALSE_RETURNS("FALSE_RETURNS", "Replace boolean returns with false"),
+CONSTRUCTOR_CALLS("CONSTRUCTOR_CALLS", "Remove constructor calls"),
+NON_VOID_METHOD_CALLS("NON_VOID_METHOD_CALLS", "Remove non-void method calls (ignore return)"),
+
+companion object {
+    val QUICK_WIN_OPERATORS = setOf(
+        VOID_METHOD_CALLS, INCREMENTS, TRUE_RETURNS, FALSE_RETURNS,
+        CONSTRUCTOR_CALLS, NON_VOID_METHOD_CALLS
+    )
+    val ALL_OPERATORS = MVP_OPERATORS + KOTLIN_OPERATORS + QUICK_WIN_OPERATORS
+}
+```
+
+---
+
+## Phase 5: Suppression & Configuration
+
+### 5.1 @SuppressMutations Annotation
+
+**What:** Skip mutations on specific classes or functions.
+
+**Implementation:**
+```kotlin
+// Create annotation
+@Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class SuppressMutations(
+    val operators: Array<String> = [],  // Empty = suppress all
+    val reason: String = ""
+)
+```
+
+**Usage:**
+```kotlin
+@SuppressMutations(reason = "Generated code")
+class BuildConfig { }
+
+@SuppressMutations(operators = ["ARITHMETIC"], reason = "Trivial getter")
+fun getName(): String = name
+```
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../annotation/SuppressMutations.kt`
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (check annotation before adding mutations)
+
+### 5.2 Comment-Based Line Suppression
+
+**What:** Skip mutations on specific lines via comments.
+
+**Implementation:**
+```kotlin
+// In MutationScannerMethodVisitor
+override fun visitLineNumber(line: Int, start: Label?) {
+    currentLineNumber = line
+    // Check if this line has suppression comment
+    if (hasSuppressionComment(line)) {
+        suppressCurrentLine = true
+    }
+    super.visitLineNumber(line, start)
+}
+```
+
+**Comments:**
+- `// mutflow:ignore` - Skip all mutations on this line
+- `// mutflow:ignore:ARITHMETIC` - Skip specific operator
+- `// mutflow:falsePositive` - Mark as false positive (for reporting)
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (read source files, check comments)
+
+### 5.3 DSL Configuration
+
+**What:** Exclude methods via build.gradle.kts.
+
+**Already implemented** in `MutationPluginExtension.kt`:
+```kotlin
+mutationTest {
+    excludedMethods.addAll("main", "toString", "hashCode", "equals")
+    excludedClasses.addAll("**/Generated*", "**/BuildConfig")
+}
+```
+
+**Enhance with:**
+```kotlin
+mutationTest {
+    // New options
+    failOnScoreThreshold.set(80)  // Fail if mutation score < 80%
+    failOnCoverageThreshold.set(90)  // Fail if line coverage < 90%
+    maxMutationsPerClass.set(100)  // Limit mutations per class
+    enableIncrementalAnalysis.set(true)  // Use cached results
+}
+```
+
+**Files:**
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationPluginExtension.kt`
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationTask.kt`
+
+---
+
+## Phase 6: Incremental Analysis & Reports
+
+### 6.1 File-Based History
+
+**What:** Save mutation results to `.mutation-history` file.
+
+**Implementation:**
+```kotlin
+data class MutationHistory(
+    val timestamp: Long,
+    val classHash: String,  // SHA-256 of class bytecode
+    val testHash: String,   // SHA-256 of test bytecode
+    val results: Map<String, MutationStatus>  // mutationId -> status
+)
+
+class MutationHistoryManager(
+    private val historyFile: File
+) {
+    fun load(): MutationHistory { ... }
+    fun save(history: MutationHistory) { ... }
+    fun getReusableResults(
+        classBytes: ByteArray,
+        testBytes: ByteArray,
+        oldHistory: MutationHistory
+    ): Map<String, MutationStatus> { ... }
+}
+```
+
+**Logic:**
+1. Load previous history
+2. For each class: compute SHA-256 of bytecode
+3. If class unchanged and test unchanged → reuse previous results
+4. If class changed → re-run mutations for that class only
+5. Save new history
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../engine/MutationHistoryManager.kt`
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt` (use history)
+
+### 6.2 Coverage-Based Skipping
+
+**What:** Use JaCoCo coverage data to skip uncovered code.
+
+**Implementation:**
+```kotlin
+class CoverageAnalyzer {
+    fun getCoveredLines(execFile: File): Set<Int> { ... }
+    fun isLineCovered(lineNumber: Int, coveredLines: Set<Int>): Boolean { ... }
+}
+
+// In MutationEngine
+val coveredLines = coverageAnalyzer.getCoveredLines(coverageExecFile)
+val filteredMutations = mutations.filter { mutation ->
+    coverageAnalyzer.isLineCovered(mutation.lineNumber, coveredLines)
+}
+```
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../coverage/CoverageAnalyzer.kt` (enhance)
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt` (use coverage)
+
+### 6.3 Timeout Detection
+
+**What:** Detect infinite loops from mutations.
+
+**Thread-Based Timeout:**
+```kotlin
+fun runWithTimeout(timeoutMs: Long, block: () -> Unit): Boolean {
+    val executor = Executors.newSingleThreadExecutor()
+    val future = executor.submit(Callable { block(); true })
+    return try {
+        future.get(timeoutMs, TimeUnit.MILLISECONDS)
+    } catch (e: TimeoutException) {
+        future.cancel(true)
+        false  // Timed out
+    }
+}
+```
+
+**Bytecode Injection:**
+```kotlin
+// Inject timeout check at loop headers
+// In ClassVisitor
+override fun visit跳JumpInsn(opcode: Int, label: Label) {
+    if (opcode in listOf(Opcodes.IFEQ, Opcodes.IFNE, Opcodes.IFLT, Opcodes.IFGE, Opcodes.IFGT, Opcodes.IFLE)) {
+        // This is a loop condition - inject timeout check
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, "MutationRegistry", "checkTimeout", "()V", false)
+    }
+    super.visitJumpInsn(opcode, label)
+}
+```
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt` (thread-based timeout)
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (bytecode injection)
+
+### 6.4 Report Formats
+
+**XML Report:**
+```kotlin
+object XmlReportGenerator {
+    fun generate(report: MutationReport, outputDir: File): File {
+        val xml = buildString {
+            appendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+            appendLine("<mutationTestReport>")
+            appendLine("  <statistics>")
+            appendLine("    <mutations>${report.totalMutations}</mutations>")
+            appendLine("    <killed>${report.killedMutations}</killed>")
+            appendLine("    <survived>${report.survivedMutations}</survived>")
+            appendLine("  </statistics>")
+            appendLine("  <mutations>")
+            for (result in report.results) {
+                appendLine("    <mutation>")
+                appendLine("      <id>${result.mutation.id}</id>")
+                appendLine("      <status>${result.status}</status>")
+                appendLine("      <operator>${result.mutation.operator.operatorName}</operator>")
+                appendLine("      <line>${result.mutation.lineNumber}</line>")
+                appendLine("    </mutation>")
+            }
+            appendLine("  </mutations>")
+            appendLine("</mutationTestReport>")
+        }
+        val file = File(outputDir, "mutations.xml")
+        file.writeText(xml)
+        return file
+    }
+}
+```
+
+**JSON Report:**
+```kotlin
+object JsonReportGenerator {
+    fun generate(report: MutationReport, outputDir: File): File {
+        val json = buildString {
+            appendLine("{")
+            appendLine("  \"statistics\": {")
+            appendLine("    \"mutations\": ${report.totalMutations},")
+            appendLine("    \"killed\": ${report.killedMutations},")
+            appendLine("    \"survived\": ${report.survivedMutations}")
+            appendLine("  },")
+            appendLine("  \"mutations\": [")
+            for ((index, result) in report.results.withIndex()) {
+                appendLine("    {")
+                appendLine("      \"id\": \"${result.mutation.id}\",")
+                appendLine("      \"status\": \"${result.status}\",")
+                appendLine("      \"operator\": \"${result.mutation.operator.operatorName}\",")
+                appendLine("      \"line\": ${result.mutation.lineNumber}")
+                if (index < report.results.size - 1) appendLine("    },")
+                else appendLine("    }")
+            }
+            appendLine("  ]")
+            appendLine("}")
+        }
+        val file = File(outputDir, "mutations.json")
+        file.writeText(json)
+        return file
+    }
+}
+```
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../report/XmlReportGenerator.kt`
+- `mutation-core/src/main/kotlin/.../report/JsonReportGenerator.kt`
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationTask.kt` (use new generators)
+
+### 6.5 Readable Mutation Names
+
+**What:** Human-readable mutation descriptions.
+
+**Implementation:**
+```kotlin
+object MutationDescriber {
+    fun describe(mutation: MutationInfo): String {
+        return when (mutation.operator) {
+            MutationOperator.CONDITIONALS_BOUNDARY -> {
+                val op = when (mutation.originalOpcode) {
+                    Opcodes.IF_ICMPLT -> "<"
+                    Opcodes.IF_ICMPGE -> ">="
+                    Opcodes.IF_ICMPGT -> ">"
+                    Opcodes.IF_ICMPLE -> "<="
+                    else -> "?"
+                }
+                val mutated = when (mutation.mutatedOpcode) {
+                    Opcodes.IF_ICMPLT -> "<"
+                    Opcodes.IF_ICMPGE -> ">="
+                    Opcodes.IF_ICMPGT -> ">"
+                    Opcodes.IF_ICMPLE -> "<="
+                    else -> "?"
+                }
+                "Boundary: $op → $mutated"
+            }
+            MutationOperator.ARITHMETIC -> {
+                val op = when (mutation.originalOpcode) {
+                    Opcodes.IADD -> "+"
+                    Opcodes.ISUB -> "-"
+                    Opcodes.IMUL -> "*"
+                    Opcodes.IDIV -> "/"
+                    else -> "?"
+                }
+                val mutated = when (mutation.mutatedOpcode) {
+                    Opcodes.IADD -> "+"
+                    Opcodes.ISUB -> "-"
+                    Opcodes.IMUL -> "*"
+                    Opcodes.IDIV -> "/"
+                    else -> "?"
+                }
+                "Arithmetic: $op → $mutated"
+            }
+            // ... other operators
+            else -> mutation.description
+        }
+    }
+}
+```
+
+**Files:**
+- `mutation-core/src/main/kotlin/.../report/MutationDescriber.kt`
+
+---
+
+## Implementation Order
+
+1. **Phase 4: Operators** (2-3 hours)
+   - Add 5 new operators to MutationOperator enum
+   - Implement scanner logic in Mutator.kt
+   - Add unit tests for each operator
+   - Update sample with new mutation points
+
+2. **Phase 5: Suppression** (1-2 hours)
+   - Create @SuppressMutations annotation
+   - Implement comment-based suppression
+   - Add DSL configuration options
+   - Add tests
+
+3. **Phase 6: Incremental & Reports** (2-3 hours)
+   - Implement MutationHistoryManager
+   - Add coverage-based skipping
+   - Add timeout detection (thread + bytecode)
+   - Implement XML/JSON report generators
+   - Add MutationDescriber
+   - Add tests
+
+**Total estimated time:** 5-8 hours
+
+---
+
+## Files to Create/Modify
+
+### New Files
+- `mutation-core/src/main/kotlin/.../annotation/SuppressMutations.kt`
+- `mutation-core/src/main/kotlin/.../engine/MutationHistoryManager.kt`
+- `mutation-core/src/main/kotlin/.../report/XmlReportGenerator.kt`
+- `mutation-core/src/main/kotlin/.../report/JsonReportGenerator.kt`
+- `mutation-core/src/main/kotlin/.../report/MutationDescriber.kt`
+- `mutation-core/src/test/kotlin/.../mutator/VoidMethodCallMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../mutator/IncrementMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../mutator/BooleanReturnMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../mutator/ConstructorCallMutatorTest.kt`
+- `mutation-core/src/test/kotlin/.../mutator/NonVoidMethodCallMutatorTest.kt`
+
+### Modified Files
+- `mutation-core/src/main/kotlin/.../mutator/MutationOperator.kt` (add new operators)
+- `mutation-core/src/main/kotlin/.../mutator/Mutator.kt` (add scanner logic)
+- `mutation-core/src/main/kotlin/.../mutator/MutationInfo.kt` (add suppression fields)
+- `mutation-core/src/main/kotlin/.../engine/MutationEngine.kt` (use history, timeout, coverage)
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationPluginExtension.kt` (add new options)
+- `mutation-gradle-plugin/src/main/kotlin/.../MutationTask.kt` (use new generators)
+
+---
+
+## Verification
+
+After implementation:
+1. Run all tests: `./gradlew test`
+2. Verify new operators generate mutations
+3. Verify suppression works (annotation + comment + DSL)
+4. Verify incremental analysis skips unchanged classes
+5. Verify XML/JSON reports generate correctly
+6. Verify timeout detection catches infinite loops
+7. Verify readable mutation names in reports
