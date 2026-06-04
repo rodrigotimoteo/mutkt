@@ -4,6 +4,10 @@ import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.runner.MutationTestRunnerFactory
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.*
 
 import java.io.File
@@ -14,56 +18,103 @@ import java.io.File
  */
 abstract class MutationTask : DefaultTask() {
 
-    @Input
+    @InputFiles
     @Optional
-    val enabledOperators = project.objects.listProperty(String::class.java)
+    val targetClasses: ConfigurableFileCollection = project.objects.fileCollection()
+
+    @InputFiles
+    @Optional
+    val testClasses: ConfigurableFileCollection = project.objects.fileCollection()
+
+    @InputFiles
+    @Optional
+    val classpath: ConfigurableFileCollection = project.objects.fileCollection()
+
+    @InputFile
+    @Optional
+    val coverageExecFile: RegularFileProperty = project.objects.fileProperty()
 
     @Input
     @Optional
-    val timeoutMs = project.objects.property(Long::class.java).convention(30000)
+    val enabledOperators: SetProperty<String> = project.objects.setProperty(String::class.java)
 
     @Input
     @Optional
-    val maxParallelMutants = project.objects.property(Int::class.java).convention(4)
+    val timeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(30000)
 
     @Input
     @Optional
-    val reportFormat = project.objects.property(String::class.java).convention("console")
+    val maxParallelMutants: Property<Int> = project.objects.property(Int::class.java).convention(4)
 
     @Input
     @Optional
-    val outputDir = project.objects.property(File::class.java).convention(
-        File(project.buildDir, "reports/mutation-test")
-    )
+    val reportFormat: Property<String> = project.objects.property(String::class.java).convention("html")
+
+    @Input
+    @Optional
+    val outputDir: Property<String> = project.objects.property(String::class.java)
+        .convention("build/reports/mutation")
+
+    @Input
+    @Optional
+    val failOnSurvived: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    @Input
+    @Optional
+    val excludedClasses: SetProperty<String> = project.objects.setProperty(String::class.java)
+
+    @Input
+    @Optional
+    val excludedMethods: SetProperty<String> = project.objects.setProperty(String::class.java)
 
     @TaskAction
     fun runMutationTests() {
-        logger.lifecycle("=" .repeat(60))
+        logger.lifecycle("=".repeat(60))
         logger.lifecycle("  Kotlin Mutation Testing - PITest-style")
-        logger.lifecycle("=" .repeat(60))
+        logger.lifecycle("=".repeat(60))
 
-        // Parse operators
-        val operators = parseOperators(enabledOperators.getOrElse(emptyList()))
-        logger.lifecycle("Enabled operators: ${operators.joinToString { it.operatorName }}")
-        logger.lifecycle("Timeout: ${timeoutMs.get()}ms, Max parallel mutants: ${maxParallelMutants.get()}")
+        // Find classes directories from file collections
+        val classesDir = findClassesDir(targetClasses.files)
+        val testClassesDir = findClassesDir(testClasses.files)
+        val classpathFiles = classpath.files.toList()
 
-        // Find output directories
-        val classesDir = findOutputDir("classes/kotlin", "classes/java")
-        val testClassesDir = findOutputDir("test-classes", "classes/kotlin/test")
-        val classpath = buildClasspath()
+        // Find coverage file
+        val coverageFile = if (coverageExecFile.isPresent) {
+            coverageExecFile.get().asFile
+        } else {
+            // Auto-detect JaCoCo coverage file
+            val possiblePaths = listOf(
+                File(project.buildDir, "jacoco/test.exec"),
+                File(project.buildDir, "jacoco/jacocoTestReport.exec"),
+                File(project.buildDir, "reports/jacoco/test/jacocoTestReport.exec")
+            )
+            possiblePaths.firstOrNull { it.exists() }
+        }
 
         logger.lifecycle("Classes dir: $classesDir")
         logger.lifecycle("Test classes dir: $testClassesDir")
+        logger.lifecycle("Classpath size: ${classpathFiles.size}")
+        if (coverageFile != null) {
+            logger.lifecycle("Coverage file: $coverageFile")
+        }
 
+        // Validate directories exist
         if (!classesDir.exists()) {
-            logger.warn("Classes directory not found: $classesDir")
+            logger.error("Classes directory not found: $classesDir")
+            logger.error("Run 'gradlew compileKotlin' first")
             return
         }
 
         if (!testClassesDir.exists()) {
-            logger.warn("Test classes directory not found: $testClassesDir")
+            logger.error("Test classes directory not found: $testClassesDir")
+            logger.error("Run 'gradlew compileTestKotlin' first")
             return
         }
+
+        // Parse operators
+        val operators = parseOperators(enabledOperators.getOrElse(emptySet()))
+        logger.lifecycle("Enabled operators: ${operators.joinToString { it.operatorName }}")
+        logger.lifecycle("Timeout: ${timeoutMs.get()}ms, Max parallel mutants: ${maxParallelMutants.get()}")
 
         // Create runner
         val runner = MutationTestRunnerFactory.create(
@@ -72,16 +123,12 @@ abstract class MutationTask : DefaultTask() {
             enabledOperators = operators.toSet()
         )
 
-        // Find coverage file if it exists
-        val coverageFile = File(project.buildDir, "reports/jacoco/test/jacocoTestReport.exec")
-        val coverageExecFile = if (coverageFile.exists()) coverageFile else null
-
         // Run mutation testing
         val report = runner.run(
             classesDir = classesDir,
             testClassesDir = testClassesDir,
-            classpath = classpath,
-            coverageExecFile = coverageExecFile,
+            classpath = classpathFiles,
+            coverageExecFile = coverageFile,
             enabledOperators = operators.toSet()
         )
 
@@ -92,54 +139,35 @@ abstract class MutationTask : DefaultTask() {
         printSummary(report)
 
         // Fail build if configured
-        if (report.survivedMutations > 0) {
-            logger.warn("${report.survivedMutations} mutants survived!")
+        if (failOnSurvived.get() && report.survivedMutations > 0) {
+            throw RuntimeException("${report.survivedMutations} mutants survived! Build failed.")
         }
     }
 
-    private fun parseOperators(names: List<String>): List<MutationOperator> {
+    private fun parseOperators(names: Set<String>): List<MutationOperator> {
         if (names.isEmpty()) return MutationOperator.MVP_OPERATORS.toList()
         return names.mapNotNull { MutationOperator.fromName(it) }
     }
 
-    private fun findOutputDir(vararg candidates: String): File {
-        for (candidate in candidates) {
-            val dir = File(project.buildDir, candidate)
-            if (dir.exists()) return dir
-        }
-        return File(project.buildDir, candidates.first())
-    }
-
-    private fun buildClasspath(): List<File> {
-        val classpath = mutableListOf<File>()
-
-        // Add compiled classes
-        val classesDir = findOutputDir("classes/kotlin", "classes/java")
-        if (classesDir.exists()) classpath.add(classesDir)
-
-        val testClassesDir = findOutputDir("test-classes", "classes/kotlin/test")
-        if (testClassesDir.exists()) classpath.add(testClassesDir)
-
-        // Add all compile-time dependencies
-        project.configurations.findByName("runtimeClasspath")?.forEach { file ->
-            classpath.add(file)
-        }
-
-        project.configurations.findByName("testRuntimeClasspath")?.forEach { file ->
-            if (!classpath.any { it.name == file.name }) {
-                classpath.add(file)
+    private fun findClassesDir(files: Set<File>): File {
+        // Find the first directory that contains .class files
+        for (file in files) {
+            if (file.isDirectory) {
+                val hasClasses = file.walkTopDown().any { it.extension == "class" }
+                if (hasClasses) return file
             }
         }
-
-        return classpath
+        // Fallback to build directory
+        return File(project.buildDir, "classes/kotlin/main")
     }
 
     private fun generateReports(report: MutationReport) {
-        val outputDir = outputDir.get()
-        outputDir.mkdirs()
+        val outputDirPath = outputDir.get()
+        val outputDirFile = File(project.rootDir, outputDirPath)
+        outputDirFile.mkdirs()
 
         // Generate HTML report
-        val htmlReport = HtmlReportGenerator.generate(report, outputDir)
+        val htmlReport = HtmlReportGenerator.generate(report, outputDirFile)
         logger.lifecycle("HTML report: $htmlReport")
 
         // Generate console report
@@ -149,9 +177,9 @@ abstract class MutationTask : DefaultTask() {
 
     private fun printSummary(report: MutationReport) {
         logger.lifecycle("")
-        logger.lifecycle("=" .repeat(60))
+        logger.lifecycle("=".repeat(60))
         logger.lifecycle("  Mutation Test Results")
-        logger.lifecycle("=" .repeat(60))
+        logger.lifecycle("=".repeat(60))
         logger.lifecycle("Total mutations:  ${report.totalMutations}")
         logger.lifecycle("Killed:           ${report.killedMutations} (${report.killedPercentage}%)")
         logger.lifecycle("Survived:         ${report.survivedMutations} (${report.survivedPercentage}%)")
@@ -159,6 +187,6 @@ abstract class MutationTask : DefaultTask() {
         logger.lifecycle("Timeouts:         ${report.timeoutMutations}")
         logger.lifecycle("No coverage:      ${report.noCoverageMutations}")
         logger.lifecycle("Total time:       ${report.totalExecutionTimeMs / 1000}s")
-        logger.lifecycle("=" .repeat(60))
+        logger.lifecycle("=".repeat(60))
     }
 }

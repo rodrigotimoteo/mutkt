@@ -39,6 +39,24 @@ enum class MutationOperator(val operatorName: String, val description: String) {
     INVERT_NEGS(
         "INVERT_NEGS",
         "Inverts boolean negation: !x -> x, x -> !x"
+    ),
+
+    // Kotlin-specific mutations
+    DATA_CLASS_COPY(
+        "DATA_CLASS_COPY",
+        "Mutates data class copy() parameters to default values"
+    ),
+    SEALED_WHEN(
+        "SEALED_WHEN",
+        "Removes or mutates sealed class when branches"
+    ),
+    NULL_SAFETY(
+        "NULL_SAFETY",
+        "Mutates null-safety operators: ?.let, ?:, !!"
+    ),
+    COROUTINE(
+        "COROUTINE",
+        "Mutates coroutine builders and suspend functions"
     );
 
     companion object {
@@ -51,6 +69,15 @@ enum class MutationOperator(val operatorName: String, val description: String) {
             EMPTY_RETURNS,
             INVERT_NEGS
         )
+
+        val KOTLIN_OPERATORS = setOf(
+            DATA_CLASS_COPY,
+            SEALED_WHEN,
+            NULL_SAFETY,
+            COROUTINE
+        )
+
+        val ALL_OPERATORS = MVP_OPERATORS + KOTLIN_OPERATORS
 
         fun fromName(name: String): MutationOperator? {
             return values().firstOrNull { it.operatorName == name }

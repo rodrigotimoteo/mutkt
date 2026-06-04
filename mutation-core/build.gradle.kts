@@ -1,5 +1,14 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.1.10"
+}
+
+dependencies {
+    implementation("org.ow2.asm:asm:9.7.1")
+    implementation("org.ow2.asm:asm-tree:9.7.1")
+    implementation("org.slf4j:slf4j-api:2.0.9")
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation(kotlin("test"))
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
 }
 
 dependencies {

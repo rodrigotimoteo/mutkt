@@ -78,4 +78,66 @@ class CalculatorTest {
         assertFalse(calc.invert(true))
         assertTrue(calc.invert(false))
     }
+
+    // Kotlin-specific tests
+
+    @Test
+    fun `processString should handle null safely`() {
+        assertEquals("DEFAULT", calc.processString(null))
+        assertEquals("HELLO", calc.processString("  hello  "))
+        assertEquals("", calc.processString(""))
+    }
+
+    @Test
+    fun `requireNonNull should throw on null`() {
+        assertThrows<NullPointerException> {
+            calc.requireNonNull(null)
+        }
+        assertEquals("hello", calc.requireNonNull("  hello  "))
+    }
+
+    @Test
+    fun `provideDefault should use default on null`() {
+        assertEquals("default", calc.provideDefault(null))
+        assertEquals("hello", calc.provideDefault("hello"))
+    }
+}
+
+/**
+ * Tests for UserService - sealed class and data class mutations.
+ */
+class UserServiceTest {
+    private val service = UserService()
+
+    @Test
+    fun `handleResult should return data for Success`() {
+        assertEquals("test", service.handleResult(Result.Success("test")))
+    }
+
+    @Test
+    fun `handleResult should return error message for Error`() {
+        assertEquals("Error: fail", service.handleResult(Result.Error("fail")))
+    }
+
+    @Test
+    fun `handleResult should return Loading for Loading`() {
+        assertEquals("Loading...", service.handleResult(Result.Loading))
+    }
+
+    @Test
+    fun `processUser should increment age`() {
+        val user = User("Alice", 30, "alice@test.com")
+        val updated = service.processUser(user)
+        assertEquals(31, updated.age)
+        assertEquals("Alice", updated.name)
+        assertEquals("alice@test.com", updated.email)
+    }
+
+    @Test
+    fun `processUser should preserve other fields`() {
+        val user = User("Bob", 25, "bob@test.com")
+        val updated = service.processUser(user)
+        assertEquals(user.name, updated.name)
+        assertEquals(user.email, updated.email)
+    }
 }
