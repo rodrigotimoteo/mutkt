@@ -14,6 +14,19 @@ data class MutationResult(
 }
 
 /**
+ * Mutation score for a specific class.
+ */
+data class ClassMutationScore(
+    val className: String,
+    val totalMutations: Int,
+    val killedMutations: Int,
+    val survivedMutations: Int,
+    val weakMutations: Int = 0,
+    val subsumedMutations: Int = 0,
+    val score: Int = if (totalMutations > 0) (killedMutations * 100) / totalMutations else 0
+)
+
+/**
  * Complete mutation testing report with results and statistics.
  */
 data class MutationReport(
@@ -31,4 +44,21 @@ data class MutationReport(
 
     val survivedPercentage: Int get() =
         if (totalMutations > 0) (survivedMutations * 100) / totalMutations else 0
+
+    /**
+     * Get per-class mutation scores.
+     */
+    fun getClassScores(): List<ClassMutationScore> {
+        return results
+            .groupBy { it.mutation.className }
+            .map { (className, classResults) ->
+                ClassMutationScore(
+                    className = className,
+                    totalMutations = classResults.size,
+                    killedMutations = classResults.count { it.isKilled },
+                    survivedMutations = classResults.count { it.isSurvived }
+                )
+            }
+            .sortedByDescending { it.score }
+    }
 }

@@ -180,4 +180,95 @@ open class MutationPluginExtension(project: Project) {
     @Input
     @Optional
     val mutantTimeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(10000)
+
+    // === Regex Filtering ===
+
+    /**
+     * Target classes to mutate (regex patterns).
+     * If empty, all classes are targeted.
+     * Example: listOf("com\\.example\\..*")
+     */
+    @Input
+    @Optional
+    val targetClassPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /**
+     * Target tests to run (regex patterns).
+     * If empty, all tests are run.
+     * Example: listOf("com\\.example\\..*Test")
+     */
+    @Input
+    @Optional
+    val targetTestPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /**
+     * Exclude classes matching these patterns.
+     * Example: listOf("com\\.example\\.generated\\..*")
+     */
+    @Input
+    @Optional
+    val excludeClassPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /**
+     * Exclude tests matching these patterns.
+     * Example: listOf("com\\.example\\.Generated.*")
+     */
+    @Input
+    @Optional
+    val excludeTestPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    // === Speed Optimizations ===
+
+    /**
+     * Enable subsumption detection (skip redundant mutants).
+     */
+    @Input
+    @Optional
+    val enableSubsumption: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /**
+     * Enable weak mutant detection (skip mutations never reached).
+     */
+    @Input
+    @Optional
+    val enableWeakMutation: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /**
+     * Enable inlined finally detection (skip inlined finally blocks).
+     */
+    @Input
+    @Optional
+    val enableInlinedFinally: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /**
+     * Enable test ordering (run most effective tests first).
+     */
+    @Input
+    @Optional
+    val enableTestOrdering: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    // === Report Options ===
+
+    /**
+     * Report formats to generate: "html", "xml", "json", "csv", "console", "graph"
+     */
+    @Input
+    @Optional
+    val reportFormats: SetProperty<String> = project.objects.setProperty(String::class.java).convention(
+        setOf("html", "csv")
+    )
+
+    /**
+     * Generate per-class mutation scores in reports.
+     */
+    @Input
+    @Optional
+    val showClassScores: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /**
+     * Generate interactive HTML graph of test-mutant relationships.
+     */
+    @Input
+    @Optional
+    val generateGraph: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 }
