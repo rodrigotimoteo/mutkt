@@ -6,7 +6,7 @@ plugins {
 }
 
 allprojects {
-    group = "com.github.rodrigotimoteo"
+    group = "io.github.rodrigotimoteo"
     version = "0.1.0"
 
     repositories {
@@ -16,6 +16,9 @@ allprojects {
 }
 
 subprojects {
+    // Skip publishing for sample module
+    if (name == "mutation-sample") return@subprojects
+
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
@@ -73,7 +76,7 @@ subprojects {
             }
             maven {
                 name = "MavenCentral"
-                url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+                url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
                 credentials {
                     username = System.getenv("SONATYPE_USERNAME") ?: project.findProperty("ossrh.username") as String? ?: ""
                     password = System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("ossrh.password") as String? ?: ""
@@ -83,8 +86,8 @@ subprojects {
     }
 
     extensions.configure<SigningExtension> {
-        val signingKey = System.getenv("GPG_SIGNING_KEY")
-        val signingPassword = System.getenv("GPG_SIGNING_PASSWORD")
+        val signingKey = System.getenv("GPG_SIGNING_KEY") ?: project.findProperty("signing.key") as String?
+        val signingPassword = System.getenv("GPG_SIGNING_PASSWORD") ?: project.findProperty("signing.password") as String?
         if (signingKey != null && signingPassword != null) {
             useInMemoryPgpKeys(signingKey, signingPassword)
             val publishing = extensions.getByType<PublishingExtension>()
