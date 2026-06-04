@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":mutation-core"))
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
 
