@@ -289,10 +289,48 @@ mutationTesting {
 
 ---
 
+## MVP Status: COMPLETE ✓
+
+### Delivered
+- **mutation-core** (4 source files + tests): ASM mutator, Kotlin metadata parser, MutantClassLoader, CoverageAnalyzer, MutationEngine
+- **mutation-test-runner** (3 source files + tests): JUnit Platform launcher, reflection-based test execution, MutationTestRunner
+- **mutation-gradle-plugin** (5 source files): MutationPlugin, MutationTask, MutationPluginExtension, ConsoleReportGenerator, HtmlReportGenerator
+- **mutation-sample**: Calculator demo with comprehensive JUnit 5 tests
+
+### Test Results
+- 6 tests pass (4 in mutation-test-runner, 1 in mutation-core, 1 in mutation-sample)
+- Integration test on sample: **16 mutations generated, 15 killed, 1 survived**
+- Survived mutation: `CONDITIONALS_BOUNDARY max:47` (`if (a > b)` → `if (a >= b)`) - expected behavior, max(5,5) returns 5 either way
+
+### MVP Mutation Operators (7)
+1. `CONDITIONALS_BOUNDARY`: `<` ↔ `<=`, `>` ↔ `>=`
+2. `NEGATE_CONDITIONALS`: `==` ↔ `!=`, `<` ↔ `>=`, etc.
+3. `INVERT_NEGS`: `IFEQ` ↔ `IFNE`
+4. `ARITHMETIC`: `+` ↔ `-`, `*` ↔ `/`
+5. `RETURN_VALUES`: primitive returns → 0
+6. `NULL_RETURNS`: reference returns → null
+7. `EMPTY_RETURNS`: collections/arrays → empty
+
+### Bugfixes During MVP
+- `ClassVisitor.visitMethod()` returns null when no delegate → use direct visitor pattern
+- Kotlin `executor.submit { ... }` infers `Runnable` (returns null) → wrap in `Callable<MutationResult>`
+- `ClassReader.SKIP_DEBUG` strips line numbers → remove to preserve source mapping
+- MutantClassLoader needs test class bytes in addition to main class bytes for proper test loading
+
+---
+
 ## Open Questions
 
-- [ ] Package name / Maven coordinates (`io.github.yourorg`?)
-- [ ] License (Apache 2.0 / MIT?)
-- [ ] Minimum Kotlin version (1.9? 2.0?)
-- [ ] Minimum Gradle version (8.0+?)
-- [ ] JUnit 4 support or JUnit 5 only?
+- [ ] Package name / Maven coordinates (`io.github.yourorg`?) → **DECIDED: `com.github.rodrigotimoteo`**
+- [ ] License (Apache 2.0 / MIT?) → **DECIDED: TBD - to be added**
+- [ ] Minimum Kotlin version (1.9? 2.0?) → **DECIDED: 2.1.10+**
+- [ ] Minimum Gradle version (8.0+?) → **DECIDED: 8.10+**
+- [ ] JUnit 4 support or JUnit 5 only? → **DECIDED: JUnit 5 only (MVP)**
+
+### Next Steps (Post-MVP)
+- [ ] Add LICENSE file
+- [ ] Publish to Maven Central
+- [ ] Kotlin-specific mutations: data class copy, sealed when, coroutines
+- [ ] HTML report improvements (mutation source diff)
+- [ ] Android support verification
+- [ ] CI integration guide
