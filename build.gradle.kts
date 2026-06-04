@@ -73,9 +73,12 @@ subprojects {
         val signingPassword = System.getenv("GPG_SIGNING_PASSWORD")
         if (signingKey != null && signingPassword != null) {
             useInMemoryPgpKeys(signingKey, signingPassword)
+            val publishing = extensions.getByType<PublishingExtension>()
+            sign(publishing.publications["maven"])
+        } else {
+            // Skip signing if no key provided
+            isRequired = false
         }
-        val publishing = extensions.getByType<PublishingExtension>()
-        sign(publishing.publications["maven"])
     }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
