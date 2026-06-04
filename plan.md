@@ -784,8 +784,56 @@ enum class MutationOperator(val operatorName: String, val description: String) {
 
 ## Open Questions (Remaining)
 
-- [ ] Sonatype OSSRH account credentials?
-- [ ] GPG key pair available?
-- [ ] GitHub repository already created?
-- [ ] Version strategy: 0.1.0 or 1.0.0?
-- [ ] License: Apache 2.0 or MIT?
+- [ ] Sonatype OSSRH account credentials? → **DECIDED: TBD - needs account**
+- [ ] GPG key pair available? → **DECIDED: TBD - needs key generation**
+- [ ] GitHub repository already created? → **DECIDED: TBD - needs repo creation**
+- [ ] Version strategy: 0.1.0 or 1.0.0? → **DECIDED: 0.1.0**
+- [ ] License: Apache 2.0 or MIT? → **DECIDED: Apache 2.0**
+
+---
+
+# EXPANSION STATUS: COMPLETE ✓
+
+## Delivered
+
+### Phase 1: Auto-Discovery
+- ✅ `MutationPlugin.kt`: Auto-detect sourceSets, classpath, JaCoCo
+- ✅ `MutationPluginExtension.kt`: Full DSL with targetClasses, testClasses, excludedClasses, excludedMethods
+- ✅ `MutationTask.kt`: Auto-detect JaCoCo .exec file, lifecycle logging
+
+### Phase 2: Kotlin-Specific Operators
+- ✅ `DataClassCopyMutator.kt`: Mutate copy() parameters
+- ✅ `SealedClassWhenMutator.kt`: Remove/mutate sealed class when branches
+- ✅ `NullSafetyMutator.kt`: Mutate ?., !!, ?: operators
+- ✅ `CoroutineMutator.kt`: Mutate suspend functions and coroutine builders
+- ✅ `MutationOperator.kt`: Added DATA_CLASS_COPY, SEALED_WHEN, NULL_SAFETY, COROUTINE
+
+### Phase 3: Publishing & Docs
+- ✅ `README.md`: Quick start, configuration, operator reference
+- ✅ `LICENSE`: Apache 2.0
+- ✅ `build.gradle.kts`: Version 0.1.0, group com.github.rodrigotimoteo
+
+## Test Results
+
+| Module | Tests | Status |
+|--------|-------|--------|
+| mutation-core | 2 | ✅ PASS |
+| mutation-sample | 17 | ✅ PASS |
+| mutation-test-runner | 6 | ✅ PASS |
+| **Total** | **25** | **✅ PASS** |
+
+## Git History
+
+```
+dc80076 docs: update plan.md with MVP completion status and decisions
+af52557 feat(mvp): implement mutation testing MVP
+7fdbfb8 feat: implement mutation-test-runner and mutation-gradle-plugin modules
+4d2cbd6 feat: implement mutation-core with ASM mutators, metadata parser, classloader, coverage analyzer, and engine
+```
+
+## What's Left for Production
+
+1. **Publish to Maven Central**: Need Sonatype OSSRH account + GPG key
+2. **GitHub Packages**: Need repo creation + GITHUB_TOKEN
+3. **Integration test with real project**: Test plugin on external project
+4. **CI/CD**: GitHub Actions workflow for automated publishing
