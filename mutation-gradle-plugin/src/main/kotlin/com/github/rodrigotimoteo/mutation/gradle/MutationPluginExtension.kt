@@ -145,4 +145,39 @@ open class MutationPluginExtension(project: Project) {
     @Input
     @Optional
     val autoRunJaCoCo: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /**
+     * Mutation score threshold (0-100). Fail build if score below this.
+     */
+    @Input
+    @Optional
+    val failOnScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
+
+    /**
+     * Line coverage threshold (0-100). Fail build if coverage below this.
+     */
+    @Input
+    @Optional
+    val failOnCoverageThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
+
+    /**
+     * Maximum mutations per class. 0 = no limit.
+     */
+    @Input
+    @Optional
+    val maxMutationsPerClass: Property<Int> = project.objects.property(Int::class.java).convention(0)
+
+    /**
+     * Enable incremental analysis (cache mutation results).
+     */
+    @Input
+    @Optional
+    val enableIncrementalAnalysis: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /**
+     * Timeout per mutant in milliseconds.
+     */
+    @Input
+    @Optional
+    val mutantTimeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(10000)
 }

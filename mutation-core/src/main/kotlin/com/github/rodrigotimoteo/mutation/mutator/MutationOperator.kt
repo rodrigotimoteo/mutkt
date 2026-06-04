@@ -57,6 +57,32 @@ enum class MutationOperator(val operatorName: String, val description: String) {
     COROUTINE(
         "COROUTINE",
         "Mutates coroutine builders and suspend functions"
+    ),
+
+    // Additional PITest-style mutations
+    VOID_METHOD_CALLS(
+        "VOID_METHOD_CALLS",
+        "Remove calls to void methods (side effects)"
+    ),
+    INCREMENTS(
+        "INCREMENTS",
+        "Replace ++ with -- and vice versa"
+    ),
+    TRUE_RETURNS(
+        "TRUE_RETURNS",
+        "Replace boolean returns with true"
+    ),
+    FALSE_RETURNS(
+        "FALSE_RETURNS",
+        "Replace boolean returns with false"
+    ),
+    CONSTRUCTOR_CALLS(
+        "CONSTRUCTOR_CALLS",
+        "Remove constructor calls (object creation)"
+    ),
+    NON_VOID_METHOD_CALLS(
+        "NON_VOID_METHOD_CALLS",
+        "Remove non-void method calls (ignore return value)"
     );
 
     companion object {
@@ -77,7 +103,16 @@ enum class MutationOperator(val operatorName: String, val description: String) {
             COROUTINE
         )
 
-        val ALL_OPERATORS = MVP_OPERATORS + KOTLIN_OPERATORS
+        val QUICK_WIN_OPERATORS = setOf(
+            VOID_METHOD_CALLS,
+            INCREMENTS,
+            TRUE_RETURNS,
+            FALSE_RETURNS,
+            CONSTRUCTOR_CALLS,
+            NON_VOID_METHOD_CALLS
+        )
+
+        val ALL_OPERATORS = MVP_OPERATORS + KOTLIN_OPERATORS + QUICK_WIN_OPERATORS
 
         fun fromName(name: String): MutationOperator? {
             return values().firstOrNull { it.operatorName == name }
