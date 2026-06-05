@@ -93,7 +93,7 @@ class MutantTestTask(
 
     private fun toMutation(info: MutationInfo): com.github.rodrigotimoteo.mutation.model.Mutation {
         return com.github.rodrigotimoteo.mutation.model.Mutation(
-            id = "${info.operator.operatorName}_${info.className}_${info.methodName}_${info.lineNumber}",
+            id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}",
             className = info.className,
             methodName = info.methodName,
             methodDescriptor = info.methodDescriptor,

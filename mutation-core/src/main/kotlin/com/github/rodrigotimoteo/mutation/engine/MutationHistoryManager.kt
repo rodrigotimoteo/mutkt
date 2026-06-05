@@ -86,9 +86,9 @@ class MutationHistoryManager(
         val reusableResults = mutableMapOf<String, MutationStatus>()
 
         for ((mutationId, result) in oldHistory.results) {
-            // Mutation ID format: ${operatorName}_${className}_${methodName}_${lineNumber}
+            // Mutation ID format: ${operatorName}::${className}::${methodName}::${lineNumber}
             // parts[0] = operator, parts[1] = class name
-            val parts = mutationId.split("_")
+            val parts = mutationId.split("::")
             if (parts.size >= 2) {
                 val mutationClassHash = oldHistory.classHashes[parts[1]]
                 val mutationTestHash = oldHistory.testHashes[parts[1]]
@@ -146,7 +146,7 @@ class MutationHistoryManager(
      * TIMESTAMP:<timestamp>
      * CLASS:<className>:<hash>
      * TEST:<testName>:<hash>
-     * RESULT:<mutationId>:<status>:<timestamp>:<executionTimeMs>
+     * RESULT:<mutationId>|<status>|<timestamp>|<executionTimeMs>
      */
     private fun parseHistory(content: String): MutationHistory {
         val classHashes = mutableMapOf<String, String>()
@@ -172,7 +172,10 @@ class MutationHistoryManager(
                     }
                 }
                 line.startsWith("RESULT:") -> {
-                    val parts = line.substringAfter(":").split(":")
+                    // Format: RESULT:<mutationId>|<status>|<timestamp>|<executionTimeMs>
+                    // Using | as field separator to avoid conflict with :: in mutation IDs
+                    val payload = line.substringAfter("RESULT:")
+                    val parts = payload.split("|")
                     if (parts.size >= 2) {
                         val mutationId = parts[0]
                         val status =
@@ -219,7 +222,7 @@ class MutationHistoryManager(
             }
 
             for ((mutationId, result) in history.results) {
-                appendLine("RESULT:$mutationId:${result.status}:${result.timestamp}:${result.executionTimeMs}")
+                appendLine("RESULT:$mutationId|${result.status}|${result.timestamp}|${result.executionTimeMs}")
             }
         }
     }

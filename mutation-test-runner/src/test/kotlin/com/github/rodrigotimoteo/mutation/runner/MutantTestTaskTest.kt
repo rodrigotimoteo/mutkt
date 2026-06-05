@@ -34,7 +34,7 @@ class MutantTestTaskTest {
                 parentClassLoader = MutantTestTaskTest::class.java.classLoader,
             )
         val mutation = task.call().mutation
-        assertEquals("ARITHMETIC_com.example.Foo_add_42", mutation.id)
+        assertEquals("ARITHMETIC::com.example.Foo::add::42", mutation.id)
         assertEquals("com.example.Foo", mutation.className)
         assertEquals("add", mutation.methodName)
         assertEquals(MutationOperator.ARITHMETIC, mutation.operator)
