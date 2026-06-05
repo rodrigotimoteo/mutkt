@@ -10,7 +10,7 @@ junitPlatform = "1.10.2"
 assertj = "3.25.3"
 asm = "9.7"
 slf4j = "2.0.9"
-jacoco = "0.8.12"
+jacoco = "0.8.14"
 mockk = "1.13.13"
 
 [libraries]
