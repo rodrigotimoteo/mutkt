@@ -57,6 +57,7 @@ object MutationRegistry {
      */
     fun beginClass(className: String) {
         classThreads.computeIfAbsent(className) { ConcurrentHashMap.newKeySet() }
+            .add(Thread.currentThread().threadId())
     }
 
     /**

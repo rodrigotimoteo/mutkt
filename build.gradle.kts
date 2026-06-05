@@ -1,9 +1,31 @@
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
-    alias(libs.plugins.kover) apply false
-    alias(libs.plugins.dokka) apply false
-    alias(libs.plugins.detekt) apply false
-    alias(libs.plugins.ktlint) apply false
+    alias(libs.plugins.kover)
+    alias(libs.plugins.detekt)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.dokka)
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply(plugin = "org.jetbrains.dokka")
+
+    tasks.withType<Test>().configureEach {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+        }
+    }
+}
+
+// Aggregated Dokka configuration
+tasks.named("dokkaHtml") {
+    dependsOn(subprojects.map { "${it.path}:dokkaHtml" })
 }
 
 allprojects {

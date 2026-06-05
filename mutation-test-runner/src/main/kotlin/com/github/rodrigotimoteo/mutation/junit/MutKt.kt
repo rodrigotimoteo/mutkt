@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutation.junit
 
 import com.github.rodrigotimoteo.mutation.registry.MutationRegistry
+import org.slf4j.LoggerFactory
 
 /**
  * Entry point for mutation testing in JUnit 5 tests.
@@ -32,13 +33,15 @@ import com.github.rodrigotimoteo.mutation.registry.MutationRegistry
  * @see MutationRegistry for state management
  */
 object MutKt {
+    private val logger = LoggerFactory.getLogger(MutKt::class.java)
+
     /**
      * Register a block of code for mutation testing.
      *
      * When mutation testing is enabled, this tracks which mutations
      * are triggered during execution. When disabled, it's a no-op.
      */
-    inline fun <T> underTest(
+    fun <T> underTest(
         mutationId: String = "",
         block: () -> T,
     ): T {
@@ -56,7 +59,7 @@ object MutKt {
         } finally {
             val elapsed = System.currentTimeMillis() - startTime
             if (elapsed > MutationRegistry.getTimeoutMs()) {
-                // Timeout will be detected by the extension
+                logger.warn("Mutation execution exceeded timeout: ${elapsed}ms > ${MutationRegistry.getTimeoutMs()}ms")
             }
         }
     }
@@ -64,7 +67,7 @@ object MutKt {
     /**
      * Register a block without tracking a specific mutation.
      */
-    inline fun <T> underTest(block: () -> T): T {
+    fun <T> underTest(block: () -> T): T {
         return underTest("", block)
     }
 

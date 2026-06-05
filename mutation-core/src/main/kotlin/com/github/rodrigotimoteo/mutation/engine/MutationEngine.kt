@@ -112,7 +112,7 @@ class MutationEngine(
                         executionData,
                         listOf(mutation),
                     )
-                if (coverage.first().coveringTests.isNotEmpty()) {
+                if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
                     filtered.add(mutation to mutatedBytes)
                 }
             }
@@ -203,10 +203,12 @@ class MutationEngine(
         val status =
             try {
                 runTestsWithClassLoader(classLoader, testClassNames)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Distinguish: test assertion failures = KILLED, class loading = ERROR
+                val status = if (e is AssertionError) MutationStatus.KILLED else MutationStatus.ERROR
                 return MutationResult(
                     mutation = toMutation(mutation),
-                    status = MutationStatus.ERROR,
+                    status = status,
                     executionTimeMs = System.currentTimeMillis() - startTime,
                     errorMessage = e.message,
                 )
@@ -241,12 +243,12 @@ class MutationEngine(
                     val instance = testClass.getDeclaredConstructor().newInstance()
                     try {
                         method.invoke(instance)
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         hasFailures = true
                         logger.debug("Test failed: ${method.name}", e)
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 logger.debug("Could not load test class: $testClassName", e)
             }
         }

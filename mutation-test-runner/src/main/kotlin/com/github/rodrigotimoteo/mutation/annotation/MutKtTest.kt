@@ -22,6 +22,10 @@ package com.github.rodrigotimoteo.mutation.annotation
 @Retention(AnnotationRetention.RUNTIME)
 annotation class MutKtTest(
     /**
+     * Verification mode for mutation testing.
+     */
+    val mode: VerificationMode = VerificationMode.LENIENT,
+    /**
      * Mutation operators to enable. Empty means all operators.
      */
     val operators: Array<String> = [],

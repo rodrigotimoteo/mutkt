@@ -57,6 +57,7 @@ class MutationPlugin : Plugin<Project> {
                 task.failOnSurvived.set(extension.failOnSurvived)
                 task.excludedClasses.set(extension.excludedClasses)
                 task.excludedMethods.set(extension.excludedMethods)
+                task.coverageExecFile.set(extension.coverageExecFile)
             }
 
         // Auto-detect sourceSets after project evaluation

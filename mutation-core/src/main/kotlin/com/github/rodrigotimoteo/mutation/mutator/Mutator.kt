@@ -212,6 +212,12 @@ private class MutationScannerMethodVisitor(
         return false
     }
 
+    private fun tryAddMutation(mutation: MutationInfo) {
+        if (!isSuppressed(mutation.operator)) {
+            mutations.add(mutation)
+        }
+    }
+
     override fun visitLineNumber(
         line: Int,
         start: org.objectweb.asm.Label?,
@@ -261,7 +267,7 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.CONDITIONALS_BOUNDARY in enabledOperators) {
             val mutated = ConditionalMutator.mutateBoundaryStatic(opcode)
             if (mutated != opcode) {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.CONDITIONALS_BOUNDARY,
                         className = className,
@@ -278,7 +284,7 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.NEGATE_CONDITIONALS in enabledOperators) {
             val mutated = ConditionalMutator.mutateNegateStatic(opcode)
             if (mutated != opcode) {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.NEGATE_CONDITIONALS,
                         className = className,
@@ -295,7 +301,7 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.INVERT_NEGS in enabledOperators) {
             val mutated = InvertNegsMutator.mutateStatic(opcode)
             if (mutated != opcode) {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.INVERT_NEGS,
                         className = className,
@@ -315,7 +321,7 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.ARITHMETIC in enabledOperators) {
             val mutated = ArithmeticMutator.mutateStatic(opcode)
             if (mutated != opcode) {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.ARITHMETIC,
                         className = className,
@@ -340,7 +346,7 @@ private class MutationScannerMethodVisitor(
                     else -> increment
                 }
             if (mutated != increment) {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.ARITHMETIC,
                         className = className,
@@ -362,7 +368,7 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.RETURN_VALS in enabledOperators) {
             val mutated = ReturnValueMutator.mutateReturnStatic(opcode, returnType)
             if (mutated != opcode) {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.RETURN_VALS,
                         className = className,
@@ -378,7 +384,7 @@ private class MutationScannerMethodVisitor(
         }
 
         if (MutationOperator.NULL_RETURNS in enabledOperators && opcode == Opcodes.ARETURN) {
-            mutations.add(
+            tryAddMutation(
                 MutationInfo(
                     operator = MutationOperator.NULL_RETURNS,
                     className = className,
@@ -394,7 +400,7 @@ private class MutationScannerMethodVisitor(
 
         if (MutationOperator.EMPTY_RETURNS in enabledOperators && opcode == Opcodes.ARETURN) {
             if (ReturnValueMutator.isCollectionOrArrayStatic(returnType)) {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.EMPTY_RETURNS,
                         className = className,
@@ -412,7 +418,7 @@ private class MutationScannerMethodVisitor(
 
     private fun checkBooleanReturnMutations(opcode: Int) {
         if (MutationOperator.TRUE_RETURNS in enabledOperators && opcode == Opcodes.ICONST_1) {
-            mutations.add(
+            tryAddMutation(
                 MutationInfo(
                     operator = MutationOperator.TRUE_RETURNS,
                     className = className,
@@ -426,7 +432,7 @@ private class MutationScannerMethodVisitor(
             )
         }
         if (MutationOperator.FALSE_RETURNS in enabledOperators && opcode == Opcodes.ICONST_0) {
-            mutations.add(
+            tryAddMutation(
                 MutationInfo(
                     operator = MutationOperator.FALSE_RETURNS,
                     className = className,
@@ -445,7 +451,7 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.INCREMENTS in enabledOperators) {
             val mutated = -increment
             if (mutated != increment) {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.INCREMENTS,
                         className = className,
@@ -470,7 +476,7 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.VOID_METHOD_CALLS in enabledOperators) {
             val returnType = Type.getReturnType(descriptor)
             if (returnType.sort == Type.VOID && name != "<init>" && name != "<clinit>") {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.VOID_METHOD_CALLS,
                         className = className,
@@ -492,7 +498,7 @@ private class MutationScannerMethodVisitor(
         name: String,
     ) {
         if (MutationOperator.CONSTRUCTOR_CALLS in enabledOperators && name == "<init>") {
-            mutations.add(
+            tryAddMutation(
                 MutationInfo(
                     operator = MutationOperator.CONSTRUCTOR_CALLS,
                     className = className,
@@ -516,7 +522,7 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.NON_VOID_METHOD_CALLS in enabledOperators) {
             val returnType = Type.getReturnType(descriptor)
             if (returnType.sort != Type.VOID && name != "<init>" && name != "<clinit>") {
-                mutations.add(
+                tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.NON_VOID_METHOD_CALLS,
                         className = className,
@@ -656,22 +662,93 @@ private class MutationApplierMethodVisitor(
         varIndex: Int,
         increment: Int,
     ) {
-        if (!applied && currentLineNumber == targetMutation.lineNumber &&
-            targetMutation.operator == MutationOperator.ARITHMETIC
-        ) {
-            val mutated =
-                when (increment) {
-                    1 -> -1
-                    -1 -> 1
-                    else -> increment
+        if (!applied && currentLineNumber == targetMutation.lineNumber) {
+            when (targetMutation.operator) {
+                MutationOperator.ARITHMETIC -> {
+                    val mutated =
+                        when (increment) {
+                            1 -> -1
+                            -1 -> 1
+                            else -> increment
+                        }
+                    if (mutated != increment) {
+                        super.visitIincInsn(varIndex, mutated)
+                        applied = true
+                        return
+                    }
                 }
-            if (mutated != increment) {
-                super.visitIincInsn(varIndex, mutated)
-                applied = true
-                return
+                MutationOperator.INCREMENTS -> {
+                    super.visitIincInsn(varIndex, -increment)
+                    applied = true
+                    return
+                }
+                else -> {}
             }
         }
         super.visitIincInsn(varIndex, increment)
+    }
+
+    override fun visitMethodInsn(
+        opcode: Int,
+        owner: String,
+        name: String,
+        descriptor: String,
+        isInterface: Boolean,
+    ) {
+        if (!applied && currentLineNumber == targetMutation.lineNumber) {
+            when (targetMutation.operator) {
+                MutationOperator.VOID_METHOD_CALLS -> {
+                    if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESTATIC) {
+                        val returnType = Type.getReturnType(descriptor)
+                        if (returnType.sort == Type.VOID) {
+                            // Pop all arguments from the stack
+                            val argTypes = Type.getArgumentTypes(descriptor)
+                            repeat(argTypes.size) { mv.visitInsn(Opcodes.POP) }
+                            // Don't emit the call
+                            applied = true
+                            return
+                        }
+                    }
+                }
+                MutationOperator.CONSTRUCTOR_CALLS -> {
+                    if (opcode == Opcodes.INVOKESPECIAL && name == "<init>") {
+                        // Pop all arguments (including the uninitialized this)
+                        val argTypes = Type.getArgumentTypes(descriptor)
+                        repeat(argTypes.size) { mv.visitInsn(Opcodes.POP) }
+                        mv.visitInsn(Opcodes.POP) // Pop the uninitialized object
+                        applied = true
+                        return
+                    }
+                }
+                MutationOperator.NON_VOID_METHOD_CALLS -> {
+                    val returnType = Type.getReturnType(descriptor)
+                    if (returnType.sort != Type.VOID) {
+                        // Pop all arguments
+                        val argTypes = Type.getArgumentTypes(descriptor)
+                        repeat(argTypes.size) { mv.visitInsn(Opcodes.POP) }
+                        if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESTATIC) {
+                            mv.visitInsn(Opcodes.POP) // Pop receiver for invokevirtual
+                        }
+                        // Push default return value
+                        pushDefaultValue(returnType)
+                        applied = true
+                        return
+                    }
+                }
+                else -> {}
+            }
+        }
+        super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+    }
+
+    private fun pushDefaultValue(type: Type) {
+        when (type.sort) {
+            Type.BOOLEAN, Type.BYTE, Type.CHAR, Type.SHORT, Type.INT -> mv.visitInsn(Opcodes.ICONST_0)
+            Type.LONG -> mv.visitInsn(Opcodes.LCONST_0)
+            Type.FLOAT -> mv.visitInsn(Opcodes.FCONST_0)
+            Type.DOUBLE -> mv.visitInsn(Opcodes.DCONST_0)
+            Type.ARRAY, Type.OBJECT -> mv.visitInsn(Opcodes.ACONST_NULL)
+        }
     }
 
     private fun getMutatedOpcode(opcode: Int): Int {
@@ -680,6 +757,8 @@ private class MutationApplierMethodVisitor(
             MutationOperator.NEGATE_CONDITIONALS -> ConditionalMutator.mutateNegateStatic(opcode)
             MutationOperator.INVERT_NEGS -> InvertNegsMutator.mutateStatic(opcode)
             MutationOperator.ARITHMETIC -> ArithmeticMutator.mutateStatic(opcode)
+            MutationOperator.TRUE_RETURNS -> if (opcode == Opcodes.ICONST_1) Opcodes.ICONST_0 else opcode
+            MutationOperator.FALSE_RETURNS -> if (opcode == Opcodes.ICONST_0) Opcodes.ICONST_1 else opcode
             else -> opcode
         }
     }

@@ -133,13 +133,13 @@ abstract class MutationTask : DefaultTask() {
         if (!classesDir.exists()) {
             logger.error("Classes directory not found: $classesDir")
             logger.error("Run 'gradlew compileKotlin' first")
-            return
+            throw IllegalStateException("Classes directory not found: $classesDir")
         }
 
         if (!testClassesDir.exists()) {
             logger.error("Test classes directory not found: $testClassesDir")
             logger.error("Run 'gradlew compileTestKotlin' first")
-            return
+            throw IllegalStateException("Test classes directory not found: $testClassesDir")
         }
 
         // Parse operators
@@ -173,7 +173,7 @@ abstract class MutationTask : DefaultTask() {
 
         // Fail build if configured
         if (failOnSurvived.get() && report.survivedMutations > 0) {
-            throw RuntimeException("${report.survivedMutations} mutants survived! Build failed.")
+            throw org.gradle.api.GradleException("${report.survivedMutations} mutants survived! Build failed.")
         }
     }
 
@@ -190,8 +190,10 @@ abstract class MutationTask : DefaultTask() {
                 if (hasClasses) return file
             }
         }
-        // Fallback to build directory
+        // Fallback to build directory — check kotlin and java output dirs
         return File(project.buildDir, "classes/kotlin/main")
+            .takeIf { it.exists() }
+            ?: File(project.buildDir, "classes/java/main")
     }
 
     private fun generateReports(report: MutationReport) {
@@ -214,12 +216,6 @@ abstract class MutationTask : DefaultTask() {
                     logger.warn("Unknown report format: $format (supported: html, console)")
                 }
             }
-        }
-
-        // Always generate console output
-        if (!formats.contains("console")) {
-            val consoleReport = ConsoleReportGenerator.generate(report)
-            println(consoleReport)
         }
     }
 

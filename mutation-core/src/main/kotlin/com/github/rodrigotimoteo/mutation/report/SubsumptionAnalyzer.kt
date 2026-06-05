@@ -100,7 +100,7 @@ class SubsumptionAnalyzer {
      * Extract test name from mutation result.
      */
     private fun extractTestName(result: MutationResult): String {
-        // Use className as test identifier
-        return result.mutation.className
+        // Use mutation location as test identifier since we don't track killing tests yet
+        return "${result.mutation.className}#${result.mutation.methodName}"
     }
 }

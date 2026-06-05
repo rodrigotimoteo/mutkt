@@ -5,7 +5,6 @@ import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.net.URLClassLoader
 import java.nio.file.Files
 
 /**
@@ -41,10 +40,6 @@ class MutationTestRunner(
         // Find test classes
         val testClassNames = findTestClasses(testClassesDir)
         logger.info("Found ${testClassNames.size} test classes: $testClassNames")
-
-        // Create classloader with project classpath
-        val urls = classpath.map { it.toURI().toURL() }.toTypedArray()
-        val projectClassLoader = URLClassLoader(urls, this.javaClass.classLoader)
 
         // Run mutation testing
         return engine.runMutationTesting(classFiles, testClassNames, testClassBytes, coverageExecFile)
