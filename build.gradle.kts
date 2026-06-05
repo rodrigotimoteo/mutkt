@@ -92,33 +92,6 @@ subprojects {
                     }
                 }
             }
-
-            // Configure all publications (including plugin marker) with required POM metadata
-            withType<MavenPublication>().configureEach {
-                pom {
-                    name.set(project.name)
-                    description.set("Kotlin Mutation Testing - PITest-style for Kotlin/JVM")
-                    url.set("https://github.com/rodrigotimoteo/mutkt")
-                    licenses {
-                        license {
-                            name.set("The Apache License, Version 2.0")
-                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                        }
-                    }
-                    developers {
-                        developer {
-                            id.set("rodrigotimoteo")
-                            name.set("Rodrigo Timoteo")
-                            email.set("rodrigo.timoteo2603@gmail.com")
-                        }
-                    }
-                    scm {
-                        connection.set("scm:git:git://github.com/rodrigotimoteo/mutkt.git")
-                        developerConnection.set("scm:git:ssh://github.com/rodrigotimoteo/mutkt.git")
-                        url.set("https://github.com/rodrigotimoteo/mutkt")
-                    }
-                }
-            }
         }
 
         repositories {
