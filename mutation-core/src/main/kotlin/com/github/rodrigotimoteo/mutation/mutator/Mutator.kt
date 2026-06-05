@@ -973,7 +973,7 @@ private class MutationApplierMethodVisitor(
 }
 
 // Static helper functions for mutation logic
-private object ConditionalMutator {
+internal object ConditionalMutator {
     fun mutateBoundaryStatic(opcode: Int): Int =
         when (opcode) {
             Opcodes.IFGE -> Opcodes.IFGT
@@ -1011,7 +1011,7 @@ private object ConditionalMutator {
         }
 }
 
-private object ArithmeticMutator {
+internal object ArithmeticMutator {
     fun mutateStatic(opcode: Int): Int =
         when (opcode) {
             Opcodes.IADD -> Opcodes.ISUB
@@ -1042,7 +1042,7 @@ private object ArithmeticMutator {
         }
 }
 
-private object InvertNegsMutator {
+internal object InvertNegsMutator {
     fun mutateStatic(opcode: Int): Int =
         // INVERT_NEGS is now intentionally a no-op - negation mutations are fully
         // covered by NEGATE_CONDITIONALS (mutateNegateStatic). This operator is kept
@@ -1050,7 +1050,7 @@ private object InvertNegsMutator {
         opcode
 }
 
-private object ReturnValueMutator {
+internal object ReturnValueMutator {
     fun mutateReturnStatic(
         opcode: Int,
         returnType: Type,
