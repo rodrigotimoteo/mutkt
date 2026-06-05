@@ -24,23 +24,6 @@ subprojects {
     }
 }
 
-// OWASP dependency-check configuration.
-// Disable the NVD analyzer — without an NVD_API_KEY secret the public
-// NVD endpoint rate-limits CI runs to failure. We still scan via OSS
-// Index, RetireJS, and other analyzers. To re-enable NVD, obtain a
-// free key at https://nvd.nist.gov/developers/request-an-api-key,
-// add it as the NVD_API_KEY repository secret, and remove the
-// analyzers block below.
-extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckExtension> {
-    failOnError.set(false)
-    nvd {
-        apiKey = System.getenv("NVD_API_KEY") ?: (project.findProperty("nvd.api.key") as String? ?: "")
-    }
-    analyzers {
-        nvd.enabled = false
-    }
-}
-
 allprojects {
     group = "io.github.rodrigotimoteo"
     version = "0.1.0"
@@ -166,18 +149,19 @@ subprojects {
 }
 
 // OWASP dependency-check configuration.
-// Disable the NVD analyzer — without an NVD_API_KEY secret the public
-// NVD endpoint rate-limits CI runs to failure. We still scan via OSS
-// Index, RetireJS, and other analyzers. To re-enable NVD, obtain a
-// free key at https://nvd.nist.gov/developers/request-an-api-key,
-// add it as the NVD_API_KEY repository secret, and remove the
-// analyzers block below.
+// Use the NVD data feed (no API key required). The public REST API
+// is heavily rate-limited and CI runs hit 429s without a key. The
+// data feed is a single bulk JSON download per year, cached locally
+// and reused for `validForHours`. Optionally set NVD_API_KEY (free
+// at https://nvd.nist.gov/developers/request-an-api-key) to switch
+// back to the REST API for freshest data.
 extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckExtension> {
     failOnError.set(false)
+    autoUpdate.set(false)
     nvd {
         apiKey = System.getenv("NVD_API_KEY") ?: (project.findProperty("nvd.api.key") as String? ?: "")
-    }
-    analyzers {
-        nvd.enabled = false
+        validForHours.set(24)
+        datafeedUrl.set("https://nvd.nist.gov/static/feeds/json/cve/1.1/nvdcve-1.1-{year}.json.gz")
+        datafeedStartYear.set(2002)
     }
 }
