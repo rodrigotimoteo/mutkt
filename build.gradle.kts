@@ -24,6 +24,23 @@ subprojects {
     }
 }
 
+// OWASP dependency-check configuration.
+// Disable the NVD analyzer — without an NVD_API_KEY secret the public
+// NVD endpoint rate-limits CI runs to failure. We still scan via OSS
+// Index, RetireJS, and other analyzers. To re-enable NVD, obtain a
+// free key at https://nvd.nist.gov/developers/request-an-api-key,
+// add it as the NVD_API_KEY repository secret, and remove the
+// analyzers block below.
+extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckExtension> {
+    failOnError.set(false)
+    nvd {
+        apiKey = System.getenv("NVD_API_KEY") ?: (project.findProperty("nvd.api.key") as String? ?: "")
+    }
+    analyzers {
+        nvd.enabled = false
+    }
+}
+
 allprojects {
     group = "io.github.rodrigotimoteo"
     version = "0.1.0"
@@ -145,5 +162,22 @@ subprojects {
         testLogging {
             events("passed", "skipped", "failed")
         }
+    }
+}
+
+// OWASP dependency-check configuration.
+// Disable the NVD analyzer — without an NVD_API_KEY secret the public
+// NVD endpoint rate-limits CI runs to failure. We still scan via OSS
+// Index, RetireJS, and other analyzers. To re-enable NVD, obtain a
+// free key at https://nvd.nist.gov/developers/request-an-api-key,
+// add it as the NVD_API_KEY repository secret, and remove the
+// analyzers block below.
+extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckExtension> {
+    failOnError.set(false)
+    nvd {
+        apiKey = System.getenv("NVD_API_KEY") ?: (project.findProperty("nvd.api.key") as String? ?: "")
+    }
+    analyzers {
+        nvd.enabled = false
     }
 }
