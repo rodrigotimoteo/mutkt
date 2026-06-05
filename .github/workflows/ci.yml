@@ -27,7 +27,7 @@ jobs:
           distribution: 'corretto'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Run ktlint
         run: ./gradlew ktlintCheck
@@ -62,7 +62,7 @@ jobs:
           distribution: 'corretto'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build
         run: ./gradlew build
@@ -90,7 +90,7 @@ jobs:
           distribution: 'corretto'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Generate coverage report
         run: ./gradlew koverXmlReport
@@ -121,7 +121,7 @@ jobs:
           distribution: 'corretto'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Run mutation tests
         run: ./gradlew mutationTest
