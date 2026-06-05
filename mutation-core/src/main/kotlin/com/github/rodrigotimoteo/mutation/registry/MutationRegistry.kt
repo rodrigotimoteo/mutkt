@@ -135,6 +135,7 @@ object MutationRegistry {
      * Reset all thread state.
      */
     fun reset() {
+        active.set(false)
         threads.clear()
         classThreads.clear()
     }

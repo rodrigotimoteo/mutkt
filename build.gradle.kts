@@ -23,11 +23,6 @@ subprojects {
     }
 }
 
-// Aggregated Dokka configuration
-tasks.named("dokkaHtml") {
-    dependsOn(subprojects.map { "${it.path}:dokkaHtml" })
-}
-
 allprojects {
     group = "io.github.rodrigotimoteo"
     version = "0.1.0"
