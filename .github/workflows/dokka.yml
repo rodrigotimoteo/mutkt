@@ -31,7 +31,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Generate Dokka docs
-        run: ./gradlew dokkaHtmlMultiModule --no-daemon
+        run: ./gradlew dokkaGenerate --no-daemon
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
