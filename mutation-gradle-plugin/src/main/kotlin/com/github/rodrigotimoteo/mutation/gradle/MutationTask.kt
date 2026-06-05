@@ -10,6 +10,7 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
@@ -48,7 +49,7 @@ abstract class MutationTask : DefaultTask() {
     val classpath: ConfigurableFileCollection = project.objects.fileCollection()
 
     /** JaCoCo execution file for coverage analysis. */
-    @Input
+    @InputFile
     @Optional
     val coverageExecFile: RegularFileProperty = project.objects.fileProperty()
 
@@ -108,7 +109,7 @@ abstract class MutationTask : DefaultTask() {
 
         // Find classes directories from file collections
         val classesDir = findClassesDir(targetClasses.files)
-        val testClassesDir = findClassesDir(testClasses.files)
+        val testClassesDir = findClassesDir(testClasses.files, isTestClasses = true)
         val classpathFiles = classpath.files.toList()
 
         // Find coverage file
@@ -167,7 +168,6 @@ abstract class MutationTask : DefaultTask() {
                 testClassesDir = testClassesDir,
                 classpath = classpathFiles,
                 coverageExecFile = coverageFile,
-                enabledOperators = operators.toSet(),
             )
 
         // Generate reports
@@ -191,21 +191,38 @@ abstract class MutationTask : DefaultTask() {
 
     private fun parseOperators(names: Set<String>): List<MutationOperator> {
         if (names.isEmpty()) return MutationOperator.MVP_OPERATORS.toList()
-        return names.mapNotNull { MutationOperator.fromName(it) }
+        val valid = mutableListOf<MutationOperator>()
+        for (name in names) {
+            val op = MutationOperator.fromName(name)
+            if (op != null) {
+                valid.add(op)
+            } else {
+                logger.warn("Unknown mutation operator: '$name' (ignored)")
+            }
+        }
+        if (valid.isEmpty()) {
+            logger.warn("All specified operators are invalid: $names. Falling back to MVP_OPERATORS.")
+            return MutationOperator.MVP_OPERATORS.toList()
+        }
+        return valid
     }
 
-    private fun findClassesDir(files: Set<File>): File {
+    private fun findClassesDir(
+        files: Set<File>,
+        isTestClasses: Boolean = false,
+    ): File {
         // Find the first directory that contains .class files
         for (file in files) {
             if (file.isDirectory) {
-                val hasClasses = file.walkTopDown().maxDepth(5).any { it.extension == "class" }
+                val hasClasses = file.walkTopDown().maxDepth(10).any { it.extension == "class" }
                 if (hasClasses) return file
             }
         }
         // Fallback to build directory — check kotlin and java output dirs
-        return File(project.buildDir, "classes/kotlin/main")
+        val subDir = if (isTestClasses) "test" else "main"
+        return File(project.buildDir, "classes/kotlin/$subDir")
             .takeIf { it.exists() }
-            ?: File(project.buildDir, "classes/java/main")
+            ?: File(project.buildDir, "classes/java/$subDir")
     }
 
     private fun generateReports(report: MutationReport) {
@@ -222,7 +239,7 @@ abstract class MutationTask : DefaultTask() {
                 }
                 "console" -> {
                     val consoleReport = ConsoleReportGenerator.generate(report)
-                    println(consoleReport)
+                    logger.lifecycle(consoleReport)
                 }
                 else -> {
                     logger.warn("Unknown report format: $format (supported: html, console)")
@@ -242,7 +259,7 @@ abstract class MutationTask : DefaultTask() {
         logger.lifecycle("Errors:           ${report.errorMutations}")
         logger.lifecycle("Timeouts:         ${report.timeoutMutations}")
         logger.lifecycle("No coverage:      ${report.noCoverageMutations}")
-        logger.lifecycle("Total time:       ${report.totalExecutionTimeMs / 1000}s")
+        logger.lifecycle("Total time:       ${"%.1f".format(report.totalExecutionTimeMs / 1000.0)}s")
         logger.lifecycle("=".repeat(60))
     }
 }

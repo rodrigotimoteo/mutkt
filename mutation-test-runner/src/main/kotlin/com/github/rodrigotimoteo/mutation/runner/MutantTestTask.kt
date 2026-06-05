@@ -25,15 +25,12 @@ class MutantTestTask(
         val startTime = System.currentTimeMillis()
 
         return try {
-            // Create classloader with mutated class
-            val mutatedClassFiles = classFiles.toMutableMap()
-            mutatedClassFiles[mutation.className.replace('.', '/')] = mutatedBytes
-
+            // Pass original classFiles to classloader — it applies the single mutation
             val mutator = Mutator(setOf(mutation.operator))
             val classLoader =
                 MutantClassLoaderFactory.create(
                     parentClassLoader,
-                    mutatedClassFiles,
+                    classFiles,
                     mutation,
                     mutator,
                 )
@@ -46,7 +43,7 @@ class MutantTestTask(
                 status = status,
                 executionTimeMs = System.currentTimeMillis() - startTime,
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             logger.debug("Mutant execution error: ${e.message}", e)
             MutationResult(
                 mutation = toMutation(mutation),

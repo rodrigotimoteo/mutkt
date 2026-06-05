@@ -83,7 +83,7 @@ MutationEngine.runMutationTesting() → orchestrates scan → mutate → test �
 - **Publishing**: Maven Central via Sonatype (needs `SONATYPE_USERNAME`/`SONATYPE_PASSWORD` env vars + GPG key)
 - **Coverage threshold**: 85% line per module enforced by kover
 - **Detekt**: `maxIssues: 0`, `LongMethod: 60`, `LongParameterList: 8/10`, `ComplexMethod: 15`
-- **18 mutation operators**: 7 MVP + 6 Kotlin-specific + 5 additional
+- **17 mutation operators**: 7 MVP + 4 Kotlin-specific + 6 Quick Win
 
 ## Known Gotchas
 

@@ -87,21 +87,14 @@ class SubsumptionAnalyzer {
         for (result in results) {
             if (result.status == MutationStatus.KILLED) {
                 val mutationId = result.mutation.id
-                // Extract test name from mutation ID or use className
-                val testName = extractTestName(result)
+                // Use the mutated class name as the test name proxy.
+                // In a complete implementation, this would track which specific
+                // test class killed each mutation.
+                val testName = result.mutation.className
                 killMatrix.getOrPut(mutationId) { mutableSetOf() }.add(testName)
             }
         }
 
         return killMatrix
-    }
-
-    /**
-     * Extract test name from mutation result.
-     * Uses the unique mutation id (which includes operator, class, method, line)
-     * to ensure each mutation has a unique kill-matrix key.
-     */
-    private fun extractTestName(result: MutationResult): String {
-        return result.mutation.id
     }
 }

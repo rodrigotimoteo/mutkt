@@ -39,7 +39,7 @@ class MutationPluginTest {
         project.plugins.apply(MutationPlugin::class.java)
         val ext = project.extensions.getByType(MutationPluginExtension::class.java)
         assertEquals(30000L, ext.timeoutMs.get())
-        assertEquals(setOf("html", "csv"), ext.reportFormats.get())
+        assertEquals(setOf("html"), ext.reportFormats.get())
         assertEquals(false, ext.failOnSurvived.get())
         assertEquals(0, ext.failOnScoreThreshold.get())
     }

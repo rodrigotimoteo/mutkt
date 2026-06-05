@@ -125,8 +125,13 @@ class MutationEngine(
         classFiles: Map<String, ByteArray>,
         testClassNames: List<String>,
     ): List<MutationResult> {
+        if (mutations.isEmpty()) return emptyList()
+
         val results = mutableListOf<MutationResult>()
-        val executor: ExecutorService = Executors.newFixedThreadPool(maxParallelMutants)
+        val executor: ExecutorService =
+            Executors.newFixedThreadPool(maxParallelMutants) { runnable ->
+                Thread(runnable, "mutation-worker").apply { isDaemon = true }
+            }
 
         try {
             val futures =
@@ -145,6 +150,7 @@ class MutationEngine(
                     results.add(result)
                 } catch (e: java.util.concurrent.TimeoutException) {
                     future.cancel(true)
+                    logger.warn("Mutation timed out after ${timeoutMs}ms: ${mutations[index].first}")
                     results.add(
                         MutationResult(
                             mutation = toMutation(mutations[index].first, mutatedBytes = mutations[index].second),
@@ -154,6 +160,7 @@ class MutationEngine(
                         ),
                     )
                 } catch (e: java.util.concurrent.ExecutionException) {
+                    logger.error("Mutation execution failed: ${mutations[index].first}", e.cause)
                     results.add(
                         MutationResult(
                             mutation = toMutation(mutations[index].first, mutatedBytes = mutations[index].second),
@@ -161,7 +168,12 @@ class MutationEngine(
                             errorMessage = "${e.cause?.javaClass?.simpleName}: ${e.cause?.message}",
                         ),
                     )
+                } catch (e: InterruptedException) {
+                    logger.warn("Mutation testing interrupted at mutant index $index")
+                    Thread.currentThread().interrupt()
+                    break
                 } catch (e: Exception) {
+                    logger.error("Unexpected error processing mutant: ${mutations[index].first}", e)
                     results.add(
                         MutationResult(
                             mutation = toMutation(mutations[index].first, mutatedBytes = mutations[index].second),
@@ -175,7 +187,9 @@ class MutationEngine(
             executor.shutdown()
             if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
                 executor.shutdownNow()
-                executor.awaitTermination(5, TimeUnit.SECONDS)
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    logger.warn("Executor did not terminate after shutdownNow — threads may leak")
+                }
             }
         }
 
@@ -200,19 +214,7 @@ class MutationEngine(
             )
 
         // Run tests with mutant classloader
-        val status =
-            try {
-                runTestsWithClassLoader(classLoader, testClassNames)
-            } catch (e: Throwable) {
-                // Distinguish: test assertion failures = KILLED, class loading = ERROR
-                val status = if (e is AssertionError) MutationStatus.KILLED else MutationStatus.ERROR
-                return MutationResult(
-                    mutation = toMutation(mutation),
-                    status = status,
-                    executionTimeMs = System.currentTimeMillis() - startTime,
-                    errorMessage = e.message,
-                )
-            }
+        val status = runTestsWithClassLoader(classLoader, testClassNames)
 
         return MutationResult(
             mutation = toMutation(mutation),
@@ -225,10 +227,9 @@ class MutationEngine(
         classLoader: ClassLoader,
         testClassNames: List<String>,
     ): MutationStatus {
-        // Simplified test execution - in real implementation use JUnit Platform
-        // For MVP, we'll use reflection to run test methods
         var hasTests = false
         var hasFailures = false
+        var hasErrors = false
 
         for (testClassName in testClassNames) {
             try {
@@ -243,22 +244,32 @@ class MutationEngine(
                     val instance = testClass.getDeclaredConstructor().newInstance()
                     try {
                         method.invoke(instance)
-                    } catch (e: Throwable) {
+                    } catch (e: java.lang.reflect.InvocationTargetException) {
+                        val cause = e.targetException
+                        if (cause is AssertionError) {
+                            hasFailures = true
+                            logger.debug("Test failed (mutation killed): ${method.name}", cause)
+                        } else {
+                            hasErrors = true
+                            logger.debug("Test error: ${method.name}", cause)
+                        }
+                    } catch (e: Exception) {
                         hasFailures = true
                         logger.debug("Test failed: ${method.name}", e)
                     }
                 }
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 logger.debug("Could not load test class: $testClassName", e)
+                hasErrors = true
             }
         }
 
-        return if (!hasTests) {
-            MutationStatus.NO_COVERAGE
-        } else if (hasFailures) {
-            MutationStatus.KILLED
-        } else {
-            MutationStatus.SURVIVED
+        return when {
+            !hasTests && hasErrors -> MutationStatus.ERROR
+            !hasTests -> MutationStatus.NO_COVERAGE
+            hasFailures -> MutationStatus.KILLED
+            hasErrors -> MutationStatus.ERROR
+            else -> MutationStatus.SURVIVED
         }
     }
 

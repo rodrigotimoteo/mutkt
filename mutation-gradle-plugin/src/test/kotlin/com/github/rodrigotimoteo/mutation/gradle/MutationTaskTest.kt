@@ -239,12 +239,12 @@ class MutationTaskInternalMethodsTest {
     }
 
     @Test
-    fun `parseOperators with all invalid names returns empty`() {
+    fun `parseOperators with all invalid names falls back to MVP`() {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("java")
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
         val operators = invokeParseOperators(task, setOf("X", "Y", "Z"))
-        assertEquals(0, operators.size)
+        assertEquals(MutationOperator.MVP_OPERATORS.size, operators.size)
     }
 
     @Test
@@ -342,11 +342,12 @@ class MutationTaskInternalMethodsTest {
     private fun invokeFindClassesDir(
         task: MutationTask,
         files: Set<File>,
+        isTestClasses: Boolean = false,
     ): File {
-        val method = MutationTask::class.java.getDeclaredMethod("findClassesDir", Set::class.java)
+        val method = MutationTask::class.java.getDeclaredMethod("findClassesDir", Set::class.java, Boolean::class.java)
         method.isAccessible = true
         @Suppress("UNCHECKED_CAST")
-        return method.invoke(task, files) as File
+        return method.invoke(task, files, isTestClasses) as File
     }
 }
 

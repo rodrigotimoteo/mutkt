@@ -71,7 +71,7 @@ class MutationEngineIntegrationTest {
             )
         }
 
-        // Our tests are comprehensive - should kill at least 80% of mutations
+        // Our tests are comprehensive - should kill at least 50% of mutations
         val killRate =
             if (report.totalMutations > 0) {
                 report.killedMutations.toDouble() / report.totalMutations

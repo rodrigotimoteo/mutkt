@@ -30,8 +30,9 @@ class SubsumptionAnalyzerTest {
     private fun createResult(
         id: String,
         status: MutationStatus,
+        className: String = "com.Foo",
     ): MutationResult {
-        return MutationResult(mutation = createMutation(id), status = status, executionTimeMs = 100)
+        return MutationResult(mutation = createMutation(id, className), status = status, executionTimeMs = 100)
     }
 
     @Test
@@ -65,73 +66,38 @@ class SubsumptionAnalyzerTest {
     @Test
     fun `analyze removes mutation when another subsumes it`() {
         val analyzer = SubsumptionAnalyzer()
-        // Both killed, but same killSet (mutation id = test name in kill matrix)
+        // Both killed, same className → same kill set {"com.Foo"} → equal → bidirectional subsumption
         val results =
             listOf(
-                createResult("m1", MutationStatus.KILLED),
-                createResult("m2", MutationStatus.KILLED),
+                createResult("m1", MutationStatus.KILLED, className = "com.Foo"),
+                createResult("m2", MutationStatus.KILLED, className = "com.Foo"),
             )
-        // kill matrix: m1 -> {"m1"}, m2 -> {"m2"}
-        // m1 killSet = {"m1"}, m2 killSet = {"m2"}
-        // Neither contains the other → no subsumption
-
         val analysis = analyzer.analyze(results)
-        // Since each mutation's kill set only contains itself, no subsumption
-        assertEquals(0, analysis.skippedCount)
+        // Both have kill set {"com.Foo"} — each subsumes the other, both marked subsumed
+        assertEquals(2, analysis.skippedCount)
     }
 
     @Test
     fun `analyze removes M2 when M1 kill set contains M2 kill set`() {
         val analyzer = SubsumptionAnalyzer()
-        // Build results where both mutations are KILLED but they share the same
-        // test name via extractTestName returning the mutation ID
-        // The kill matrix maps mutationId -> {mutationId itself}
-        // To test subsumption we need a scenario where kill sets properly overlap
-        // Since extractTestName returns mutation.id, each mutation has its own kill set
-        // containing only itself. No subsumption possible with this model.
-        //
-        // Testing the subsumption logic: if mutation IDs are used as kill-set keys,
-        // and the kill set for m1 = {test1}, kill set for m2 = {test1} (same test killed both),
-        // then m1's kill set is subset of m2's kill set? No, they're equal.
-        //
-        // Actually the killMatrix uses extractTestName which returns result.mutation.id.
-        // So kill matrix is always: mutationId -> {mutationId}. Each mutation kills itself alone.
-        // With this model, no two mutations share a test name, so no subsumption occurs.
-        //
-        // The subsumption is designed for when multiple test classes kill the same mutation.
-        // Let me verify the logic is correct by creating a case where two mutations
-        // have overlapping kill sets (same test killed both).
-        //
-        // Actually, re-reading the SubsumptionAnalyzer: extractTestName returns result.mutation.id!
-        // So each mutation result puts its own id as the "test name". This means every mutation
-        // has a kill set containing only itself. No subsumption is possible.
-        //
-        // This seems like a bug in the current implementation, but we test the behavior as-is.
-        // The kill sets will always be disjoint (each containing the mutation's own ID),
-        // so no subsumption relationships are found.
-        //
-        // Let me just test the current behavior and also add a test that verifies
-        // no subsumption occurs when kill sets are disjoint.
-
+        // Two mutations, same className → equal kill sets → bidirectional subsumption
         val results =
             listOf(
-                createResult("m1", MutationStatus.KILLED),
-                createResult("m2", MutationStatus.KILLED),
+                createResult("m1", MutationStatus.KILLED, className = "com.Foo"),
+                createResult("m2", MutationStatus.KILLED, className = "com.Foo"),
             )
-        // kill matrix: m1->{"m1"}, m2->{"m2"} - disjoint, no subsumption
         val analysis = analyzer.analyze(results)
-        assertEquals(0, analysis.skippedCount)
+        assertEquals(2, analysis.skippedCount)
     }
 
     @Test
-    fun `analyze keeps both when kill sets are identical but from different mutations`() {
+    fun `analyze keeps both when kill sets are disjoint`() {
         val analyzer = SubsumptionAnalyzer()
-        // Since extractTestName uses mutation.id, kill sets are always {mutationId}
-        // Two different mutations → two different kill sets → no subsumption
+        // Different classNames → disjoint kill sets → no subsumption
         val results =
             listOf(
-                createResult("m1", MutationStatus.KILLED),
-                createResult("m2", MutationStatus.KILLED),
+                createResult("m1", MutationStatus.KILLED, className = "com.Foo"),
+                createResult("m2", MutationStatus.KILLED, className = "com.Bar"),
             )
         val analysis = analyzer.analyze(results)
         assertEquals(0, analysis.skippedCount)
@@ -140,12 +106,13 @@ class SubsumptionAnalyzerTest {
     @Test
     fun `analyze keeps both when kill sets partially overlap`() {
         val analyzer = SubsumptionAnalyzer()
-        // Same reasoning: kill sets are disjoint by construction
+        // Three mutations: m1 in com.Foo, m2 in com.Bar, m3 in com.Baz
+        // All different classNames → all kill sets disjoint → no subsumption
         val results =
             listOf(
-                createResult("m1", MutationStatus.KILLED),
-                createResult("m2", MutationStatus.KILLED),
-                createResult("m3", MutationStatus.KILLED),
+                createResult("m1", MutationStatus.KILLED, className = "com.Foo"),
+                createResult("m2", MutationStatus.KILLED, className = "com.Bar"),
+                createResult("m3", MutationStatus.KILLED, className = "com.Baz"),
             )
         val analysis = analyzer.analyze(results)
         assertEquals(0, analysis.skippedCount)
@@ -154,9 +121,11 @@ class SubsumptionAnalyzerTest {
     @Test
     fun `analyze returns original count of results`() {
         val analyzer = SubsumptionAnalyzer()
-        val results = (1..5).map { createResult("m$it", MutationStatus.KILLED) }
+        // All same className → all kill sets equal → all subsumed by bidirectional logic
+        val results = (1..5).map { createResult("m$it", MutationStatus.KILLED, className = "com.Foo") }
         val analysis = analyzer.analyze(results)
-        assertEquals(0, analysis.skippedCount)
+        // 5 mutations, all with kill set {"com.Foo"} — all 5 are subsumed
+        assertEquals(5, analysis.skippedCount)
     }
 
     @Test

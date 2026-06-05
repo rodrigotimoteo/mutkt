@@ -59,6 +59,11 @@ class MutationPlugin : Plugin<Project> {
                 task.excludedMethods.set(extension.excludedMethods)
                 task.failOnScoreThreshold.set(extension.failOnScoreThreshold)
                 task.coverageExecFile.set(extension.coverageExecFile)
+                task.reportsDir.set(
+                    extension.outputDir.map { dir ->
+                        project.layout.projectDirectory.dir(dir)
+                    },
+                )
             }
 
         // Auto-detect sourceSets after project evaluation
@@ -101,18 +106,11 @@ class MutationPlugin : Plugin<Project> {
         extension: MutationPluginExtension,
     ) {
         try {
-            // Auto-detect testRuntimeClasspath
+            // Auto-detect testRuntimeClasspath (already includes main output)
             val testRuntimeClasspath = project.configurations.findByName("testRuntimeClasspath")
             if (testRuntimeClasspath != null) {
                 extension.classpath.from(testRuntimeClasspath)
                 project.logger.info("Auto-detected classpath from testRuntimeClasspath")
-            }
-
-            // Also add main output to classpath
-            val sourceSets = project.extensions.findByType(SourceSetContainer::class.java)
-            val mainSourceSet = sourceSets?.findByName("main")
-            if (mainSourceSet != null) {
-                extension.classpath.from(mainSourceSet.output)
             }
         } catch (e: Exception) {
             project.logger.warn("Could not auto-detect classpath: ${e.message}")
