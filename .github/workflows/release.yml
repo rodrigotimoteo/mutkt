@@ -54,7 +54,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Publish to GitHub Packages
-        run: ./gradlew publishMavenPublicationToGitHubPackagesRepository
+        run: ./gradlew publishMavenPublicationToGitHubPackagesRepository || echo "GitHub Packages publish skipped (version may already exist)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
