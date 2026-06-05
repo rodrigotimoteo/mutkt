@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.ktlint)
     alias(libs.plugins.dokka)
     alias(libs.plugins.owasp.dependencycheck)
+    id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
 }
 
 allprojects {
@@ -163,5 +164,16 @@ extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckE
         validForHours.set(24)
         datafeedUrl.set("https://nvd.nist.gov/static/feeds/json/cve/1.1/nvdcve-1.1-{year}.json.gz")
         datafeedStartYear.set(2002)
+    }
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/content/repositories/snapshots/"))
+            username.set(System.getenv("SONATYPE_USERNAME") ?: project.findProperty("ossrh.username") as String? ?: "")
+            password.set(System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("ossrh.password") as String? ?: "")
+        }
     }
 }
