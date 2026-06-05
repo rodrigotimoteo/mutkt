@@ -94,7 +94,11 @@ subprojects {
                 url = uri("https://maven.pkg.github.com/rodrigotimoteo/mutkt")
                 credentials {
                     username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String? ?: "rodrigotimoteo"
-                    password = System.getenv("GH_PACKAGES_TOKEN") ?: System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String? ?: ""
+                    password =
+                        System.getenv("GH_PACKAGES_TOKEN")
+                            ?: System.getenv("GITHUB_TOKEN")
+                            ?: project.findProperty("gpr.key") as String?
+                            ?: ""
                 }
             }
             maven {
@@ -123,10 +127,11 @@ subprojects {
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         kotlinOptions {
             jvmTarget = libs.versions.jvmTarget.get()
-            freeCompilerArgs += listOf(
-                "-opt-in=kotlin.RequiresOptIn",
-                "-Xjsr305=strict"
-            )
+            freeCompilerArgs +=
+                listOf(
+                    "-opt-in=kotlin.RequiresOptIn",
+                    "-Xjsr305=strict",
+                )
         }
     }
 

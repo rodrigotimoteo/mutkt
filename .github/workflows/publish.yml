@@ -29,7 +29,7 @@ jobs:
           distribution: 'corretto'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Publish to GitHub Packages
         run: ./gradlew publishMavenPublicationToGitHubPackagesRepository
@@ -51,7 +51,7 @@ jobs:
           distribution: 'corretto'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Publish to Maven Central
         run: ./gradlew publishMavenPublicationToMavenCentralRepository
