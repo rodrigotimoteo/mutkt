@@ -366,8 +366,10 @@ private class MutationScannerMethodVisitor(
         val returnType = Type.getReturnType(methodDescriptor)
 
         if (MutationOperator.RETURN_VALS in enabledOperators) {
-            val mutated = ReturnValueMutator.mutateReturnStatic(opcode, returnType)
-            if (mutated != opcode) {
+            if (opcode == Opcodes.IRETURN || opcode == Opcodes.LRETURN ||
+                opcode == Opcodes.FRETURN || opcode == Opcodes.DRETURN ||
+                opcode == Opcodes.ARETURN
+            ) {
                 tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.RETURN_VALS,
@@ -377,7 +379,7 @@ private class MutationScannerMethodVisitor(
                         lineNumber = currentLineNumber,
                         description = "Return: $opcode -> constant",
                         originalOpcode = opcode,
-                        mutatedOpcode = mutated,
+                        mutatedOpcode = opcode,
                     ),
                 )
             }
@@ -700,11 +702,16 @@ private class MutationApplierMethodVisitor(
         if (!applied && currentLineNumber == targetMutation.lineNumber) {
             when (targetMutation.operator) {
                 MutationOperator.VOID_METHOD_CALLS -> {
-                    if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESTATIC || opcode == Opcodes.INVOKEINTERFACE) {
+                    if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESTATIC ||
+                        opcode == Opcodes.INVOKEINTERFACE || opcode == Opcodes.INVOKESPECIAL
+                    ) {
                         val returnType = Type.getReturnType(descriptor)
                         if (returnType.sort == Type.VOID) {
                             val argTypes = Type.getArgumentTypes(descriptor)
                             popArgs(argTypes)
+                            if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE) {
+                                mv.visitInsn(Opcodes.POP) // Pop receiver
+                            }
                             applied = true
                             return
                         }
@@ -714,7 +721,8 @@ private class MutationApplierMethodVisitor(
                     if (opcode == Opcodes.INVOKESPECIAL && name == "<init>") {
                         val argTypes = Type.getArgumentTypes(descriptor)
                         popArgs(argTypes)
-                        mv.visitInsn(Opcodes.POP) // Pop the uninitialized object
+                        mv.visitInsn(Opcodes.POP2) // Pop receiver + NEW reference (2 slots for new expression)
+                        mv.visitInsn(Opcodes.ACONST_NULL) // Push null as replacement
                         applied = true
                         return
                     }
@@ -724,8 +732,10 @@ private class MutationApplierMethodVisitor(
                     if (returnType.sort != Type.VOID) {
                         val argTypes = Type.getArgumentTypes(descriptor)
                         popArgs(argTypes)
-                        if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE) {
-                            mv.visitInsn(Opcodes.POP) // Pop receiver for virtual/interface calls
+                        if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE ||
+                            opcode == Opcodes.INVOKESPECIAL
+                        ) {
+                            mv.visitInsn(Opcodes.POP) // Pop receiver for virtual/interface/special calls
                         }
                         pushDefaultValue(returnType)
                         applied = true
@@ -739,7 +749,7 @@ private class MutationApplierMethodVisitor(
     }
 
     private fun popArgs(argTypes: Array<Type>) {
-        for (type in argTypes) {
+        for (type in argTypes.reversed()) {
             if (type.sort == Type.LONG || type.sort == Type.DOUBLE) {
                 mv.visitInsn(Opcodes.POP2)
             } else {
@@ -822,19 +832,41 @@ private class MutationApplierMethodVisitor(
         when {
             returnType.sort == Type.ARRAY -> {
                 val elementType = returnType.elementType
-                mv.visitInsn(Opcodes.ICONST_0)
-                mv.visitTypeInsn(Opcodes.ANEWARRAY, elementType.internalName)
+                if (elementType.sort >= Type.BOOLEAN && elementType.sort <= Type.DOUBLE) {
+                    // Primitive array: use NEWARRAY
+                    mv.visitInsn(Opcodes.ICONST_0)
+                    val newarrayOp =
+                        when (elementType.sort) {
+                            Type.BOOLEAN -> Opcodes.T_BOOLEAN
+                            Type.BYTE -> Opcodes.T_BYTE
+                            Type.CHAR -> Opcodes.T_CHAR
+                            Type.SHORT -> Opcodes.T_SHORT
+                            Type.INT -> Opcodes.T_INT
+                            Type.LONG -> Opcodes.T_LONG
+                            Type.FLOAT -> Opcodes.T_FLOAT
+                            Type.DOUBLE -> Opcodes.T_DOUBLE
+                            else -> Opcodes.T_INT
+                        }
+                    mv.visitIntInsn(Opcodes.NEWARRAY, newarrayOp)
+                } else {
+                    // Object array: use ANEWARRAY
+                    mv.visitInsn(Opcodes.ICONST_0)
+                    mv.visitTypeInsn(Opcodes.ANEWARRAY, elementType.internalName)
+                }
                 mv.visitInsn(Opcodes.ARETURN)
             }
-            className.contains("List") || className.contains("MutableList") -> {
+            className == "java.util.List" || className == "kotlin.collections.List" ||
+                className == "kotlin.collections.MutableList" -> {
                 mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/Collections", "emptyList", "()Ljava/util/List;", false)
                 mv.visitInsn(Opcodes.ARETURN)
             }
-            className.contains("Set") || className.contains("MutableSet") -> {
+            className == "java.util.Set" || className == "kotlin.collections.Set" ||
+                className == "kotlin.collections.MutableSet" -> {
                 mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/Collections", "emptySet", "()Ljava/util/Set;", false)
                 mv.visitInsn(Opcodes.ARETURN)
             }
-            className.contains("Map") || className.contains("MutableMap") -> {
+            className == "java.util.Map" || className == "kotlin.collections.Map" ||
+                className == "kotlin.collections.MutableMap" -> {
                 mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/Collections", "emptyMap", "()Ljava/util/Map;", false)
                 mv.visitInsn(Opcodes.ARETURN)
             }
