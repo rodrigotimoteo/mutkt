@@ -18,6 +18,7 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.assertj.core)
     testImplementation(libs.mockk)
+    testImplementation(libs.asm.core)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
