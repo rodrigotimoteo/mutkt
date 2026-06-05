@@ -1,12 +1,9 @@
 package com.github.rodrigotimoteo.mutation.mutator
 
 import org.junit.jupiter.api.Test
-import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Label
-import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
-import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.ClassNode
 import org.objectweb.asm.tree.InsnNode
 import org.objectweb.asm.tree.JumpInsnNode
@@ -15,12 +12,10 @@ import org.objectweb.asm.tree.LineNumberNode
 import org.objectweb.asm.tree.MethodNode
 import org.objectweb.asm.tree.TryCatchBlockNode
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class InlinedFinallyDetectorTreeTest {
-
     @Test
     fun `detect finds no inlined blocks in class with no methods`() {
         val detector = InlinedFinallyDetector()
@@ -161,13 +156,14 @@ class InlinedFinallyDetectorTreeTest {
 
     @Test
     fun `InlinedFinallyBlock toString includes all fields`() {
-        val block = InlinedFinallyDetector.InlinedFinallyBlock(
-            methodName = "foo",
-            startLine = 10,
-            endLine = 20,
-            handlerLine = 15,
-            duplicatedAt = listOf(5, 10, 15),
-        )
+        val block =
+            InlinedFinallyDetector.InlinedFinallyBlock(
+                methodName = "foo",
+                startLine = 10,
+                endLine = 20,
+                handlerLine = 15,
+                duplicatedAt = listOf(5, 10, 15),
+            )
         val str = block.toString()
         assertTrue(str.contains("foo"))
         assertTrue(str.contains("10"))
@@ -176,13 +172,14 @@ class InlinedFinallyDetectorTreeTest {
 
     @Test
     fun `InlinedFinallyBlock copy with changes works`() {
-        val block = InlinedFinallyDetector.InlinedFinallyBlock(
-            methodName = "foo",
-            startLine = 10,
-            endLine = 20,
-            handlerLine = 15,
-            duplicatedAt = listOf(5, 10, 15),
-        )
+        val block =
+            InlinedFinallyDetector.InlinedFinallyBlock(
+                methodName = "foo",
+                startLine = 10,
+                endLine = 20,
+                handlerLine = 15,
+                duplicatedAt = listOf(5, 10, 15),
+            )
         val copied = block.copy(startLine = 50)
         assertEquals(50, copied.startLine)
         assertEquals(20, copied.endLine)
@@ -198,9 +195,10 @@ class InlinedFinallyDetectorTreeTest {
     @Test
     fun `isInInlinedBlock at exact boundary lines`() {
         val detector = InlinedFinallyDetector()
-        val blocks = listOf(
-            InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
-        )
+        val blocks =
+            listOf(
+                InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
+            )
         // Exact boundaries
         assertTrue(detector.isInInlinedBlock(10, blocks), "startLine should be inclusive")
         assertTrue(detector.isInInlinedBlock(20, blocks), "endLine should be inclusive")
@@ -209,9 +207,10 @@ class InlinedFinallyDetectorTreeTest {
     @Test
     fun `isInInlinedBlock outside range returns false`() {
         val detector = InlinedFinallyDetector()
-        val blocks = listOf(
-            InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
-        )
+        val blocks =
+            listOf(
+                InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
+            )
         assertFalse(detector.isInInlinedBlock(9, blocks))
         assertFalse(detector.isInInlinedBlock(21, blocks))
     }
@@ -219,10 +218,11 @@ class InlinedFinallyDetectorTreeTest {
     @Test
     fun `isInInlinedBlock with multiple blocks finds match in any`() {
         val detector = InlinedFinallyDetector()
-        val blocks = listOf(
-            InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
-            InlinedFinallyDetector.InlinedFinallyBlock("bar", 50, 60, 55, listOf(50, 55, 60)),
-        )
+        val blocks =
+            listOf(
+                InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
+                InlinedFinallyDetector.InlinedFinallyBlock("bar", 50, 60, 55, listOf(50, 55, 60)),
+            )
         assertTrue(detector.isInInlinedBlock(10, blocks))
         assertTrue(detector.isInInlinedBlock(55, blocks))
         assertFalse(detector.isInInlinedBlock(30, blocks))
@@ -231,41 +231,47 @@ class InlinedFinallyDetectorTreeTest {
     @Test
     fun `countSkippedMutations with single-block edge`() {
         val detector = InlinedFinallyDetector()
-        val blocks = listOf(
-            InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
-        )
-        val mutations = listOf(
-            createMutation(10),
-            createMutation(20),
-        )
+        val blocks =
+            listOf(
+                InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
+            )
+        val mutations =
+            listOf(
+                createMutation(10),
+                createMutation(20),
+            )
         assertEquals(2, detector.countSkippedMutations(mutations, blocks))
     }
 
     @Test
     fun `countSkippedMutations with mutations at boundary lines`() {
         val detector = InlinedFinallyDetector()
-        val blocks = listOf(
-            InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
-        )
-        val mutations = listOf(
-            createMutation(10), // start, included
-            createMutation(20), // end, included
-            createMutation(9),  // before start
-            createMutation(21), // after end
-        )
+        val blocks =
+            listOf(
+                InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
+            )
+        val mutations =
+            listOf(
+                createMutation(10), // start, included
+                createMutation(20), // end, included
+                createMutation(9), // before start
+                createMutation(21), // after end
+            )
         assertEquals(2, detector.countSkippedMutations(mutations, blocks))
     }
 
     @Test
     fun `countSkippedMutations with mixed KILLED and SURVIVED`() {
         val detector = InlinedFinallyDetector()
-        val blocks = listOf(
-            InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
-        )
-        val mutations = listOf(
-            createMutation(10),
-            createMutation(15),
-        )
+        val blocks =
+            listOf(
+                InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
+            )
+        val mutations =
+            listOf(
+                createMutation(10),
+                createMutation(15),
+            )
         // countSkippedMutations doesn't care about result status
         assertEquals(2, detector.countSkippedMutations(mutations, blocks))
     }
@@ -302,15 +308,17 @@ class InlinedFinallyDetectorTreeTest {
     @Test
     fun `countSkippedMutations counts duplicates across overlapping blocks`() {
         val detector = InlinedFinallyDetector()
-        val blocks = listOf(
-            InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 30, 15, listOf(10, 20, 30)),
-            InlinedFinallyDetector.InlinedFinallyBlock("bar", 20, 40, 25, listOf(20, 30, 40)),
-        )
-        val mutations = listOf(
-            createMutation(20), // in both
-            createMutation(30), // in both
-            createMutation(40), // only in bar
-        )
+        val blocks =
+            listOf(
+                InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 30, 15, listOf(10, 20, 30)),
+                InlinedFinallyDetector.InlinedFinallyBlock("bar", 20, 40, 25, listOf(20, 30, 40)),
+            )
+        val mutations =
+            listOf(
+                createMutation(20), // in both
+                createMutation(30), // in both
+                createMutation(40), // only in bar
+            )
         // countSkippedMutations counts mutations where isInInlinedBlock returns true
         // isInInlinedBlock returns true if mutationLine is in ANY block's range
         // 20: in [10,30] (yes) — in [20,40] (yes) → true (1)

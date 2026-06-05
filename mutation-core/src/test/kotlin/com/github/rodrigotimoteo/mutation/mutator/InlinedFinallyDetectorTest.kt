@@ -112,18 +112,20 @@ class InlinedFinallyDetectorTest {
     @Test
     fun `countSkippedMutations counts mutations within blocks`() {
         val detector = InlinedFinallyDetector()
-        val blocks = listOf(
-            InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
-        )
-        val mutations = listOf(
-            // in block
-            createMutation(10),
-            createMutation(15),
-            createMutation(20),
-            // not in block
-            createMutation(5),
-            createMutation(50),
-        )
+        val blocks =
+            listOf(
+                InlinedFinallyDetector.InlinedFinallyBlock("foo", 10, 20, 15, listOf(5, 10, 15)),
+            )
+        val mutations =
+            listOf(
+                // in block
+                createMutation(10),
+                createMutation(15),
+                createMutation(20),
+                // not in block
+                createMutation(5),
+                createMutation(50),
+            )
         assertEquals(3, detector.countSkippedMutations(mutations, blocks))
     }
 

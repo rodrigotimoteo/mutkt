@@ -8,7 +8,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class MutationDescriberOperatorTest {
-
     @Test
     fun `describe CONDITIONALS_BOUNDARY with IFEQ and IFNE`() {
         val m = makeMutation(MutationOperator.CONDITIONALS_BOUNDARY, Opcodes.IFEQ, Opcodes.IFNE)
@@ -308,64 +307,68 @@ class MutationDescriberOperatorTest {
 
     @Test
     fun `describe VOID_METHOD_CALLS extracts from description`() {
-        val m = MutationInfo(
-            operator = MutationOperator.VOID_METHOD_CALLS,
-            className = "com.Foo",
-            methodName = "bar",
-            methodDescriptor = "()V",
-            lineNumber = 10,
-            description = "Remove void call: java/io/PrintStream.println",
-            originalOpcode = 182,
-            mutatedOpcode = 182,
-        )
+        val m =
+            MutationInfo(
+                operator = MutationOperator.VOID_METHOD_CALLS,
+                className = "com.Foo",
+                methodName = "bar",
+                methodDescriptor = "()V",
+                lineNumber = 10,
+                description = "Remove void call: java/io/PrintStream.println",
+                originalOpcode = 182,
+                mutatedOpcode = 182,
+            )
         val result = MutationDescriber.describe(m)
         assertEquals("Remove void call: java/io/PrintStream.println", result)
     }
 
     @Test
     fun `describe VOID_METHOD_CALLS with multiple colons takes last segment`() {
-        val m = MutationInfo(
-            operator = MutationOperator.VOID_METHOD_CALLS,
-            className = "com.Foo",
-            methodName = "bar",
-            methodDescriptor = "()V",
-            lineNumber = 10,
-            description = "pre: middle: java/io/PrintStream.println",
-            originalOpcode = 182,
-            mutatedOpcode = 182,
-        )
+        val m =
+            MutationInfo(
+                operator = MutationOperator.VOID_METHOD_CALLS,
+                className = "com.Foo",
+                methodName = "bar",
+                methodDescriptor = "()V",
+                lineNumber = 10,
+                description = "pre: middle: java/io/PrintStream.println",
+                originalOpcode = 182,
+                mutatedOpcode = 182,
+            )
         val result = MutationDescriber.describe(m)
         assertEquals("Remove void call: java/io/PrintStream.println", result)
     }
 
     @Test
     fun `describe CONSTRUCTOR_CALLS extracts from description`() {
-        val m = MutationInfo(
-            operator = MutationOperator.CONSTRUCTOR_CALLS,
-            className = "com.Foo",
-            methodName = "bar",
-            methodDescriptor = "()V",
-            lineNumber = 10,
-            description = "Remove constructor: java/lang/String.<init>",
-            originalOpcode = 183,
-            mutatedOpcode = 183,
-        )
+        val m =
+            MutationInfo(
+                operator = MutationOperator.CONSTRUCTOR_CALLS,
+                className = "com.Foo",
+                methodName = "bar",
+                methodDescriptor = "()V",
+                lineNumber = 10,
+                description = "Remove constructor: java/lang/String.<init>",
+                originalOpcode = 183,
+                mutatedOpcode = 183,
+            )
         val result = MutationDescriber.describe(m)
         assertEquals("Remove constructor: java/lang/String.<init>", result)
     }
 
     @Test
     fun `describe NON_VOID_METHOD_CALLS extracts from description`() {
-        val m = MutationInfo(
-            operator = MutationOperator.NON_VOID_METHOD_CALLS,
-            className = "com.Foo",
-            methodName = "bar",
-            methodDescriptor = "()V",
-            lineNumber = 10,
-            description = "Remove non-void call: java/lang/String.length",
-            originalOpcode = 182,
-            mutatedOpcode = 182,
-        )
+        val m =
+            MutationInfo(
+                operator = MutationOperator.NON_VOID_METHOD_CALLS,
+                className = "com.Foo",
+                methodName = "bar",
+                methodDescriptor = "()V",
+                lineNumber = 10,
+                description = "Remove non-void call: java/lang/String.length",
+                originalOpcode = 182,
+                mutatedOpcode = 182,
+            )
         val result = MutationDescriber.describe(m)
         assertEquals("Remove non-void call: java/lang/String.length", result)
     }
@@ -394,7 +397,11 @@ class MutationDescriberOperatorTest {
         assertEquals("Coroutine mutation", MutationDescriber.describe(m))
     }
 
-    private fun makeMutation(op: MutationOperator, originalOpcode: Int, mutatedOpcode: Int): MutationInfo {
+    private fun makeMutation(
+        op: MutationOperator,
+        originalOpcode: Int,
+        mutatedOpcode: Int,
+    ): MutationInfo {
         return MutationInfo(
             operator = op,
             className = "com.Foo",

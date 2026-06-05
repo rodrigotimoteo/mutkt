@@ -125,6 +125,8 @@ private class MutationScannerVisitor(
         }
         // Check for @SuppressMutations annotation
         if (desc == "Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;") {
+            // Presence of the annotation suppresses all mutations by default.
+            // Specific operators listed in `operators` field are also suppressed.
             classSuppressed = true
             // Parse the annotation to extract specific operators to suppress
             return object : org.objectweb.asm.AnnotationVisitor(Opcodes.ASM9) {
