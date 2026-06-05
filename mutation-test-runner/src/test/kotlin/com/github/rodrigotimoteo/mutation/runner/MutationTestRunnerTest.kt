@@ -124,7 +124,7 @@ class MutationTestRunnerTest {
         testDir.mkdirs()
         runner.run(classesDir, testDir, classpath = emptyList())
         // Verify engine was called
-        verify { mockEngine.runMutationTesting(any<Map<String, ByteArray>>(), any(), any(), any()) }
+        verify { mockEngine.runMutationTesting(any<Map<String, ByteArray>>(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -145,6 +145,7 @@ class MutationTestRunnerTest {
                 any<List<String>>(),
                 any<Map<String, ByteArray>>(),
                 null,
+                any(),
             )
         }
     }

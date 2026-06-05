@@ -51,7 +51,23 @@ class Mutator(
         classBytes: ByteArray,
         targetMutation: MutationInfo,
     ): ByteArray {
-        val writer = ClassWriter(ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES)
+        val writer =
+            object : ClassWriter(ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES) {
+                override fun getCommonSuperClass(
+                    type1: String,
+                    type2: String,
+                ): String {
+                    // Use context classloader to resolve class hierarchies for COMPUTE_FRAMES
+                    val loader = Thread.currentThread().contextClassLoader ?: javaClass.classLoader
+                    return try {
+                        Class.forName(type1.replace('/', '.'), false, loader)
+                        type1
+                    } catch (e: ClassNotFoundException) {
+                        // Fallback: return java/lang/Object if class not found
+                        "java/lang/Object"
+                    }
+                }
+            }
         val reader = ClassReader(classBytes)
         val visitor = MutationApplierVisitor(writer, targetMutation, enabledOperators)
         reader.accept(visitor, ClassReader.SKIP_FRAMES)

@@ -1,5 +1,15 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    `java-gradle-plugin`
+}
+
+gradlePlugin {
+    plugins {
+        create("mutation-kotlin") {
+            id = "io.github.rodrigotimoteo.mutation-kotlin"
+            implementationClass = "com.github.rodrigotimoteo.mutation.gradle.MutationPlugin"
+        }
+    }
 }
 
 dependencies {

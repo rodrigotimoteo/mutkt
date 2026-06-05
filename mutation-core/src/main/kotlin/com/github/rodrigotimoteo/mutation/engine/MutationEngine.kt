@@ -59,6 +59,7 @@ class MutationEngine(
         testClassNames: List<String>,
         testClassBytes: Map<String, ByteArray> = emptyMap(),
         coverageExecFile: File? = null,
+        testClassLoader: ClassLoader? = null,
     ): MutationReport {
         val startTime = System.currentTimeMillis()
         val allMutations = generateAllMutations(classFiles)
@@ -106,7 +107,7 @@ class MutationEngine(
             }
 
         // Run tests against each mutant
-        val results = runMutants(mutationsAfterInlined, allClassFiles, orderedTestNames)
+        val results = runMutants(mutationsAfterInlined, allClassFiles, orderedTestNames, testClassLoader)
 
         // Subsumption analysis disabled until per-test kill attribution is available.
         // Currently className is used as kill-set proxy, producing nonsensical results.
@@ -161,6 +162,7 @@ class MutationEngine(
         mutations: List<Pair<MutationInfo, ByteArray>>,
         classFiles: Map<String, ByteArray>,
         testClassNames: List<String>,
+        testClassLoader: ClassLoader? = null,
     ): List<MutationResult> {
         if (mutations.isEmpty()) return emptyList()
 
@@ -176,7 +178,7 @@ class MutationEngine(
                     index to
                         executor.submit(
                             Callable {
-                                runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames)
+                                runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames, testClassLoader)
                             },
                         )
                 }
@@ -238,13 +240,15 @@ class MutationEngine(
         mutatedBytes: ByteArray,
         classFiles: Map<String, ByteArray>,
         testClassNames: List<String>,
+        testClassLoader: ClassLoader? = null,
     ): MutationResult {
         val startTime = System.currentTimeMillis()
 
         // Don't pre-mutate — let MutantClassLoader apply the mutation
+        val parentLoader = testClassLoader ?: this.javaClass.classLoader
         val classLoader =
             MutantClassLoaderFactory.create(
-                this.javaClass.classLoader,
+                parentLoader,
                 classFiles,
                 mutation,
                 mutator,

@@ -40,8 +40,12 @@ class MutationTestRunner(
         val testClassNames = findTestClasses(testClassesDir)
         logger.info("Found ${testClassNames.size} test classes: $testClassNames")
 
-        // Run mutation testing
-        return engine.runMutationTesting(classFiles, testClassNames, testClassBytes, coverageExecFile)
+        // Create classloader from classpath so engine can resolve all dependencies
+        val urls = classpath.map { it.toURI().toURL() }.toTypedArray()
+        val testClassLoader = java.net.URLClassLoader(urls, javaClass.classLoader)
+
+        // Run mutation testing with the test classloader
+        return engine.runMutationTesting(classFiles, testClassNames, testClassBytes, coverageExecFile, testClassLoader)
     }
 
     private fun loadClassFiles(dir: File): Map<String, ByteArray> {
