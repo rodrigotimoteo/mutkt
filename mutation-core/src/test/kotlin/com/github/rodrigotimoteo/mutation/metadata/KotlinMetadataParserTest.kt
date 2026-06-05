@@ -6,11 +6,9 @@ import org.objectweb.asm.Opcodes
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class KotlinMetadataParserTest {
-
     @Test
     fun `parse returns KotlinClassInfo for any class`() {
         val bytes = buildJavaClass()
@@ -135,10 +133,11 @@ class KotlinMetadataParserTest {
 
     @Test
     fun `KotlinClassInfo default values`() {
-        val info = KotlinMetadataParser.KotlinClassInfo(
-            className = "Foo",
-            isKotlinClass = false,
-        )
+        val info =
+            KotlinMetadataParser.KotlinClassInfo(
+                className = "Foo",
+                isKotlinClass = false,
+            )
         assertEquals("Foo", info.className)
         assertFalse(info.isKotlinClass)
         assertFalse(info.isDataClass)

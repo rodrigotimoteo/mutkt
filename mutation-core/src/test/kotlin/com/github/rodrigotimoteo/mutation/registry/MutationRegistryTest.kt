@@ -9,7 +9,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class MutationRegistryTest {
-
     @BeforeEach
     fun setUp() {
         MutationRegistry.reset()
@@ -159,13 +158,14 @@ class MutationRegistryTest {
     fun `ThreadState triggeredMutations is thread-safe under concurrent access`() {
         val threadCount = 10
         val perThread = 100
-        val threads = (1..threadCount).map { threadIdx ->
-            Thread {
-                repeat(perThread) { i ->
-                    MutationRegistry.markTriggered("m_$threadIdx" + "_$i")
+        val threads =
+            (1..threadCount).map { threadIdx ->
+                Thread {
+                    repeat(perThread) { i ->
+                        MutationRegistry.markTriggered("m_$threadIdx" + "_$i")
+                    }
                 }
             }
-        }
         threads.forEach { it.start() }
         threads.forEach { it.join(5000) }
     }
