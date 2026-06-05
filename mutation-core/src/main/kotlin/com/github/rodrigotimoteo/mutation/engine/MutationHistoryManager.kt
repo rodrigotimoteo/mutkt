@@ -172,7 +172,7 @@ class MutationHistoryManager(
                 }
                 line.startsWith("RESULT:") -> {
                     val parts = line.substringAfter(":").split(":")
-                    if (parts.size >= 4) {
+                    if (parts.size >= 2) {
                         val mutationId = parts[0]
                         val status =
                             try {
@@ -180,8 +180,8 @@ class MutationHistoryManager(
                             } catch (e: Exception) {
                                 MutationStatus.ERROR
                             }
-                        val resultTimestamp = parts[2].toLongOrNull() ?: System.currentTimeMillis()
-                        val executionTimeMs = parts[3].toLongOrNull() ?: 0
+                        val resultTimestamp = parts.getOrNull(2)?.toLongOrNull() ?: System.currentTimeMillis()
+                        val executionTimeMs = parts.getOrNull(3)?.toLongOrNull() ?: 0
 
                         results[mutationId] =
                             MutationStatusResult(

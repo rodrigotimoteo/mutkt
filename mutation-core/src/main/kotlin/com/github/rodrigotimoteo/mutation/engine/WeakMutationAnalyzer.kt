@@ -81,7 +81,8 @@ class WeakMutationAnalyzer {
         }
 
         // Get covered lines for this class
-        val classCoverage = coveredLines[mutation.className] ?: return false
+        // If class isn't in coverage, the mutation is weak (never reached)
+        val classCoverage = coveredLines[mutation.className] ?: return true
 
         // Check if mutation line is covered
         return mutation.lineNumber !in classCoverage

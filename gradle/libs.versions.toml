@@ -11,6 +11,7 @@ assertj = "3.25.3"
 asm = "9.7"
 slf4j = "2.0.9"
 jacoco = "0.8.12"
+mockk = "1.13.13"
 
 [libraries]
 # Kotlin
@@ -38,6 +39,9 @@ slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 jacoco-core = { module = "org.jacoco:org.jacoco.core", version.ref = "jacoco" }
 jacoco-agent = { module = "org.jacoco:org.jacoco.agent", version.ref = "jacoco" }
 jacoco-report = { module = "org.jacoco:org.jacoco.report", version.ref = "jacoco" }
+
+# Mocking
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
