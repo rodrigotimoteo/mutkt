@@ -44,6 +44,8 @@ class MutationEngine(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     private val timeoutMs: Long = 30000,
     private val maxParallelMutants: Int = 4,
+    private val enableInlinedFinally: Boolean = true,
+    private val enableTestOrdering: Boolean = true,
 ) {
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators)
@@ -75,17 +77,20 @@ class MutationEngine(
         logger.info("Testing ${mutationsAfterCoverage.size} mutations after coverage filtering")
 
         // Filter out mutations in inlined finally blocks (duplicates)
-        val detector = InlinedFinallyDetector()
         val mutationsAfterInlined =
-            mutationsAfterCoverage.filter { (mutation, _) ->
-                // Check if this mutation is in an inlined finally block
-                val classBytes = classFiles[mutation.className.replace('.', '/')]
-                if (classBytes != null) {
-                    val blocks = detector.detect(classBytes)
-                    !detector.isInInlinedBlock(mutation.lineNumber, blocks)
-                } else {
-                    true
+            if (enableInlinedFinally) {
+                val detector = InlinedFinallyDetector()
+                mutationsAfterCoverage.filter { (mutation, _) ->
+                    val classBytes = classFiles[mutation.className.replace('.', '/')]
+                    if (classBytes != null) {
+                        val blocks = detector.detect(classBytes)
+                        !detector.isInInlinedBlock(mutation.lineNumber, blocks)
+                    } else {
+                        true
+                    }
                 }
+            } else {
+                mutationsAfterCoverage
             }
         val skippedInlined = mutationsAfterCoverage.size - mutationsAfterInlined.size
         if (skippedInlined > 0) {
@@ -93,8 +98,12 @@ class MutationEngine(
         }
 
         // Order test classes by effectiveness (if history available)
-        val orderingStrategy = TestOrderingStrategy()
-        val orderedTestNames = orderingStrategy.orderTests(testClassNames)
+        val orderedTestNames =
+            if (enableTestOrdering) {
+                TestOrderingStrategy().orderTests(testClassNames)
+            } else {
+                testClassNames
+            }
 
         // Run tests against each mutant
         val results = runMutants(mutationsAfterInlined, allClassFiles, orderedTestNames)

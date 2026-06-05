@@ -234,6 +234,8 @@ abstract class MutationTask : DefaultTask() {
                 timeoutMs = timeoutMs.get(),
                 maxParallelMutants = maxParallelMutants.get(),
                 enabledOperators = operators.toSet(),
+                enableInlinedFinally = enableInlinedFinally.get(),
+                enableTestOrdering = enableTestOrdering.get(),
             )
 
         // Run mutation testing
