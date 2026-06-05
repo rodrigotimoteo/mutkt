@@ -974,9 +974,15 @@ private class MutationApplierMethodVisitor(
                 }
                 MutationOperator.NULL_SAFETY -> {
                     // Remove null check call (static — no receiver on stack)
-                    // Intrinsics.checkNotNull/etc. return void, so just pop args
+                    // checkNotNull(Object) returns the checked value (non-void)
+                    // checkNotNullParameter(Object, String) returns void
+                    // throwUninitializedPropertyAccessException(String) returns void
                     val argTypes = Type.getArgumentTypes(descriptor)
                     popArgs(argTypes)
+                    val returnType = Type.getReturnType(descriptor)
+                    if (returnType.sort != Type.VOID) {
+                        pushDefaultValue(returnType)
+                    }
                     applied = true
                     return
                 }
