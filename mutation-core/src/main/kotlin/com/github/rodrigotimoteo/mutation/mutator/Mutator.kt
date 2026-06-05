@@ -1063,17 +1063,19 @@ private object ReturnValueMutator {
     fun isCollectionOrArrayStatic(type: Type): Boolean {
         if (type.sort == Type.ARRAY) return true
         val cn = type.className
-        return cn == "java/util/List" ||
-            cn == "java/util/ArrayList" ||
-            cn == "java/util/LinkedList" ||
-            cn == "java/util/Set" ||
-            cn == "java/util/HashSet" ||
-            cn == "java/util/TreeSet" ||
-            cn == "java/util/Collection" ||
-            cn == "java/util/Map" ||
-            cn == "java/util/HashMap" ||
-            cn == "java/util/TreeMap" ||
-            cn.startsWith("kotlin/collections/")
+        // Type.className returns dotted form (java.util.List), not slashed.
+        // Match against dotted forms and use prefix matching for packages.
+        return cn == "java.util.List" ||
+            cn == "java.util.ArrayList" ||
+            cn == "java.util.LinkedList" ||
+            cn == "java.util.Set" ||
+            cn == "java.util.HashSet" ||
+            cn == "java.util.TreeSet" ||
+            cn == "java.util.Collection" ||
+            cn == "java.util.Map" ||
+            cn == "java.util.HashMap" ||
+            cn == "java.util.TreeMap" ||
+            cn.startsWith("kotlin.collections.")
     }
 }
 
