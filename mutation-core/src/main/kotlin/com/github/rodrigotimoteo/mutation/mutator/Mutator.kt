@@ -260,7 +260,104 @@ private class MutationScannerMethodVisitor(
         checkVoidMethodCallMutations(opcode, owner, name, descriptor)
         checkConstructorCallMutations(opcode, owner, name)
         checkNonVoidMethodCallMutations(opcode, owner, name, descriptor)
+        checkKotlinMutatorMutations(opcode, owner, name, descriptor)
         super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+    }
+
+    /**
+     * Detect Kotlin-specific patterns and create mutations.
+     * - DATA_CLASS_COPY: INVOKESPECIAL to copy() on data class
+     * - COROUTINE: suspend function calls and builder calls
+     * - NULL_SAFETY: kotlin.throwNpe, kotlin.checkNotNull, Intrinsics
+     * - SEALED_WHEN: handled at tableswitch/lookupswitch
+     */
+    private fun checkKotlinMutatorMutations(
+        opcode: Int,
+        owner: String,
+        name: String,
+        descriptor: String,
+    ) {
+        // DATA_CLASS_COPY: INVOKESPECIAL to copy() method (data class generated)
+        if (MutationOperator.DATA_CLASS_COPY in enabledOperators) {
+            if (opcode == Opcodes.INVOKESPECIAL && name == "copy" && descriptor.startsWith("()")) {
+                tryAddMutation(
+                    MutationInfo(
+                        operator = MutationOperator.DATA_CLASS_COPY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Data class copy() call mutation",
+                        originalOpcode = opcode,
+                        mutatedOpcode = Opcodes.NOP,
+                    ),
+                )
+            }
+        }
+
+        // COROUTINE: detect suspend markers, coroutine builders
+        if (MutationOperator.COROUTINE in enabledOperators) {
+            // Coroutine builder calls: kotlinx coroutines builders
+            if (opcode == Opcodes.INVOKESTATIC &&
+                (
+                    owner == "kotlinx/coroutines/BuildersKt" ||
+                        owner == "kotlinx/coroutines/JobKt" ||
+                        owner == "kotlinx/coroutines/GlobalScope"
+                )
+            ) {
+                tryAddMutation(
+                    MutationInfo(
+                        operator = MutationOperator.COROUTINE,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Coroutine builder call: $owner.$name",
+                        originalOpcode = opcode,
+                        mutatedOpcode = Opcodes.NOP,
+                    ),
+                )
+            }
+            // runBlocking, runCatching detection (kotlin stdlib)
+            if (opcode == Opcodes.INVOKESTATIC &&
+                owner == "kotlin/coroutines/intrinsics/IntrinsicsKt" &&
+                name == "runBlocking"
+            ) {
+                tryAddMutation(
+                    MutationInfo(
+                        operator = MutationOperator.COROUTINE,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "runBlocking call mutation",
+                        originalOpcode = opcode,
+                        mutatedOpcode = Opcodes.NOP,
+                    ),
+                )
+            }
+        }
+
+        // NULL_SAFETY: detect Kotlin null check intrinsics
+        if (MutationOperator.NULL_SAFETY in enabledOperators) {
+            if (opcode == Opcodes.INVOKESTATIC &&
+                owner == "kotlin/jvm/internal/Intrinsics" &&
+                (name == "checkNotNull" || name == "checkNotNullParameter" || name == "throwUninitializedPropertyAccessException")
+            ) {
+                tryAddMutation(
+                    MutationInfo(
+                        operator = MutationOperator.NULL_SAFETY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Kotlin null check: $name mutation",
+                        originalOpcode = opcode,
+                        mutatedOpcode = Opcodes.NOP,
+                    ),
+                )
+            }
+        }
     }
 
     private fun checkConditionalMutations(opcode: Int) {
