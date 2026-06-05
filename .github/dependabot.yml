@@ -3,20 +3,36 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/.github/workflows"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     commit-message:
       prefix: "ci"
     labels:
       - "dependencies"
+    open-pull-requests-limit: 5
+    rebase-strategy: "disabled"
+    groups:
+      github-actions-bump:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     commit-message:
       prefix: "build"
     labels:
       - "dependencies"
+    open-pull-requests-limit: 5
+    rebase-strategy: "disabled"
+    groups:
+      gradle-bump:
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
       - dependency-name: "org.jetbrains.kotlin*"
       - dependency-name: "org.jetbrains.kotlinx*"
