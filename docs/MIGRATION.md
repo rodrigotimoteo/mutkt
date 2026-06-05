@@ -9,14 +9,14 @@ This guide helps you migrate between versions of the Kotlin Mutation Testing lib
 **Before (0.1.x):**
 ```kotlin
 plugins {
-    id("com.github.rodrigotimeteo.mutation-kotlin") version "0.1.0"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.1.0"
 }
 ```
 
 **After (0.2.x):**
 ```kotlin
 plugins {
-    id("com.github.rodrigotimeteo.mutation-kotlin") version "0.2.0"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.2.0"
 }
 ```
 
@@ -114,7 +114,7 @@ This is the initial release. No migration needed.
 
 ```kotlin
 plugins {
-    id("com.github.rodrigotimeteo.mutation-kotlin") version "0.1.0"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.1.0"
 }
 ```
 
@@ -164,7 +164,7 @@ mutationTest {
 ```kotlin
 // Ensure correct plugin ID
 plugins {
-    id("com.github.rodrigotimeteo.mutation-kotlin") version "0.2.0"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.2.0"
 }
 ```
 

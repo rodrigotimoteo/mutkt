@@ -417,6 +417,9 @@ private class MutationScannerMethodVisitor(
     }
 
     private fun checkBooleanReturnMutations(opcode: Int) {
+        val returnType = Type.getReturnType(methodDescriptor)
+        if (returnType.sort != Type.BOOLEAN) return
+
         if (MutationOperator.TRUE_RETURNS in enabledOperators && opcode == Opcodes.ICONST_1) {
             tryAddMutation(
                 MutationInfo(
@@ -638,21 +641,20 @@ private class MutationApplierMethodVisitor(
 
     override fun visitInsn(opcode: Int) {
         if (!applied && currentLineNumber == targetMutation.lineNumber && opcode == targetMutation.originalOpcode) {
+            // Return mutations need special handling — they always match
+            if (targetMutation.operator == MutationOperator.RETURN_VALS ||
+                targetMutation.operator == MutationOperator.NULL_RETURNS ||
+                targetMutation.operator == MutationOperator.EMPTY_RETURNS
+            ) {
+                applyReturnMutation(opcode)
+                applied = true
+                return
+            }
             val mutatedOpcode = getMutatedOpcode(opcode)
             if (mutatedOpcode != opcode) {
-                // For return mutations, we need special handling
-                if (targetMutation.operator == MutationOperator.RETURN_VALS ||
-                    targetMutation.operator == MutationOperator.NULL_RETURNS ||
-                    targetMutation.operator == MutationOperator.EMPTY_RETURNS
-                ) {
-                    applyReturnMutation(opcode)
-                    applied = true
-                    return
-                } else {
-                    super.visitInsn(mutatedOpcode)
-                    applied = true
-                    return
-                }
+                super.visitInsn(mutatedOpcode)
+                applied = true
+                return
             }
         }
         super.visitInsn(opcode)
@@ -698,13 +700,11 @@ private class MutationApplierMethodVisitor(
         if (!applied && currentLineNumber == targetMutation.lineNumber) {
             when (targetMutation.operator) {
                 MutationOperator.VOID_METHOD_CALLS -> {
-                    if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESTATIC) {
+                    if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESTATIC || opcode == Opcodes.INVOKEINTERFACE) {
                         val returnType = Type.getReturnType(descriptor)
                         if (returnType.sort == Type.VOID) {
-                            // Pop all arguments from the stack
                             val argTypes = Type.getArgumentTypes(descriptor)
-                            repeat(argTypes.size) { mv.visitInsn(Opcodes.POP) }
-                            // Don't emit the call
+                            popArgs(argTypes)
                             applied = true
                             return
                         }
@@ -712,9 +712,8 @@ private class MutationApplierMethodVisitor(
                 }
                 MutationOperator.CONSTRUCTOR_CALLS -> {
                     if (opcode == Opcodes.INVOKESPECIAL && name == "<init>") {
-                        // Pop all arguments (including the uninitialized this)
                         val argTypes = Type.getArgumentTypes(descriptor)
-                        repeat(argTypes.size) { mv.visitInsn(Opcodes.POP) }
+                        popArgs(argTypes)
                         mv.visitInsn(Opcodes.POP) // Pop the uninitialized object
                         applied = true
                         return
@@ -723,13 +722,11 @@ private class MutationApplierMethodVisitor(
                 MutationOperator.NON_VOID_METHOD_CALLS -> {
                     val returnType = Type.getReturnType(descriptor)
                     if (returnType.sort != Type.VOID) {
-                        // Pop all arguments
                         val argTypes = Type.getArgumentTypes(descriptor)
-                        repeat(argTypes.size) { mv.visitInsn(Opcodes.POP) }
-                        if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKESTATIC) {
-                            mv.visitInsn(Opcodes.POP) // Pop receiver for invokevirtual
+                        popArgs(argTypes)
+                        if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE) {
+                            mv.visitInsn(Opcodes.POP) // Pop receiver for virtual/interface calls
                         }
-                        // Push default return value
                         pushDefaultValue(returnType)
                         applied = true
                         return
@@ -739,6 +736,16 @@ private class MutationApplierMethodVisitor(
             }
         }
         super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+    }
+
+    private fun popArgs(argTypes: Array<Type>) {
+        for (type in argTypes) {
+            if (type.sort == Type.LONG || type.sort == Type.DOUBLE) {
+                mv.visitInsn(Opcodes.POP2)
+            } else {
+                mv.visitInsn(Opcodes.POP)
+            }
+        }
     }
 
     private fun pushDefaultValue(type: Type) {

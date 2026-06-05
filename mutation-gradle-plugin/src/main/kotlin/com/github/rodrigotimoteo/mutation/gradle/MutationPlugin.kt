@@ -57,6 +57,7 @@ class MutationPlugin : Plugin<Project> {
                 task.failOnSurvived.set(extension.failOnSurvived)
                 task.excludedClasses.set(extension.excludedClasses)
                 task.excludedMethods.set(extension.excludedMethods)
+                task.failOnScoreThreshold.set(extension.failOnScoreThreshold)
                 task.coverageExecFile.set(extension.coverageExecFile)
             }
 

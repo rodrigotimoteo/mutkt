@@ -2,7 +2,11 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, please report it by [opening an issue](https://github.com/rodrigotimoteo/mutkt/issues/new?template=bug_report.md).
+**Do NOT open a public issue for security vulnerabilities.**
+
+Please report vulnerabilities privately via [GitHub Security Advisories](https://github.com/rodrigotimoteo/mutkt/security/advisories/new).
+
+We will respond within 48 hours and work with you to understand and address the issue before any public disclosure.
 
 ## Supported Versions
 

@@ -95,6 +95,11 @@ abstract class MutationTask : DefaultTask() {
     @Optional
     val excludedMethods: SetProperty<String> = project.objects.setProperty(String::class.java)
 
+    /** Fail build if mutation score below this threshold (0-100). */
+    @Input
+    @Optional
+    val failOnScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
+
     @TaskAction
     fun runMutationTests() {
         logger.lifecycle("=".repeat(60))
@@ -174,6 +179,13 @@ abstract class MutationTask : DefaultTask() {
         // Fail build if configured
         if (failOnSurvived.get() && report.survivedMutations > 0) {
             throw org.gradle.api.GradleException("${report.survivedMutations} mutants survived! Build failed.")
+        }
+
+        val threshold = failOnScoreThreshold.get()
+        if (threshold > 0 && report.killedPercentage < threshold) {
+            throw org.gradle.api.GradleException(
+                "Mutation score ${report.killedPercentage}% is below threshold $threshold%. Build failed.",
+            )
         }
     }
 
