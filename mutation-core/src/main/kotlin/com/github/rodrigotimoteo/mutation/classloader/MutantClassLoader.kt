@@ -13,7 +13,7 @@ class MutantClassLoader(
     private val targetMutation: MutationInfo,
     private val mutator: Mutator,
 ) : ClassLoader(parent) {
-    private val mutatedCache = mutableMapOf<String, ByteArray>()
+    private val mutatedCache = mutableMapOf<String, Class<*>>()
 
     override fun findClass(name: String): Class<*> {
         val className = name.replace('.', '/')
@@ -21,13 +21,12 @@ class MutantClassLoader(
             originalClassBytes[className]
                 ?: throw ClassNotFoundException("Class not found in original classpath: $name")
 
+        // Compute or fetch the mutated bytes
         val mutatedBytes =
-            mutatedCache.getOrPut(className) {
-                if (className == targetMutation.className.replace('.', '/')) {
-                    mutator.applyMutation(classBytes, targetMutation)
-                } else {
-                    classBytes
-                }
+            if (className == targetMutation.className.replace('.', '/')) {
+                mutator.applyMutation(classBytes, targetMutation)
+            } else {
+                classBytes
             }
 
         return defineClass(name, mutatedBytes, 0, mutatedBytes.size)
@@ -37,12 +36,19 @@ class MutantClassLoader(
         name: String,
         resolve: Boolean,
     ): Class<*> {
-        // Check if this is a class we should mutate
+        // Cache check: if we've already defined this class, return the cached instance.
         val className = name.replace('.', '/')
-        if (className == targetMutation.className.replace('.', '/')) {
-            return findClass(name)
-        }
-        return super.loadClass(name, resolve)
+        mutatedCache[className]?.let { return it }
+
+        // Check if this is a class we should mutate
+        val clazz =
+            if (className == targetMutation.className.replace('.', '/')) {
+                findClass(name)
+            } else {
+                super.loadClass(name, resolve)
+            }
+        mutatedCache[className] = clazz
+        return clazz
     }
 }
 
