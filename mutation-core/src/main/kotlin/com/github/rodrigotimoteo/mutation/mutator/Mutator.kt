@@ -309,9 +309,10 @@ private class MutationScannerMethodVisitor(
         name: String,
         descriptor: String,
     ) {
-        // DATA_CLASS_COPY: INVOKESPECIAL to copy() method (data class generated)
+        // DATA_CLASS_COPY: call to copy() method (data class generated)
+        // Kotlin data classes use INVOKEVIRTUAL for copy(), not INVOKESPECIAL
         if (MutationOperator.DATA_CLASS_COPY in enabledOperators) {
-            if (opcode == Opcodes.INVOKESPECIAL && name == "copy") {
+            if ((opcode == Opcodes.INVOKESPECIAL || opcode == Opcodes.INVOKEVIRTUAL) && name == "copy") {
                 tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.DATA_CLASS_COPY,
@@ -954,7 +955,7 @@ private class MutationApplierMethodVisitor(
                 }
                 // Kotlin-specific operator appliers
                 MutationOperator.DATA_CLASS_COPY -> {
-                    if (opcode == Opcodes.INVOKESPECIAL && name == "copy") {
+                    if ((opcode == Opcodes.INVOKESPECIAL || opcode == Opcodes.INVOKEVIRTUAL) && name == "copy") {
                         // Remove copy() call: pop args + receiver, push null
                         val argTypes = Type.getArgumentTypes(descriptor)
                         popArgs(argTypes)

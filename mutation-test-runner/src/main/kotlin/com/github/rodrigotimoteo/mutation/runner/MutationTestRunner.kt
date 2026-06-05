@@ -101,12 +101,16 @@ object MutationTestRunnerFactory {
         timeoutMs: Long = 30000,
         maxParallelMutants: Int = 4,
         enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
+        enableInlinedFinally: Boolean = true,
+        enableTestOrdering: Boolean = true,
     ): MutationTestRunner {
         val engine =
             MutationEngine(
                 enabledOperators = enabledOperators,
                 timeoutMs = timeoutMs,
                 maxParallelMutants = maxParallelMutants,
+                enableInlinedFinally = enableInlinedFinally,
+                enableTestOrdering = enableTestOrdering,
             )
         return MutationTestRunner(engine)
     }
