@@ -185,6 +185,7 @@ private class MutationScannerVisitor(
             enabledOperators = enabledOperators,
             classSuppressed = classSuppressed,
             suppressedOperators = suppressedOperators,
+            isKotlinClass = isKotlinClass,
         )
     }
 
@@ -211,6 +212,7 @@ private class MutationScannerMethodVisitor(
     private val enabledOperators: Set<MutationOperator>,
     private val classSuppressed: Boolean = false,
     private val suppressedOperators: Set<String> = emptySet(),
+    private val isKotlinClass: Boolean = false,
 ) : MethodVisitor(Opcodes.ASM9) {
     private var currentLineNumber = -1
 
@@ -273,6 +275,25 @@ private class MutationScannerMethodVisitor(
         checkNonVoidMethodCallMutations(opcode, owner, name, descriptor)
         checkKotlinMutatorMutations(opcode, owner, name, descriptor)
         super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+    }
+
+    override fun visitTableSwitchInsn(
+        min: Int,
+        max: Int,
+        dflt: org.objectweb.asm.Label?,
+        vararg labels: org.objectweb.asm.Label?,
+    ) {
+        checkSealedWhenMutations(Opcodes.TABLESWITCH, labels.size)
+        super.visitTableSwitchInsn(min, max, dflt, *labels)
+    }
+
+    override fun visitLookupSwitchInsn(
+        dflt: org.objectweb.asm.Label?,
+        keys: IntArray?,
+        labels: Array<out org.objectweb.asm.Label?>,
+    ) {
+        checkSealedWhenMutations(Opcodes.LOOKUPSWITCH, labels.size)
+        super.visitLookupSwitchInsn(dflt, keys, labels)
     }
 
     /**
@@ -365,6 +386,38 @@ private class MutationScannerMethodVisitor(
                         description = "Kotlin null check: $name mutation",
                         originalOpcode = opcode,
                         mutatedOpcode = Opcodes.NOP,
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
+     * Detect sealed class when expressions and create mutations.
+     * When expressions compile to tableswitch/lookupswitch instructions.
+     */
+    private fun checkSealedWhenMutations(
+        opcode: Int,
+        branchCount: Int,
+    ) {
+        if (MutationOperator.SEALED_WHEN in enabledOperators && isKotlinClass) {
+            // Create a mutation for each branch: remove it by redirecting to default
+            for (i in 0 until branchCount) {
+                tryAddMutation(
+                    MutationInfo(
+                        operator = MutationOperator.SEALED_WHEN,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Remove when branch $i of $branchCount",
+                        originalOpcode = opcode,
+                        mutatedOpcode = opcode,
+                        metadata =
+                            mapOf(
+                                "branchIndex" to i.toString(),
+                                "branchCount" to branchCount.toString(),
+                            ),
                     ),
                 )
             }
@@ -799,6 +852,52 @@ private class MutationApplierMethodVisitor(
         super.visitIincInsn(varIndex, increment)
     }
 
+    override fun visitTableSwitchInsn(
+        min: Int,
+        max: Int,
+        dflt: org.objectweb.asm.Label?,
+        vararg labels: org.objectweb.asm.Label?,
+    ) {
+        if (!applied && targetMutation.operator == MutationOperator.SEALED_WHEN &&
+            currentLineNumber == targetMutation.lineNumber
+        ) {
+            // Redirect the target branch to the default label (effectively removing it)
+            val branchIndex = targetMutation.metadata["branchIndex"]?.toIntOrNull() ?: -1
+            if (branchIndex in labels.indices) {
+                val newLabels =
+                    labels.mapIndexed { i, label ->
+                        if (i == branchIndex) dflt else label
+                    }.toTypedArray()
+                super.visitTableSwitchInsn(min, max, dflt, *newLabels)
+                applied = true
+                return
+            }
+        }
+        super.visitTableSwitchInsn(min, max, dflt, *labels)
+    }
+
+    override fun visitLookupSwitchInsn(
+        dflt: org.objectweb.asm.Label?,
+        keys: IntArray?,
+        labels: Array<out org.objectweb.asm.Label?>,
+    ) {
+        if (!applied && targetMutation.operator == MutationOperator.SEALED_WHEN &&
+            currentLineNumber == targetMutation.lineNumber
+        ) {
+            val branchIndex = targetMutation.metadata["branchIndex"]?.toIntOrNull() ?: -1
+            if (branchIndex in labels.indices) {
+                val newLabels =
+                    labels.mapIndexed { i, label ->
+                        if (i == branchIndex) dflt else label
+                    }.toTypedArray()
+                super.visitLookupSwitchInsn(dflt, keys, newLabels)
+                applied = true
+                return
+            }
+        }
+        super.visitLookupSwitchInsn(dflt, keys, labels)
+    }
+
     override fun visitMethodInsn(
         opcode: Int,
         owner: String,
@@ -852,6 +951,40 @@ private class MutationApplierMethodVisitor(
                         applied = true
                         return
                     }
+                }
+                // Kotlin-specific operator appliers
+                MutationOperator.DATA_CLASS_COPY -> {
+                    if (opcode == Opcodes.INVOKESPECIAL && name == "copy") {
+                        // Remove copy() call: pop args + receiver, push null
+                        val argTypes = Type.getArgumentTypes(descriptor)
+                        popArgs(argTypes)
+                        mv.visitInsn(Opcodes.POP) // Pop receiver
+                        mv.visitInsn(Opcodes.ACONST_NULL)
+                        applied = true
+                        return
+                    }
+                }
+                MutationOperator.COROUTINE -> {
+                    // Remove coroutine builder call (static — no receiver on stack)
+                    val argTypes = Type.getArgumentTypes(descriptor)
+                    popArgs(argTypes)
+                    pushDefaultValue(Type.getReturnType(descriptor))
+                    applied = true
+                    return
+                }
+                MutationOperator.NULL_SAFETY -> {
+                    // Remove null check call (static — no receiver on stack)
+                    // checkNotNull(Object) returns the checked value (non-void)
+                    // checkNotNullParameter(Object, String) returns void
+                    // throwUninitializedPropertyAccessException(String) returns void
+                    val argTypes = Type.getArgumentTypes(descriptor)
+                    popArgs(argTypes)
+                    val returnType = Type.getReturnType(descriptor)
+                    if (returnType.sort != Type.VOID) {
+                        pushDefaultValue(returnType)
+                    }
+                    applied = true
+                    return
                 }
                 else -> {}
             }

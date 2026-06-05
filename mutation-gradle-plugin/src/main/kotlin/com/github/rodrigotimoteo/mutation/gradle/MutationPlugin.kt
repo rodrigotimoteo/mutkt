@@ -64,6 +64,22 @@ class MutationPlugin : Plugin<Project> {
                         project.layout.projectDirectory.dir(dir)
                     },
                 )
+                // Wire newly added extension properties
+                task.failOnCoverageThreshold.set(extension.failOnCoverageThreshold)
+                task.maxMutationsPerClass.set(extension.maxMutationsPerClass)
+                task.enableIncrementalAnalysis.set(extension.enableIncrementalAnalysis)
+                task.mutantTimeoutMs.set(extension.mutantTimeoutMs)
+                task.targetClassPatterns.set(extension.targetClassPatterns)
+                task.targetTestPatterns.set(extension.targetTestPatterns)
+                task.excludeClassPatterns.set(extension.excludeClassPatterns)
+                task.excludeTestPatterns.set(extension.excludeTestPatterns)
+                task.enableSubsumption.set(extension.enableSubsumption)
+                task.enableWeakMutation.set(extension.enableWeakMutation)
+                task.enableInlinedFinally.set(extension.enableInlinedFinally)
+                task.enableTestOrdering.set(extension.enableTestOrdering)
+                task.autoRunJaCoCo.set(extension.autoRunJaCoCo)
+                task.showClassScores.set(extension.showClassScores)
+                task.generateGraph.set(extension.generateGraph)
             }
 
         // Auto-detect sourceSets after project evaluation
