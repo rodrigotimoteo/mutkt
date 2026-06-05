@@ -101,6 +101,81 @@ abstract class MutationTask : DefaultTask() {
     @Optional
     val failOnScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
 
+    /** Fail build if line coverage below this threshold (0-100). */
+    @Input
+    @Optional
+    val failOnCoverageThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
+
+    /** Maximum mutations per class. 0 = no limit. */
+    @Input
+    @Optional
+    val maxMutationsPerClass: Property<Int> = project.objects.property(Int::class.java).convention(0)
+
+    /** Enable incremental analysis (cache mutation results). */
+    @Input
+    @Optional
+    val enableIncrementalAnalysis: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /** Timeout per mutant in milliseconds (separate from per-test timeout). */
+    @Input
+    @Optional
+    val mutantTimeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(10000)
+
+    /** Target classes to mutate (regex patterns). */
+    @Input
+    @Optional
+    val targetClassPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /** Target tests to run (regex patterns). */
+    @Input
+    @Optional
+    val targetTestPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /** Exclude classes matching these patterns. */
+    @Input
+    @Optional
+    val excludeClassPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /** Exclude tests matching these patterns. */
+    @Input
+    @Optional
+    val excludeTestPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /** Enable subsumption detection (skip redundant mutants). */
+    @Input
+    @Optional
+    val enableSubsumption: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /** Enable weak mutant detection (skip mutations never reached). */
+    @Input
+    @Optional
+    val enableWeakMutation: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /** Enable inlined finally detection. */
+    @Input
+    @Optional
+    val enableInlinedFinally: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /** Enable test ordering (run most effective tests first). */
+    @Input
+    @Optional
+    val enableTestOrdering: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /** Whether to run JaCoCo agent automatically. */
+    @Input
+    @Optional
+    val autoRunJaCoCo: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /** Generate per-class mutation scores in reports. */
+    @Input
+    @Optional
+    val showClassScores: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
+
+    /** Generate interactive HTML graph of test-mutant relationships. */
+    @Input
+    @Optional
+    val generateGraph: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
     @TaskAction
     fun runMutationTests() {
         logger.lifecycle("=".repeat(60))
@@ -241,8 +316,24 @@ abstract class MutationTask : DefaultTask() {
                     val consoleReport = ConsoleReportGenerator.generate(report)
                     logger.lifecycle(consoleReport)
                 }
+                "csv" -> {
+                    val csvReport = com.github.rodrigotimoteo.mutation.report.CsvReportGenerator.generate(report, outputDirFile)
+                    logger.lifecycle("CSV report: $csvReport")
+                }
+                "xml" -> {
+                    val xmlReport = com.github.rodrigotimoteo.mutation.report.XmlReportGenerator.generate(report, outputDirFile)
+                    logger.lifecycle("XML report: $xmlReport")
+                }
+                "json" -> {
+                    val jsonReport = com.github.rodrigotimoteo.mutation.report.JsonReportGenerator.generate(report, outputDirFile)
+                    logger.lifecycle("JSON report: $jsonReport")
+                }
+                "graph" -> {
+                    val graphReport = com.github.rodrigotimoteo.mutation.report.MutationGraphGenerator.generate(report, outputDirFile)
+                    logger.lifecycle("Graph report: $graphReport")
+                }
                 else -> {
-                    logger.warn("Unknown report format: $format (supported: html, console)")
+                    logger.warn("Unknown report format: $format (supported: html, console, csv, xml, json, graph)")
                 }
             }
         }

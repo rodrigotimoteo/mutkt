@@ -6,9 +6,11 @@ import com.github.rodrigotimoteo.mutation.model.Mutation
 import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.model.MutationResult
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
+import com.github.rodrigotimoteo.mutation.mutator.InlinedFinallyDetector
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
+import com.github.rodrigotimoteo.mutation.report.SubsumptionAnalyzer
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.concurrent.Callable
@@ -65,16 +67,45 @@ class MutationEngine(
         val allClassFiles = classFiles + testClassBytes
 
         // Filter mutations by coverage if available
-        val mutationsToTest =
+        val mutationsAfterCoverage =
             if (coverageExecFile != null && coverageExecFile.exists()) {
                 filterByCoverage(allMutations, classFiles, coverageExecFile)
             } else {
                 allMutations
             }
-        logger.info("Testing ${mutationsToTest.size} mutations after coverage filtering")
+        logger.info("Testing ${mutationsAfterCoverage.size} mutations after coverage filtering")
+
+        // Filter out mutations in inlined finally blocks (duplicates)
+        val detector = InlinedFinallyDetector()
+        val mutationsAfterInlined =
+            mutationsAfterCoverage.filter { (mutation, _) ->
+                // Check if this mutation is in an inlined finally block
+                val classBytes = classFiles[mutation.className.replace('.', '/')]
+                if (classBytes != null) {
+                    val blocks = detector.detect(classBytes)
+                    !detector.isInInlinedBlock(mutation.lineNumber, blocks)
+                } else {
+                    true
+                }
+            }
+        val skippedInlined = mutationsAfterCoverage.size - mutationsAfterInlined.size
+        if (skippedInlined > 0) {
+            logger.info("Skipped $skippedInlined mutations in inlined finally blocks")
+        }
+
+        // Order test classes by effectiveness (if history available)
+        val orderingStrategy = TestOrderingStrategy()
+        val orderedTestNames = orderingStrategy.orderTests(testClassNames)
 
         // Run tests against each mutant
-        val results = runMutants(mutationsToTest, allClassFiles, testClassNames)
+        val results = runMutants(mutationsAfterInlined, allClassFiles, orderedTestNames)
+
+        // Analyze subsumption
+        val subsumptionAnalyzer = SubsumptionAnalyzer()
+        val subsumptionResult = subsumptionAnalyzer.analyze(results)
+        if (subsumptionResult.skippedCount > 0) {
+            logger.info("Subsumption analysis: ${subsumptionResult.skippedCount} mutations subsumed")
+        }
 
         val totalTime = System.currentTimeMillis() - startTime
         return buildReport(results, totalTime)
