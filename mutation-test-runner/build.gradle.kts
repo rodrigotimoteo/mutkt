@@ -13,6 +13,7 @@ dependencies {
     implementation(libs.slf4j.api)
 
     // Testing
+    testImplementation(project(":mutation-sample"))
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.assertj.core)

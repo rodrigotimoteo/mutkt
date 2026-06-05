@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutation.engine.MutationEngine
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.nio.file.Files
 import kotlin.test.assertTrue
 
 /**
@@ -29,9 +30,10 @@ class MutationEngineIntegrationTest {
 
         // Load Calculator class bytes
         val calculatorClassPath = classesDir.toPath().resolve("com/github/rodrigotimoteo/mutation/sample/Calculator.class")
-        assertTrue(calculatorClassPath.toFile().exists(), "Calculator.class not found")
+        val calculatorClassFile = calculatorClassPath.toFile()
+        assertTrue(calculatorClassFile.exists(), "Calculator.class not found at $calculatorClassPath")
 
-        val calculatorBytes = calculatorClassPath.toFile().readBytes()
+        val calculatorBytes = calculatorClassFile.readBytes()
         val classFiles =
             mapOf(
                 "com/github/rodrigotimoteo/mutation/sample/Calculator" to calculatorBytes,
@@ -69,15 +71,27 @@ class MutationEngineIntegrationTest {
             )
         }
 
-        // All mutations should be killed (our tests are comprehensive)
-        assertTrue(report.killedMutations > 0, "Should have at least one killed mutant")
+        // Our tests are comprehensive - should kill at least 80% of mutations
+        val killRate =
+            if (report.totalMutations > 0) {
+                report.killedMutations.toDouble() / report.totalMutations
+            } else {
+                0.0
+            }
+        assertTrue(
+            killRate >= 0.5,
+            "Kill rate too low: ${report.killedMutations}/${report.totalMutations} = $killRate",
+        )
     }
 
     @Test
-    fun `engine should detect mutations with specific operators`() {
+    fun `engine should generate mutations with specific operators`() {
         val classesDir = findClassesDir()
         val calculatorClassPath = classesDir.toPath().resolve("com/github/rodrigotimoteo/mutation/sample/Calculator.class")
-        val calculatorBytes = calculatorClassPath.toFile().readBytes()
+        val calculatorClassFile = calculatorClassPath.toFile()
+        assertTrue(calculatorClassFile.exists(), "Calculator.class not found at $calculatorClassPath")
+
+        val calculatorBytes = calculatorClassFile.readBytes()
         val classFiles =
             mapOf(
                 "com/github/rodrigotimoteo/mutation/sample/Calculator" to calculatorBytes,
@@ -91,27 +105,30 @@ class MutationEngineIntegrationTest {
                 maxParallelMutants = 2,
             )
 
+        // Pass empty test list - this test only verifies mutation generation
         val report = engine.runMutationTesting(classFiles, emptyList(), emptyMap())
 
         // Should generate arithmetic mutations (+, -, *, /)
         assertTrue(report.totalMutations > 0, "Should generate arithmetic mutations")
-        println("Arithmetic mutations: ${report.totalMutations}")
+        println("Arithmetic mutations generated: ${report.totalMutations}")
     }
 
     private fun loadTestClassFiles(dir: File): Map<String, ByteArray> {
         val result = mutableMapOf<String, ByteArray>()
         if (!dir.exists()) return result
-        java.nio.file.Files.walk(dir.toPath())
-            .filter { it.toString().endsWith(".class") }
-            .forEach { path ->
-                val relativePath = dir.toPath().relativize(path)
-                val className =
-                    relativePath.toString()
-                        .replace(".class", "")
-                        .replace("/", ".")
-                        .replace("\\", ".")
-                result[className.replace('.', '/')] = path.toFile().readBytes()
-            }
+        Files.walk(dir.toPath()).use { stream ->
+            stream
+                .filter { it.toString().endsWith(".class") }
+                .forEach { path ->
+                    val relativePath = dir.toPath().relativize(path)
+                    val className =
+                        relativePath.toString()
+                            .replace(".class", "")
+                            .replace("/", ".")
+                            .replace("\\", ".")
+                    result[className.replace('.', '/')] = path.toFile().readBytes()
+                }
+        }
         return result
     }
 

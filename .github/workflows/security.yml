@@ -16,6 +16,7 @@ jobs:
   dependency-check:
     name: Dependency Check
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,10 +28,10 @@ jobs:
           distribution: 'corretto'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Run dependency check
-        run: ./gradlew dependencyCheckAnalyze || echo "Dependency check not configured, skipping"
+        run: ./gradlew dependencyCheckAnalyze
 
       - name: Upload dependency check report
         uses: actions/upload-artifact@v4
@@ -49,7 +50,7 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: java, kotlin
+          languages: java-kotlin
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
@@ -57,7 +58,7 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:java"
+          category: "/language:java-kotlin"
 
   secret-scanning:
     name: Secret Scanning
@@ -69,6 +70,6 @@ jobs:
           fetch-depth: 0
 
       - name: Scan for secrets
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.82.4
         with:
           extra_args: --only-verified

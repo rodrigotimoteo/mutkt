@@ -10,23 +10,47 @@ import kotlin.test.assertTrue
 class MutatorDebugTest {
     @Test
     fun `scanner should find mutations in Calculator class`() {
-        // Find the compiled class
-        val buildDir = File("../mutation-sample/build/classes/kotlin/main")
-        val classFile = buildDir.resolve("com/github/rodrigotimoteo/mutation/sample/Calculator.class")
-
-        assertTrue(classFile.exists(), "Calculator.class not found at $classFile. Working dir: ${File(".").absolutePath}")
-
-        val classBytes = classFile.readBytes()
+        val classBytes = loadCalculatorClassBytes()
 
         // Scan for mutations
         val mutator = Mutator(MutationOperator.MVP_OPERATORS)
         val foundMutations = mutator.scanMutations(classBytes)
 
-        println("Found ${foundMutations.size} mutations:")
-        for (mutation in foundMutations) {
-            println("  ${mutation.operator.operatorName} ${mutation.methodName}:${mutation.lineNumber} - ${mutation.description}")
-        }
-
         assertTrue(foundMutations.isNotEmpty(), "Should find at least one mutation")
+        assertTrue(foundMutations.size >= 5, "Should find multiple mutations, found: ${foundMutations.size}")
+    }
+
+    /**
+     * Locate Calculator.class by trying multiple build output paths.
+     * Works from both Gradle module dir and IDE project root.
+     */
+    private fun loadCalculatorClassBytes(): ByteArray {
+        val cwd = File(System.getProperty("user.dir"))
+        // Walk up to find mutation-sample module if not already there
+        val moduleRoot =
+            generateSequence(cwd) { it.parentFile }
+                .firstOrNull { File(it, "mutation-sample/build/classes/kotlin/main").exists() }
+                ?: cwd
+
+        val candidates =
+            listOf(
+                File(moduleRoot, "mutation-sample/build/classes/kotlin/main"),
+                File(moduleRoot, "mutation-sample/build/classes/java/main"),
+                File(moduleRoot, "mutation-sample/build/classes"),
+            )
+
+        val classesDir =
+            candidates.firstOrNull { it.exists() }
+                ?: error(
+                    "Calculator classes not found. Tried: ${candidates.joinToString { it.path }}\n" +
+                        "Working dir: ${cwd.absolutePath}\n" +
+                        "Run ':mutation-sample:compileKotlin' first.",
+                )
+
+        val classFile = classesDir.resolve("com/github/rodrigotimoteo/mutation/sample/Calculator.class")
+        require(classFile.exists()) {
+            "Calculator.class not found at $classFile. Run ':mutation-sample:compileKotlin' first."
+        }
+        return classFile.readBytes()
     }
 }

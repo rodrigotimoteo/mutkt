@@ -1,7 +1,6 @@
 package com.github.rodrigotimoteo.mutation.mutator
 
 import org.junit.jupiter.api.Test
-import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.Label
@@ -16,9 +15,8 @@ import kotlin.test.assertTrue
 class AsmDebugTest {
     @Test
     fun `verify Calculator bytecode contains mutation points`() {
-        val buildDir = File("../mutation-sample/build/classes/kotlin/main")
-        val classFile = buildDir.resolve("com/github/rodrigotimoteo/mutation/sample/Calculator.class")
-        val classBytes = classFile.readBytes()
+        val classBytes = loadCalculatorClassBytes()
+        assertTrue(classBytes.isNotEmpty(), "Calculator.class is empty")
 
         val reader = ClassReader(classBytes)
         val methods = mutableListOf<String>()
@@ -34,16 +32,7 @@ class AsmDebugTest {
                     superName: String?,
                     interfaces: Array<out String>?,
                 ) {
-                    println("Class: $name, version: $version")
                     super.visit(version, access, name, signature, superName, interfaces)
-                }
-
-                override fun visitAnnotation(
-                    desc: String,
-                    visible: Boolean,
-                ): AnnotationVisitor? {
-                    println("  Annotation: $desc, visible=$visible")
-                    return super.visitAnnotation(desc, visible)
                 }
 
                 override fun visitMethod(
@@ -91,14 +80,42 @@ class AsmDebugTest {
             ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES,
         )
 
-        println("\nMethods visited:")
-        methods.forEach { println("  $it") }
-
-        println("\nOpcodes found:")
-        opcodes.forEach { println(it) }
-
         assertTrue(methods.isNotEmpty(), "Should visit methods")
         assertTrue(opcodes.isNotEmpty(), "Should find opcodes")
+    }
+
+    /**
+     * Locate Calculator.class by trying multiple build output paths.
+     * Works from both Gradle module dir and IDE project root.
+     */
+    private fun loadCalculatorClassBytes(): ByteArray {
+        val cwd = File(System.getProperty("user.dir"))
+        // Walk up to find mutation-sample module if not already there
+        val moduleRoot =
+            generateSequence(cwd) { it.parentFile }
+                .firstOrNull { File(it, "mutation-sample/build/classes/kotlin/main").exists() }
+                ?: cwd
+
+        val candidates =
+            listOf(
+                File(moduleRoot, "mutation-sample/build/classes/kotlin/main"),
+                File(moduleRoot, "mutation-sample/build/classes/java/main"),
+                File(moduleRoot, "mutation-sample/build/classes"),
+            )
+
+        val classesDir =
+            candidates.firstOrNull { it.exists() }
+                ?: error(
+                    "Calculator classes not found. Tried: ${candidates.joinToString { it.path }}\n" +
+                        "Working dir: ${cwd.absolutePath}\n" +
+                        "Run ':mutation-sample:compileKotlin' first.",
+                )
+
+        val classFile = classesDir.resolve("com/github/rodrigotimoteo/mutation/sample/Calculator.class")
+        require(classFile.exists()) {
+            "Calculator.class not found at $classFile. Run ':mutation-sample:compileKotlin' first."
+        }
+        return classFile.readBytes()
     }
 
     private fun getOpcodeName(opcode: Int): String =

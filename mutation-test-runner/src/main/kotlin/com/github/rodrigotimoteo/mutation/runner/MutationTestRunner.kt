@@ -78,7 +78,14 @@ class MutationTestRunner(
                             .replace(".class", "")
                             .replace("/", ".")
                             .replace("\\", ".")
-                    if (className.endsWith("Test") || className.contains("test")) {
+                    val simpleName = className.substringAfterLast('.')
+                    // Match classes named *Test, *Tests, Test*, or *Spec
+                    // to avoid false positives like com.example.LatestReport
+                    if (simpleName.endsWith("Test") ||
+                        simpleName.endsWith("Tests") ||
+                        simpleName.startsWith("Test") ||
+                        simpleName.endsWith("Spec")
+                    ) {
                         result.add(className)
                     }
                 }

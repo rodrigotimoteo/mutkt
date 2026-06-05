@@ -98,9 +98,10 @@ class SubsumptionAnalyzer {
 
     /**
      * Extract test name from mutation result.
+     * Uses the unique mutation id (which includes operator, class, method, line)
+     * to ensure each mutation has a unique kill-matrix key.
      */
     private fun extractTestName(result: MutationResult): String {
-        // Use mutation location as test identifier since we don't track killing tests yet
-        return "${result.mutation.className}#${result.mutation.methodName}"
+        return result.mutation.id
     }
 }
