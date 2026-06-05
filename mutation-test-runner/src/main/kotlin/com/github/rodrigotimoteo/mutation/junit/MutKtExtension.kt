@@ -105,8 +105,13 @@ class MutKtExtension : InvocationInterceptor {
                 logger.info("Mutation testing: PASSED (all triggered mutations caught)")
             }
         } finally {
+            // Use per-class cleanup instead of global reset to avoid
+            // destroying concurrent test class state in parallel JUnit execution
+            val className = extensionContext.testClass.orElse(null)?.name
+            if (className != null) {
+                MutationRegistry.resetClass(className)
+            }
             MutationRegistry.disable()
-            MutationRegistry.reset()
             triggerCount.set(0)
             skipCount.set(0)
         }
@@ -148,7 +153,7 @@ class MutKtExtension : InvocationInterceptor {
         return MutKtConfiguration(
             mode = annotation.mode,
             timeoutMs = annotation.timeoutMs,
-            skipInIDE = true,
+            skipInIDE = annotation.skipInIDE,
         )
     }
 
@@ -158,14 +163,8 @@ class MutKtExtension : InvocationInterceptor {
         if (System.getenv("IDEA_INITIAL_DIRECTORY") != null) return true
         // Eclipse
         if (System.getProperty("eclipse.launcher") != null) return true
-        // VS Code
-        if (System.getenv("VSCODE_CWD") != null) return true
-        // Gradle --tests filter
-        if (System.getProperty("sun.java.command")?.contains("org.gradle.api.tasks.testing.Test") == true &&
-            System.getenv("GRADLE_TEST_FILTER") != null
-        ) {
-            return true
-        }
+        // VS Code Java Test Runner (not just VS Code terminal)
+        if (System.getProperty("vscode.java.test") != null) return true
         return false
     }
 }

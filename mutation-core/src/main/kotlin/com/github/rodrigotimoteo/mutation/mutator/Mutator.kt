@@ -125,10 +125,10 @@ private class MutationScannerVisitor(
         }
         // Check for @SuppressMutations annotation
         if (desc == "Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;") {
-            // Presence of the annotation suppresses all mutations by default.
-            // Specific operators listed in `operators` field are also suppressed.
-            classSuppressed = true
-            // Parse the annotation to extract specific operators to suppress
+            // Parse the annotation to extract specific operators to suppress.
+            // If operators list is empty, suppress ALL mutations.
+            // If operators list is non-empty, suppress only listed operators.
+            var hasExplicitOperators = false
             return object : org.objectweb.asm.AnnotationVisitor(Opcodes.ASM9) {
                 override fun visitArray(name: String?): org.objectweb.asm.AnnotationVisitor? {
                     if (name == "operators") {
@@ -139,11 +139,20 @@ private class MutationScannerVisitor(
                             ) {
                                 if (value is String) {
                                     suppressedOperators = suppressedOperators + value
+                                    hasExplicitOperators = true
                                 }
                             }
                         }
                     }
                     return super.visitArray(name)
+                }
+
+                override fun visitEnd() {
+                    super.visitEnd()
+                    // Only suppress ALL mutations when no specific operators were listed
+                    if (!hasExplicitOperators) {
+                        classSuppressed = true
+                    }
                 }
             }
         }
@@ -281,7 +290,7 @@ private class MutationScannerMethodVisitor(
     ) {
         // DATA_CLASS_COPY: INVOKESPECIAL to copy() method (data class generated)
         if (MutationOperator.DATA_CLASS_COPY in enabledOperators) {
-            if (opcode == Opcodes.INVOKESPECIAL && name == "copy" && descriptor.startsWith("()")) {
+            if (opcode == Opcodes.INVOKESPECIAL && name == "copy") {
                 tryAddMutation(
                     MutationInfo(
                         operator = MutationOperator.DATA_CLASS_COPY,
@@ -653,7 +662,6 @@ private class MutationApplierVisitor(
 ) : ClassVisitor(Opcodes.ASM9, writer) {
     private var currentClassName = ""
     private var isKotlinClass = false
-    private var mutationApplied = false
 
     override fun visit(
         version: Int,
@@ -725,21 +733,6 @@ private class MutationApplierMethodVisitor(
         super.visitLineNumber(line, start)
     }
 
-    override fun visitJumpInsn(
-        opcode: Int,
-        label: org.objectweb.asm.Label,
-    ) {
-        if (!applied && currentLineNumber == targetMutation.lineNumber && opcode == targetMutation.originalOpcode) {
-            val mutatedOpcode = getMutatedOpcode(opcode)
-            if (mutatedOpcode != opcode) {
-                super.visitJumpInsn(mutatedOpcode, label)
-                applied = true
-                return
-            }
-        }
-        super.visitJumpInsn(opcode, label)
-    }
-
     override fun visitInsn(opcode: Int) {
         if (!applied && currentLineNumber == targetMutation.lineNumber && opcode == targetMutation.originalOpcode) {
             // Return mutations need special handling — they always match
@@ -759,6 +752,21 @@ private class MutationApplierMethodVisitor(
             }
         }
         super.visitInsn(opcode)
+    }
+
+    override fun visitJumpInsn(
+        opcode: Int,
+        label: org.objectweb.asm.Label,
+    ) {
+        if (!applied && currentLineNumber == targetMutation.lineNumber && opcode == targetMutation.originalOpcode) {
+            val mutatedOpcode = getMutatedOpcode(opcode)
+            if (mutatedOpcode != opcode) {
+                super.visitJumpInsn(mutatedOpcode, label)
+                applied = true
+                return
+            }
+        }
+        super.visitJumpInsn(opcode, label)
     }
 
     override fun visitIincInsn(
@@ -808,7 +816,9 @@ private class MutationApplierMethodVisitor(
                         if (returnType.sort == Type.VOID) {
                             val argTypes = Type.getArgumentTypes(descriptor)
                             popArgs(argTypes)
-                            if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE) {
+                            if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE ||
+                                opcode == Opcodes.INVOKESPECIAL
+                            ) {
                                 mv.visitInsn(Opcodes.POP) // Pop receiver
                             }
                             applied = true
@@ -818,9 +828,11 @@ private class MutationApplierMethodVisitor(
                 }
                 MutationOperator.CONSTRUCTOR_CALLS -> {
                     if (opcode == Opcodes.INVOKESPECIAL && name == "<init>") {
+                        // Stack: [uninitialized_ref, uninitialized_ref, arg1, ..., argN]
+                        // NEW+DUP created 2 refs. popArgs removes args. POP2 removes both refs.
                         val argTypes = Type.getArgumentTypes(descriptor)
                         popArgs(argTypes)
-                        mv.visitInsn(Opcodes.POP2) // Pop receiver + NEW reference (2 slots for new expression)
+                        mv.visitInsn(Opcodes.POP2) // Pop both NEW+DUP refs
                         mv.visitInsn(Opcodes.ACONST_NULL) // Push null as replacement
                         applied = true
                         return
@@ -883,24 +895,30 @@ private class MutationApplierMethodVisitor(
         val returnType = Type.getReturnType(methodDescriptor)
         when (targetMutation.operator) {
             MutationOperator.RETURN_VALS -> {
+                // Pop original return value first, then push replacement
                 when (opcode) {
                     Opcodes.IRETURN -> {
+                        mv.visitInsn(Opcodes.POP)
                         mv.visitInsn(Opcodes.ICONST_0)
                         mv.visitInsn(Opcodes.IRETURN)
                     }
                     Opcodes.LRETURN -> {
+                        mv.visitInsn(Opcodes.POP2)
                         mv.visitInsn(Opcodes.LCONST_0)
                         mv.visitInsn(Opcodes.LRETURN)
                     }
                     Opcodes.FRETURN -> {
+                        mv.visitInsn(Opcodes.POP)
                         mv.visitInsn(Opcodes.FCONST_0)
                         mv.visitInsn(Opcodes.FRETURN)
                     }
                     Opcodes.DRETURN -> {
+                        mv.visitInsn(Opcodes.POP2)
                         mv.visitInsn(Opcodes.DCONST_0)
                         mv.visitInsn(Opcodes.DRETURN)
                     }
                     Opcodes.ARETURN -> {
+                        mv.visitInsn(Opcodes.POP)
                         mv.visitInsn(Opcodes.ACONST_NULL)
                         mv.visitInsn(Opcodes.ARETURN)
                     }
@@ -909,6 +927,7 @@ private class MutationApplierMethodVisitor(
             }
             MutationOperator.NULL_RETURNS -> {
                 if (opcode == Opcodes.ARETURN) {
+                    mv.visitInsn(Opcodes.POP) // Pop original ref
                     mv.visitInsn(Opcodes.ACONST_NULL)
                     mv.visitInsn(Opcodes.ARETURN)
                 } else {
@@ -917,6 +936,7 @@ private class MutationApplierMethodVisitor(
             }
             MutationOperator.EMPTY_RETURNS -> {
                 if (opcode == Opcodes.ARETURN && ReturnValueMutator.isCollectionOrArrayStatic(returnType)) {
+                    mv.visitInsn(Opcodes.POP) // Pop original ref
                     applyEmptyReturn(returnType)
                 } else {
                     super.visitInsn(opcode)

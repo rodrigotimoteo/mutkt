@@ -138,8 +138,10 @@ class InlinedFinallyDetectorTest {
             )
         val mutations =
             listOf(
-                createMutation(5), // not in block
-                createMutation(50), // not in block
+                // not in block
+                createMutation(5),
+                // not in block
+                createMutation(50),
             )
         assertEquals(0, detector.countSkippedMutations(mutations, blocks))
     }

@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicLong
  * @see MutKt
  */
 object MutationRegistry {
+    private const val DEFAULT_TIMEOUT_MS = 30_000L
     private val active = AtomicBoolean(false)
     private val threads = ConcurrentHashMap<Long, ThreadState>()
     private val classThreads = ConcurrentHashMap<String, MutableSet<Long>>()
@@ -106,7 +107,9 @@ object MutationRegistry {
      */
     fun checkTimeout(): Boolean {
         val state = threads[Thread.currentThread().threadId()] ?: return false
-        val elapsed = System.currentTimeMillis() - state.startTimeMs.get()
+        val start = state.startTimeMs.get()
+        if (start == 0L) return false // Not marked yet
+        val elapsed = System.currentTimeMillis() - start
         return elapsed > timeoutMs.get()
     }
 
@@ -119,9 +122,11 @@ object MutationRegistry {
 
     /**
      * Check if a specific mutation has been triggered on this thread.
+     * Does NOT create ThreadState as side-effect.
      */
     fun isMutationTriggered(mutationId: String): Boolean {
-        return current().triggeredMutations.contains(mutationId)
+        val state = threads[Thread.currentThread().threadId()] ?: return false
+        return state.triggeredMutations.contains(mutationId)
     }
 
     /**
@@ -138,12 +143,16 @@ object MutationRegistry {
         active.set(false)
         threads.clear()
         classThreads.clear()
+        timeoutMs.set(DEFAULT_TIMEOUT_MS)
     }
 
     /**
      * Clean up state for the current thread.
      */
     fun cleanup() {
-        threads.remove(Thread.currentThread().threadId())
+        val threadId = Thread.currentThread().threadId()
+        threads.remove(threadId)
+        // Also remove from classThreads sets
+        classThreads.values.forEach { it.remove(threadId) }
     }
 }

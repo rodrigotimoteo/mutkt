@@ -252,10 +252,14 @@ class InlinedFinallyDetectorTreeTest {
             )
         val mutations =
             listOf(
-                createMutation(10), // start, included
-                createMutation(20), // end, included
-                createMutation(9), // before start
-                createMutation(21), // after end
+                // start, included
+                createMutation(10),
+                // end, included
+                createMutation(20),
+                // before start
+                createMutation(9),
+                // after end
+                createMutation(21),
             )
         assertEquals(2, detector.countSkippedMutations(mutations, blocks))
     }
@@ -315,9 +319,12 @@ class InlinedFinallyDetectorTreeTest {
             )
         val mutations =
             listOf(
-                createMutation(20), // in both
-                createMutation(30), // in both
-                createMutation(40), // only in bar
+                // in both
+                createMutation(20),
+                // in both
+                createMutation(30),
+                // only in bar
+                createMutation(40),
             )
         // countSkippedMutations counts mutations where isInInlinedBlock returns true
         // isInInlinedBlock returns true if mutationLine is in ANY block's range

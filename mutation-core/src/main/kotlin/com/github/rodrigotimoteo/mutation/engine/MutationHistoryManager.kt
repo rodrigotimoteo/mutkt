@@ -86,10 +86,11 @@ class MutationHistoryManager(
         val reusableResults = mutableMapOf<String, MutationStatus>()
 
         for ((mutationId, result) in oldHistory.results) {
-            // Check if this mutation belongs to the current class
+            // Mutation ID format: ${operatorName}_${className}_${methodName}_${lineNumber}
+            // parts[0] = operator, parts[1] = class name
             val parts = mutationId.split("_")
             if (parts.size >= 2) {
-                val mutationClassHash = oldHistory.classHashes[parts[0]]
+                val mutationClassHash = oldHistory.classHashes[parts[1]]
                 val mutationTestHash = oldHistory.testHashes[parts[1]]
 
                 // If class and test haven't changed, reuse the result

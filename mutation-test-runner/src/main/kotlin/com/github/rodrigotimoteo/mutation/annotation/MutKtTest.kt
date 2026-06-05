@@ -41,4 +41,8 @@ annotation class MutKtTest(
      * Whether to automatically reset mutation state between runs.
      */
     val autoReset: Boolean = true,
+    /**
+     * Whether to skip mutation testing when running in IDE.
+     */
+    val skipInIDE: Boolean = true,
 )

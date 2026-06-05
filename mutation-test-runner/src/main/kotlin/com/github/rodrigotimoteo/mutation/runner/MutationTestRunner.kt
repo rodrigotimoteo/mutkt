@@ -24,7 +24,6 @@ class MutationTestRunner(
         testClassesDir: File,
         classpath: List<File>,
         coverageExecFile: File? = null,
-        enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     ): MutationReport {
         logger.info("Loading classes from: $classesDir")
         logger.info("Loading test classes from: $testClassesDir")

@@ -31,7 +31,7 @@ class MutationEngineTest {
     }
 
     @Test
-    fun `single class with ARITHMETIC mutation and passing test returns SURVIVED`() {
+    fun `single class with ARITHMETIC mutation and failing test returns KILLED`() {
         // Class with IADD on a method that always returns 5
         val classBytes = buildClassWithArithmetic()
         // Build a test that asserts the result is 8 (5+3). After IADD→ISUB, result is 2 → test FAILS

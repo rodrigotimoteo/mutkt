@@ -154,13 +154,16 @@ class MutationHistoryManagerTest {
         val classHash = manager.computeHash(classBytes)
         val testHash = manager.computeHash(testBytes)
 
+        // Use real mutation ID format: ${operator}_${className}_${methodName}_${line}
+        val mutationId = "ARITHMETIC_com.Foo_test1_10"
+
         val oldHistory =
             MutationHistoryManager.MutationHistory(
                 classHashes = mapOf("com.Foo" to classHash),
-                testHashes = mapOf("com.FooTest" to testHash),
+                testHashes = mapOf("com.Foo" to testHash),
                 results =
                     mapOf(
-                        "com.Foo_com.FooTest_m1" to
+                        mutationId to
                             MutationHistoryManager.MutationStatusResult(
                                 status = MutationStatus.KILLED,
                             ),
@@ -169,7 +172,7 @@ class MutationHistoryManagerTest {
 
         val reusable = manager.getReusableResults(classBytes, testBytes, oldHistory)
         assertEquals(1, reusable.size)
-        assertEquals(MutationStatus.KILLED, reusable["com.Foo_com.FooTest_m1"])
+        assertEquals(MutationStatus.KILLED, reusable[mutationId])
     }
 
     @Test
@@ -182,13 +185,15 @@ class MutationHistoryManagerTest {
         val classHash = manager.computeHash(differentBytes)
         val testHash = manager.computeHash(testBytes)
 
+        val mutationId = "ARITHMETIC_com.Foo_test1_10"
+
         val oldHistory =
             MutationHistoryManager.MutationHistory(
                 classHashes = mapOf("com.Foo" to classHash),
-                testHashes = mapOf("com.FooTest" to testHash),
+                testHashes = mapOf("com.Foo" to testHash),
                 results =
                     mapOf(
-                        "com.Foo_com.FooTest_m1" to
+                        mutationId to
                             MutationHistoryManager.MutationStatusResult(
                                 status = MutationStatus.KILLED,
                             ),

@@ -252,7 +252,7 @@ open class MutationPluginExtension(project: Project) {
 
     val reportFormats: SetProperty<String> =
         project.objects.setProperty(String::class.java).convention(
-            setOf("html", "csv"),
+            setOf("html"),
         )
 
     /**

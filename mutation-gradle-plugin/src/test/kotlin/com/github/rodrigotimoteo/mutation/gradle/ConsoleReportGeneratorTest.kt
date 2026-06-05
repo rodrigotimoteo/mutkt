@@ -118,7 +118,7 @@ class ConsoleReportGeneratorTest {
         val report = createReport(listOf(result))
         val output = ConsoleReportGenerator.generate(report)
 
-        assertThat(output).contains("Total time:       5s")
+        assertThat(output).contains("Total time:       5.0s")
     }
 
     @Test

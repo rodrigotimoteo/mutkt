@@ -139,9 +139,9 @@ class MutationPluginExtensionTest {
     }
 
     @Test
-    fun `reportFormats defaults to html and csv`() {
+    fun `reportFormats defaults to html only`() {
         val formats = extension.reportFormats.get()
-        assertThat(formats).contains("html", "csv")
+        assertThat(formats).containsExactly("html")
     }
 
     @Test
