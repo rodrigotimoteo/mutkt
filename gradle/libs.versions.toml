@@ -8,7 +8,7 @@ dokka = "1.9.20"
 junit = "5.10.2"
 junitPlatform = "1.10.2"
 assertj = "3.25.3"
-asm = "9.7"
+asm = "9.10.1"
 slf4j = "2.0.9"
 jacoco = "0.8.12"
 
