@@ -76,9 +76,9 @@ class MutationHistoryManagerTest {
             """
             TIMESTAMP:1000
             CLASS:Foo:validhash
-            RESULT:Foo_m1:KILLED:200:50
+            RESULT:Foo_m1|KILLED|200|50
             GARBAGE:this is not valid
-            RESULT:Foo_m2:SURVIVED:300:60
+            RESULT:Foo_m2|SURVIVED|300|60
             """.trimIndent(),
         )
 
@@ -98,7 +98,7 @@ class MutationHistoryManagerTest {
         file.writeText(
             """
             TIMESTAMP:1000
-            RESULT:Foo_m1:KILLED
+            RESULT:Foo_m1|KILLED
             """.trimIndent(),
         )
 
@@ -118,7 +118,7 @@ class MutationHistoryManagerTest {
         file.writeText(
             """
             TIMESTAMP:1000
-            RESULT:Foo_m1:INVALID_STATUS:200:50
+            RESULT:Foo_m1|INVALID_STATUS|200|50
             """.trimIndent(),
         )
 
@@ -155,7 +155,7 @@ class MutationHistoryManagerTest {
         val testHash = manager.computeHash(testBytes)
 
         // Use real mutation ID format: ${operator}_${className}_${methodName}_${line}
-        val mutationId = "ARITHMETIC_com.Foo_test1_10"
+        val mutationId = "ARITHMETIC::com.Foo::test1::10"
 
         val oldHistory =
             MutationHistoryManager.MutationHistory(
@@ -185,7 +185,7 @@ class MutationHistoryManagerTest {
         val classHash = manager.computeHash(differentBytes)
         val testHash = manager.computeHash(testBytes)
 
-        val mutationId = "ARITHMETIC_com.Foo_test1_10"
+        val mutationId = "ARITHMETIC::com.Foo::test1::10"
 
         val oldHistory =
             MutationHistoryManager.MutationHistory(

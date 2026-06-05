@@ -10,7 +10,6 @@ import com.github.rodrigotimoteo.mutation.mutator.InlinedFinallyDetector
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
-import com.github.rodrigotimoteo.mutation.report.SubsumptionAnalyzer
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.concurrent.Callable
@@ -100,12 +99,10 @@ class MutationEngine(
         // Run tests against each mutant
         val results = runMutants(mutationsAfterInlined, allClassFiles, orderedTestNames)
 
-        // Analyze subsumption
-        val subsumptionAnalyzer = SubsumptionAnalyzer()
-        val subsumptionResult = subsumptionAnalyzer.analyze(results)
-        if (subsumptionResult.skippedCount > 0) {
-            logger.info("Subsumption analysis: ${subsumptionResult.skippedCount} mutations subsumed")
-        }
+        // Subsumption analysis disabled until per-test kill attribution is available.
+        // Currently className is used as kill-set proxy, producing nonsensical results.
+        // When MutationResult carries killing test identifiers, re-enable:
+        // val subsumptionResult = SubsumptionAnalyzer().analyze(results)
 
         val totalTime = System.currentTimeMillis() - startTime
         return buildReport(results, totalTime)
@@ -310,7 +307,7 @@ class MutationEngine(
         mutatedBytes: ByteArray = ByteArray(0),
     ): Mutation {
         return Mutation(
-            id = "${info.operator.operatorName}_${info.className}_${info.methodName}_${info.lineNumber}",
+            id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}",
             className = info.className,
             methodName = info.methodName,
             methodDescriptor = info.methodDescriptor,
