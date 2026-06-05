@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.dokka)
+    alias(libs.plugins.owasp.dependencycheck)
 }
 
 allprojects {

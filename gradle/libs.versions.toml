@@ -5,6 +5,7 @@ kover = "0.7.6"
 detekt = "1.23.8"
 ktlint = "12.1.1"
 dokka = "2.2.0"
+owasp = "12.2.2"
 junit = "5.10.2"
 junitPlatform = "1.10.2"
 assertj = "3.27.7"
@@ -49,3 +50,4 @@ kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+owasp-dependencycheck = { id = "org.owasp.dependencycheck", version.ref = "owasp" }
