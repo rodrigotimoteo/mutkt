@@ -9,6 +9,7 @@ import org.objectweb.asm.Opcodes
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MutantClassLoaderTest {
@@ -167,7 +168,7 @@ class MutantClassLoaderTest {
     }
 
     @Test
-    fun `findClass is called for target mutation class`() {
+    fun `target class is loaded with mutated bytes`() {
         val bytes = buildCalculatorClass()
         val mutator = Mutator(setOf(MutationOperator.ARITHMETIC))
         val dummyMutation = createDummyMutation()
@@ -178,15 +179,14 @@ class MutantClassLoaderTest {
                 targetMutation = dummyMutation,
                 mutator = mutator,
             )
-        // findClass is protected, so use reflection
-        val method = MutantClassLoader::class.java.getDeclaredMethod("findClass", String::class.java)
-        method.isAccessible = true
-        val clazz = method.invoke(loader, "com.example.Calc") as Class<*>
+        // loadClass loads project classes through this classloader (defineClass)
+        val clazz = loader.loadClass("com.example.Calc")
         assertNotNull(clazz)
+        assertEquals(loader, clazz.classLoader, "Target class should be loaded by MutantClassLoader")
     }
 
     @Test
-    fun `findClass throws for class not in injected bytes`() {
+    fun `non-target class falls back to parent`() {
         val mutator = Mutator(setOf(MutationOperator.ARITHMETIC))
         val dummyMutation = createDummyMutation()
         val loader =
@@ -196,16 +196,11 @@ class MutantClassLoaderTest {
                 targetMutation = dummyMutation,
                 mutator = mutator,
             )
-        val method = MutantClassLoader::class.java.getDeclaredMethod("findClass", String::class.java)
-        method.isAccessible = true
-        try {
-            method.invoke(loader, "com.example.NotInjected")
-            assertTrue(false, "Should have thrown")
-        } catch (e: java.lang.reflect.InvocationTargetException) {
-            val cause = e.cause
-            assertTrue(cause is ClassNotFoundException, "Expected ClassNotFoundException, got $cause")
-            assertTrue(cause.message!!.contains("not found"))
-        }
+        // Class not in originalClassBytes → delegates to parent
+        val clazz = loader.loadClass("java.lang.String")
+        assertNotNull(clazz)
+        // String is loaded by bootstrap classloader (null), confirming delegation to parent
+        assertNull(clazz.classLoader, "JDK class should be loaded by bootstrap (parent delegation)")
     }
 
     @Test

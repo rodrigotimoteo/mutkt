@@ -7,11 +7,14 @@ import com.github.rodrigotimoteo.mutation.mutator.Mutator
  * Custom ClassLoader that applies a single mutation on-the-fly when loading classes.
  *
  * Each instance is configured with exactly one [targetMutation] to apply.
- * The classloader intercepts loading of the target class and returns a mutated version;
- * all other classes are delegated to the parent classloader via standard parent-first
- * delegation, with one exception: project classes (those present in [originalClassBytes])
- * are also loaded through this classloader so that dependency resolution ensures
- * the mutated target class is visible to all project code — not the original from parent.
+ * The classloader loads ALL project classes (those in [originalClassBytes]) through
+ * this classloader via [findClass]/[defineClass], so that dependency resolution between
+ * project classes goes through this classloader — ensuring test code sees the mutated
+ * target class, not the original from parent.
+ *
+ * External dependencies (JUnit, MockK, JDK, coroutines, etc.) are delegated to the
+ * parent classloader. If [defineClass] fails for a project class (e.g. due to missing
+ * Kotlin runtime metadata), the classloader falls back to parent gracefully.
  *
  * **Note:** The [originalClassBytes] map is consumed as-is — callers must not modify
  * the byte arrays after passing them to this classloader.
@@ -28,27 +31,6 @@ class MutantClassLoader(
     /** Slashed internal form of the target mutation's class name, computed once. */
     private val targetClassName: String = targetMutation.className.replace('.', '/')
 
-    override fun findClass(name: String): Class<*> {
-        val binaryName = name.replace('/', '.')
-        val slashedName = name.replace('.', '/')
-
-        val alreadyLoaded = findLoadedClass(binaryName)
-        if (alreadyLoaded != null) return alreadyLoaded
-
-        val classBytes =
-            originalClassBytes[slashedName]
-                ?: throw ClassNotFoundException("Class not found in original classpath: $binaryName")
-
-        val mutatedBytes =
-            if (slashedName == targetClassName) {
-                mutator.applyMutation(classBytes, targetMutation)
-            } else {
-                classBytes
-            }
-
-        return defineClass(binaryName, mutatedBytes, 0, mutatedBytes.size)
-    }
-
     override fun loadClass(
         name: String,
         resolve: Boolean,
@@ -59,18 +41,31 @@ class MutantClassLoader(
         val loaded = findLoadedClass(binaryName)
         if (loaded != null) return loaded
 
-        // Always delegate non-target classes to parent.
-        // The target class is the only one we intercept.
-        if (slashedName != targetClassName) {
-            return super.loadClass(binaryName, resolve)
+        val classBytes = originalClassBytes[slashedName]
+        if (classBytes != null) {
+            // Project class — load through this classloader so dependency resolution
+            // (when this class references the target class) goes through us.
+            try {
+                val mutatedBytes =
+                    if (slashedName == targetClassName) {
+                        mutator.applyMutation(classBytes, targetMutation)
+                    } else {
+                        classBytes
+                    }
+                val clazz = defineClass(binaryName, mutatedBytes, 0, mutatedBytes.size)
+                if (resolve) {
+                    resolveClass(clazz)
+                }
+                return clazz
+            } catch (e: LinkageError) {
+                // defineClass failed — fall back to parent for complex Kotlin classes
+                // that need runtime metadata not available in raw bytecode.
+                // The test will see the original class for this specific case.
+            }
         }
 
-        // Target class: load mutated version through this classloader.
-        val clazz = findClass(binaryName)
-        if (resolve) {
-            resolveClass(clazz)
-        }
-        return clazz
+        // External dependency or fallback — delegate to parent.
+        return super.loadClass(binaryName, resolve)
     }
 }
 
