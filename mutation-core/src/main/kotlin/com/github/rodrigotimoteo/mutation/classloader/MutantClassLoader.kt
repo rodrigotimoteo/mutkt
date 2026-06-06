@@ -4,18 +4,20 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
 
 /**
- * Custom ClassLoader that applies a single mutation on-the-fly when loading the target class.
+ * Custom ClassLoader that applies a single mutation on-the-fly when loading classes.
  *
  * Each instance is configured with exactly one [targetMutation] to apply.
  * The classloader intercepts loading of the target class and returns a mutated version;
- * all other classes are delegated to the parent classloader via standard parent-first delegation.
+ * all other classes are delegated to the parent classloader via standard parent-first
+ * delegation, with one exception: project classes (those present in [originalClassBytes])
+ * are also loaded through this classloader so that dependency resolution ensures
+ * the mutated target class is visible to all project code — not the original from parent.
  *
  * **Note:** The [originalClassBytes] map is consumed as-is — callers must not modify
  * the byte arrays after passing them to this classloader.
  *
- * **Thread safety:** This classloader is designed for single-threaded mutation testing runs.
- * Concurrent `loadClass` calls for the same target class may trigger [LinkageError]
- * from duplicate `defineClass` calls.
+ * **Thread safety:** Each MutantClassLoader instance is independent. Mutations run in
+ * separate threads with separate classloader instances — no shared mutable state.
  */
 class MutantClassLoader(
     parent: ClassLoader,
@@ -27,48 +29,47 @@ class MutantClassLoader(
     private val targetClassName: String = targetMutation.className.replace('.', '/')
 
     override fun findClass(name: String): Class<*> {
-        // Prevent duplicate defineClass if called directly (e.g. via reflection).
-        val alreadyLoaded = findLoadedClass(name)
+        val binaryName = name.replace('/', '.')
+        val slashedName = name.replace('.', '/')
+
+        val alreadyLoaded = findLoadedClass(binaryName)
         if (alreadyLoaded != null) return alreadyLoaded
 
-        val className = name.replace('.', '/')
         val classBytes =
-            originalClassBytes[className]
-                ?: throw ClassNotFoundException("Class not found in original classpath: $name")
+            originalClassBytes[slashedName]
+                ?: throw ClassNotFoundException("Class not found in original classpath: $binaryName")
 
-        // Apply mutation only if this is the target class.
         val mutatedBytes =
-            if (className == targetClassName) {
+            if (slashedName == targetClassName) {
                 mutator.applyMutation(classBytes, targetMutation)
             } else {
                 classBytes
             }
 
-        return defineClass(name, mutatedBytes, 0, mutatedBytes.size)
+        return defineClass(binaryName, mutatedBytes, 0, mutatedBytes.size)
     }
 
     override fun loadClass(
         name: String,
         resolve: Boolean,
     ): Class<*> {
-        // Use JVM's built-in loaded-class tracking instead of a redundant cache.
-        val loaded = findLoadedClass(name)
+        val binaryName = name.replace('/', '.')
+        val slashedName = name.replace('.', '/')
+
+        val loaded = findLoadedClass(binaryName)
         if (loaded != null) return loaded
 
-        val className = name.replace('.', '/')
-        val clazz =
-            if (className == targetClassName) {
-                findClass(name)
-            } else {
-                // Delegate to parent with standard parent-first delegation.
-                super.loadClass(name, false)
-            }
+        // Always delegate non-target classes to parent.
+        // The target class is the only one we intercept.
+        if (slashedName != targetClassName) {
+            return super.loadClass(binaryName, resolve)
+        }
 
-        // Link the class if requested — required for target classes loaded via findClass.
+        // Target class: load mutated version through this classloader.
+        val clazz = findClass(binaryName)
         if (resolve) {
             resolveClass(clazz)
         }
-
         return clazz
     }
 }

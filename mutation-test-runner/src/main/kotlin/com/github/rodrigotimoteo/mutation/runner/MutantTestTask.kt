@@ -60,6 +60,7 @@ class MutantTestTask(
     ): MutationStatus {
         var hasTests = false
         var hasFailures = false
+        var hasErrors = false
 
         for (testClassName in testClassNames) {
             try {
@@ -69,24 +70,56 @@ class MutantTestTask(
                         it.getAnnotation(org.junit.jupiter.api.Test::class.java) != null
                     }
 
+                // Discover lifecycle methods (JUnit 5).
+                val beforeEachMethods =
+                    testClass.declaredMethods.filter {
+                        it.isAnnotationPresent(org.junit.jupiter.api.BeforeEach::class.java)
+                    }
+                val afterEachMethods =
+                    testClass.declaredMethods.filter {
+                        it.isAnnotationPresent(org.junit.jupiter.api.AfterEach::class.java)
+                    }
+
                 for (method in testMethods) {
                     hasTests = true
                     val instance = testClass.getDeclaredConstructor().newInstance()
                     try {
+                        // Run @BeforeEach setup methods.
+                        for (setup in beforeEachMethods) {
+                            setup.isAccessible = true
+                            setup.invoke(instance)
+                        }
                         method.invoke(instance)
                     } catch (ite: java.lang.reflect.InvocationTargetException) {
+                        // Any exception from test execution = mutation detected.
                         hasFailures = true
                         logger.debug("Test failed: ${method.name}", ite.targetException)
+                    } catch (e: Exception) {
+                        hasErrors = true
+                        logger.debug("Test error: ${method.name}", e)
+                    } finally {
+                        // Always run @AfterEach teardown methods.
+                        for (teardown in afterEachMethods) {
+                            try {
+                                teardown.isAccessible = true
+                                teardown.invoke(instance)
+                            } catch (_: Exception) {
+                                // Teardown failure doesn't mask test result.
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
                 logger.debug("Could not load test class: $testClassName", e)
+                hasErrors = true
             }
         }
 
         return when {
+            !hasTests && hasErrors -> MutationStatus.ERROR
             !hasTests -> MutationStatus.NO_COVERAGE
             hasFailures -> MutationStatus.KILLED
+            hasErrors -> MutationStatus.ERROR
             else -> MutationStatus.SURVIVED
         }
     }

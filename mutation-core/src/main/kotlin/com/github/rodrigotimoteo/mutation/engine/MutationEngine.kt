@@ -280,23 +280,47 @@ class MutationEngine(
                         it.getAnnotation(org.junit.jupiter.api.Test::class.java) != null
                     }
 
+                // Discover lifecycle methods (JUnit 5).
+                val beforeEachMethods =
+                    testClass.declaredMethods.filter {
+                        it.isAnnotationPresent(org.junit.jupiter.api.BeforeEach::class.java)
+                    }
+                val afterEachMethods =
+                    testClass.declaredMethods.filter {
+                        it.isAnnotationPresent(org.junit.jupiter.api.AfterEach::class.java)
+                    }
+
                 for (method in testMethods) {
                     hasTests = true
                     val instance = testClass.getDeclaredConstructor().newInstance()
                     try {
+                        // Run @BeforeEach setup methods.
+                        for (setup in beforeEachMethods) {
+                            setup.isAccessible = true
+                            setup.invoke(instance)
+                        }
                         method.invoke(instance)
                     } catch (e: java.lang.reflect.InvocationTargetException) {
                         val cause = e.targetException
-                        if (cause is AssertionError) {
-                            hasFailures = true
-                            logger.debug("Test failed (mutation killed): ${method.name}", cause)
-                        } else {
-                            hasErrors = true
-                            logger.debug("Test error: ${method.name}", cause)
-                        }
-                    } catch (e: Exception) {
+                        // Any exception from test execution (assertion, NPE, AIOOBE, etc.)
+                        // means the mutation is detected — the test suite caught the broken code.
                         hasFailures = true
-                        logger.debug("Test failed: ${method.name}", e)
+                        logger.debug("Test failed (mutation killed): ${method.name}", cause)
+                    } catch (e: Exception) {
+                        // Non-invocation exceptions (e.g. instantiate failure, class not found)
+                        // indicate infrastructure issues, not mutation detection.
+                        hasErrors = true
+                        logger.debug("Test error: ${method.name}", e)
+                    } finally {
+                        // Always run @AfterEach teardown methods.
+                        for (teardown in afterEachMethods) {
+                            try {
+                                teardown.isAccessible = true
+                                teardown.invoke(instance)
+                            } catch (_: Exception) {
+                                // Teardown failure doesn't mask test result.
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {

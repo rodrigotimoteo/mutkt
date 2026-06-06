@@ -150,7 +150,7 @@ subprojects {
         if (signingKey != null && signingPassword != null) {
             useInMemoryPgpKeys(signingKey, signingPassword)
             val publishing = extensions.getByType<PublishingExtension>()
-            sign(publishing.publications["maven"])
+            sign(publishing.publications)
         } else {
             isRequired = false
         }
