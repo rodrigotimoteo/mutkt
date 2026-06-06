@@ -51,7 +51,6 @@ subprojects {
 
     extensions.configure<JavaPluginExtension> {
         withSourcesJar()
-        withJavadocJar()
     }
 
     extensions.configure<PublishingExtension> {
