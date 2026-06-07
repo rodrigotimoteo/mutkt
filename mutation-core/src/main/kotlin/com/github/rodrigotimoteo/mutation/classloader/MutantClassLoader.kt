@@ -2,33 +2,30 @@ package com.github.rodrigotimoteo.mutation.classloader
 
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Custom ClassLoader that applies a single mutation on-the-fly when loading classes.
  *
- * Each instance is configured with exactly one [targetMutation] to apply.
- * The classloader loads ALL project classes (those in [originalClassBytes]) through
- * this classloader via [findClass]/[defineClass], so that dependency resolution between
- * project classes goes through this classloader — ensuring test code sees the mutated
- * target class, not the original from parent.
+ * Loads ALL project classes (those in [originalClassBytes]) through this classloader
+ * via [defineClass], so that dependency resolution between project classes goes through
+ * this classloader — ensuring test code sees the mutated target class.
  *
  * External dependencies (JUnit, MockK, JDK, coroutines, etc.) are delegated to the
- * parent classloader. If [defineClass] fails for a project class (e.g. due to missing
- * Kotlin runtime metadata), the classloader falls back to parent gracefully.
+ * parent classloader. If [defineClass] fails for a project class, it's cached in
+ * [failedClassCache] and the class falls back to parent on subsequent requests.
  *
- * **Note:** The [originalClassBytes] map is consumed as-is — callers must not modify
- * the byte arrays after passing them to this classloader.
- *
- * **Thread safety:** Each MutantClassLoader instance is independent. Mutations run in
- * separate threads with separate classloader instances — no shared mutable state.
+ * @param preMutatedBytes Pre-computed mutated bytes for the target class.
+ * @param failedClassCache Shared cache of class names that fail [defineClass].
  */
 class MutantClassLoader(
     parent: ClassLoader,
     private val originalClassBytes: Map<String, ByteArray>,
     private val targetMutation: MutationInfo,
     private val mutator: Mutator,
+    private val preMutatedBytes: ByteArray? = null,
+    private val failedClassCache: MutableSet<String> = ConcurrentHashMap.newKeySet(),
 ) : ClassLoader(parent) {
-    /** Slashed internal form of the target mutation's class name, computed once. */
     private val targetClassName: String = targetMutation.className.replace('.', '/')
 
     override fun loadClass(
@@ -43,24 +40,23 @@ class MutantClassLoader(
 
         val classBytes = originalClassBytes[slashedName]
         if (classBytes != null) {
-            // Project class — load through this classloader so dependency resolution
-            // (when this class references the target class) goes through us.
+            // Skip classes that consistently fail defineClass (cached from prior attempts).
+            if (slashedName in failedClassCache) {
+                return super.loadClass(binaryName, resolve)
+            }
+
             try {
                 val mutatedBytes =
                     if (slashedName == targetClassName) {
-                        mutator.applyMutation(classBytes, targetMutation)
+                        preMutatedBytes ?: mutator.applyMutation(classBytes, targetMutation)
                     } else {
                         classBytes
                     }
                 val clazz = defineClass(binaryName, mutatedBytes, 0, mutatedBytes.size)
-                if (resolve) {
-                    resolveClass(clazz)
-                }
+                if (resolve) resolveClass(clazz)
                 return clazz
             } catch (e: LinkageError) {
-                // defineClass failed — fall back to parent for complex Kotlin classes
-                // that need runtime metadata not available in raw bytecode.
-                // The test will see the original class for this specific case.
+                failedClassCache.add(slashedName)
             }
         }
 
@@ -70,15 +66,32 @@ class MutantClassLoader(
 }
 
 /**
- * Factory for creating MutantClassLoader instances.
+ * Factory for creating [MutantClassLoader] instances.
+ *
+ * Provides a shared [failedClassCache] across mutations, avoiding repeated
+ * LinkageError failures for complex Kotlin classes.
  */
 object MutantClassLoaderFactory {
+    private val sharedFailedClassCache: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     fun create(
         parent: ClassLoader,
         originalClassBytes: Map<String, ByteArray>,
         targetMutation: MutationInfo,
         mutator: Mutator,
+        preMutatedBytes: ByteArray? = null,
     ): MutantClassLoader {
-        return MutantClassLoader(parent, originalClassBytes, targetMutation, mutator)
+        return MutantClassLoader(
+            parent,
+            originalClassBytes,
+            targetMutation,
+            mutator,
+            preMutatedBytes,
+            sharedFailedClassCache,
+        )
+    }
+
+    fun resetCache() {
+        sharedFailedClassCache.clear()
     }
 }
