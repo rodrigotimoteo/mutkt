@@ -9,6 +9,7 @@ import org.objectweb.asm.Opcodes
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MutantClassLoaderTest {
@@ -167,7 +168,7 @@ class MutantClassLoaderTest {
     }
 
     @Test
-    fun `findClass is called for target mutation class`() {
+    fun `target class is loaded with mutated bytes`() {
         val bytes = buildCalculatorClass()
         val mutator = Mutator(setOf(MutationOperator.ARITHMETIC))
         val dummyMutation = createDummyMutation()
@@ -178,15 +179,14 @@ class MutantClassLoaderTest {
                 targetMutation = dummyMutation,
                 mutator = mutator,
             )
-        // findClass is protected, so use reflection
-        val method = MutantClassLoader::class.java.getDeclaredMethod("findClass", String::class.java)
-        method.isAccessible = true
-        val clazz = method.invoke(loader, "com.example.Calc") as Class<*>
+        // loadClass loads project classes through this classloader (defineClass)
+        val clazz = loader.loadClass("com.example.Calc")
         assertNotNull(clazz)
+        assertEquals(loader, clazz.classLoader, "Target class should be loaded by MutantClassLoader")
     }
 
     @Test
-    fun `findClass throws for class not in injected bytes`() {
+    fun `non-target class falls back to parent`() {
         val mutator = Mutator(setOf(MutationOperator.ARITHMETIC))
         val dummyMutation = createDummyMutation()
         val loader =
@@ -196,16 +196,66 @@ class MutantClassLoaderTest {
                 targetMutation = dummyMutation,
                 mutator = mutator,
             )
-        val method = MutantClassLoader::class.java.getDeclaredMethod("findClass", String::class.java)
-        method.isAccessible = true
-        try {
-            method.invoke(loader, "com.example.NotInjected")
-            assertTrue(false, "Should have thrown")
-        } catch (e: java.lang.reflect.InvocationTargetException) {
-            val cause = e.cause
-            assertTrue(cause is ClassNotFoundException, "Expected ClassNotFoundException, got $cause")
-            assertTrue(cause.message!!.contains("not found"))
-        }
+        // Class not in originalClassBytes → delegates to parent
+        val clazz = loader.loadClass("java.lang.String")
+        assertNotNull(clazz)
+        // String is loaded by bootstrap classloader (null), confirming delegation to parent
+        assertNull(clazz.classLoader, "JDK class should be loaded by bootstrap (parent delegation)")
+    }
+
+    @Test
+    fun `cross-class resolution - dependent class sees mutated target`() {
+        // Build two classes: Caller references Target.
+        // Caller.add(a, b) calls Target.add(a, b)
+        // Mutate Target.compute: IADD → ISUB
+        // Then Caller.add should return a - b instead of a + b
+        val targetBytes = buildClassWithName("com/example/Target", makeStatic = true)
+        val callerBytes = buildCallerClass()
+
+        val mutator = Mutator(setOf(MutationOperator.ARITHMETIC))
+        val mutations = mutator.scanMutations(targetBytes)
+        val arithMutation = mutations.first { it.originalOpcode == Opcodes.IADD }
+
+        val classBytes =
+            mapOf(
+                "com/example/Target" to targetBytes,
+                "com/example/Caller" to callerBytes,
+            )
+        val loader =
+            MutantClassLoader(
+                parent = MutantClassLoaderTest::class.java.classLoader,
+                originalClassBytes = classBytes,
+                targetMutation = arithMutation,
+                mutator = mutator,
+            )
+        // Load Caller through MutantClassLoader — it resolves Target through us
+        val callerClass = loader.loadClass("com.example.Caller")
+        assertEquals(loader, callerClass.classLoader, "Caller should be loaded by MutantClassLoader")
+        val targetClass = loader.loadClass("com/example.Target")
+        assertEquals(loader, targetClass.classLoader, "Target should be loaded by MutantClassLoader")
+
+        val instance = callerClass.getDeclaredConstructor().newInstance()
+        val method = callerClass.getDeclaredMethod("add", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+        val result = method.invoke(instance, 5, 3) as Int
+        // After mutation: Target.add(5,3) = 5 - 3 = 2, so Caller.add(5,3) = 2
+        assertEquals(2, result, "Caller should see mutated Target behavior")
+    }
+
+    @Test
+    fun `non-target project class loads from original bytes not parent`() {
+        val calcBytes = buildCalculatorClass()
+        val mutator = Mutator(setOf(MutationOperator.ARITHMETIC))
+        // Target is a different class, so Calc should load unmutated
+        val dummyMutation = createDummyMutation(className = "com.example.OtherClass")
+        val loader =
+            MutantClassLoader(
+                parent = MutantClassLoaderTest::class.java.classLoader,
+                originalClassBytes = mapOf("com/example/Calc" to calcBytes),
+                targetMutation = dummyMutation,
+                mutator = mutator,
+            )
+        val clazz = loader.loadClass("com.example.Calc")
+        assertEquals(loader, clazz.classLoader, "Non-target project class should be loaded by MutantClassLoader")
     }
 
     @Test
@@ -341,9 +391,41 @@ class MutantClassLoaderTest {
             mutatedOpcode = Opcodes.ISUB,
         )
 
-    private fun buildCalculatorClass(): ByteArray {
+    private fun buildCalculatorClass(): ByteArray = buildClassWithName("com/example/Calc")
+
+    private fun buildClassWithName(
+        internalName: String,
+        makeStatic: Boolean = false,
+    ): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Calc", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, internalName, null, "java/lang/Object", null)
+        val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        ctor?.visitCode()
+        ctor?.visitVarInsn(Opcodes.ALOAD, 0)
+        ctor?.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        ctor?.visitInsn(Opcodes.RETURN)
+        ctor?.visitMaxs(1, 1)
+        ctor?.visitEnd()
+        val access = Opcodes.ACC_PUBLIC or if (makeStatic) Opcodes.ACC_STATIC else 0
+        val mv = cw.visitMethod(access, "add", "(II)I", null, null)
+        mv?.visitCode()
+        if (!makeStatic) mv?.visitVarInsn(Opcodes.ILOAD, 1) else mv?.visitVarInsn(Opcodes.ILOAD, 0)
+        if (!makeStatic) mv?.visitVarInsn(Opcodes.ILOAD, 2) else mv?.visitVarInsn(Opcodes.ILOAD, 1)
+        mv?.visitInsn(Opcodes.IADD)
+        mv?.visitInsn(Opcodes.IRETURN)
+        mv?.visitMaxs(2, 3)
+        mv?.visitEnd()
+        cw.visitEnd()
+        return cw.toByteArray()
+    }
+
+    /**
+     * Builds a Caller class that calls Target.add(a, b).
+     * Caller.add(a, b) = Target.add(a, b)
+     */
+    private fun buildCallerClass(): ByteArray {
+        val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Caller", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -355,9 +437,9 @@ class MutantClassLoaderTest {
         mv?.visitCode()
         mv?.visitVarInsn(Opcodes.ILOAD, 1)
         mv?.visitVarInsn(Opcodes.ILOAD, 2)
-        mv?.visitInsn(Opcodes.IADD)
+        mv?.visitMethodInsn(Opcodes.INVOKESTATIC, "com/example/Target", "add", "(II)I", false)
         mv?.visitInsn(Opcodes.IRETURN)
-        mv?.visitMaxs(2, 3)
+        mv?.visitMaxs(3, 3)
         mv?.visitEnd()
         cw.visitEnd()
         return cw.toByteArray()

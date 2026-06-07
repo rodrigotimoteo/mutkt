@@ -2,87 +2,96 @@ package com.github.rodrigotimoteo.mutation.classloader
 
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Custom ClassLoader that applies a single mutation on-the-fly when loading the target class.
+ * Custom ClassLoader that applies a single mutation on-the-fly when loading classes.
  *
- * Each instance is configured with exactly one [targetMutation] to apply.
- * The classloader intercepts loading of the target class and returns a mutated version;
- * all other classes are delegated to the parent classloader via standard parent-first delegation.
+ * Loads ALL project classes (those in [originalClassBytes]) through this classloader
+ * via [defineClass], so that dependency resolution between project classes goes through
+ * this classloader — ensuring test code sees the mutated target class.
  *
- * **Note:** The [originalClassBytes] map is consumed as-is — callers must not modify
- * the byte arrays after passing them to this classloader.
+ * External dependencies (JUnit, MockK, JDK, coroutines, etc.) are delegated to the
+ * parent classloader. If [defineClass] fails for a project class, it's cached in
+ * [failedClassCache] and the class falls back to parent on subsequent requests.
  *
- * **Thread safety:** This classloader is designed for single-threaded mutation testing runs.
- * Concurrent `loadClass` calls for the same target class may trigger [LinkageError]
- * from duplicate `defineClass` calls.
+ * @param preMutatedBytes Pre-computed mutated bytes for the target class.
+ * @param failedClassCache Shared cache of class names that fail [defineClass].
  */
 class MutantClassLoader(
     parent: ClassLoader,
     private val originalClassBytes: Map<String, ByteArray>,
     private val targetMutation: MutationInfo,
     private val mutator: Mutator,
+    private val preMutatedBytes: ByteArray? = null,
+    private val failedClassCache: MutableSet<String> = ConcurrentHashMap.newKeySet(),
 ) : ClassLoader(parent) {
-    /** Slashed internal form of the target mutation's class name, computed once. */
     private val targetClassName: String = targetMutation.className.replace('.', '/')
-
-    override fun findClass(name: String): Class<*> {
-        // Prevent duplicate defineClass if called directly (e.g. via reflection).
-        val alreadyLoaded = findLoadedClass(name)
-        if (alreadyLoaded != null) return alreadyLoaded
-
-        val className = name.replace('.', '/')
-        val classBytes =
-            originalClassBytes[className]
-                ?: throw ClassNotFoundException("Class not found in original classpath: $name")
-
-        // Apply mutation only if this is the target class.
-        val mutatedBytes =
-            if (className == targetClassName) {
-                mutator.applyMutation(classBytes, targetMutation)
-            } else {
-                classBytes
-            }
-
-        return defineClass(name, mutatedBytes, 0, mutatedBytes.size)
-    }
 
     override fun loadClass(
         name: String,
         resolve: Boolean,
     ): Class<*> {
-        // Use JVM's built-in loaded-class tracking instead of a redundant cache.
-        val loaded = findLoadedClass(name)
+        val binaryName = name.replace('/', '.')
+        val slashedName = name.replace('.', '/')
+
+        val loaded = findLoadedClass(binaryName)
         if (loaded != null) return loaded
 
-        val className = name.replace('.', '/')
-        val clazz =
-            if (className == targetClassName) {
-                findClass(name)
-            } else {
-                // Delegate to parent with standard parent-first delegation.
-                super.loadClass(name, false)
+        val classBytes = originalClassBytes[slashedName]
+        if (classBytes != null) {
+            // Skip classes that consistently fail defineClass (cached from prior attempts).
+            if (slashedName in failedClassCache) {
+                return super.loadClass(binaryName, resolve)
             }
 
-        // Link the class if requested — required for target classes loaded via findClass.
-        if (resolve) {
-            resolveClass(clazz)
+            try {
+                val mutatedBytes =
+                    if (slashedName == targetClassName) {
+                        preMutatedBytes ?: mutator.applyMutation(classBytes, targetMutation)
+                    } else {
+                        classBytes
+                    }
+                val clazz = defineClass(binaryName, mutatedBytes, 0, mutatedBytes.size)
+                if (resolve) resolveClass(clazz)
+                return clazz
+            } catch (e: LinkageError) {
+                failedClassCache.add(slashedName)
+            }
         }
 
-        return clazz
+        // External dependency or fallback — delegate to parent.
+        return super.loadClass(binaryName, resolve)
     }
 }
 
 /**
- * Factory for creating MutantClassLoader instances.
+ * Factory for creating [MutantClassLoader] instances.
+ *
+ * Provides a shared [failedClassCache] across mutations, avoiding repeated
+ * LinkageError failures for complex Kotlin classes.
  */
 object MutantClassLoaderFactory {
+    private val sharedFailedClassCache: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     fun create(
         parent: ClassLoader,
         originalClassBytes: Map<String, ByteArray>,
         targetMutation: MutationInfo,
         mutator: Mutator,
+        preMutatedBytes: ByteArray? = null,
     ): MutantClassLoader {
-        return MutantClassLoader(parent, originalClassBytes, targetMutation, mutator)
+        return MutantClassLoader(
+            parent,
+            originalClassBytes,
+            targetMutation,
+            mutator,
+            preMutatedBytes,
+            sharedFailedClassCache,
+        )
+    }
+
+    fun resetCache() {
+        sharedFailedClassCache.clear()
     }
 }

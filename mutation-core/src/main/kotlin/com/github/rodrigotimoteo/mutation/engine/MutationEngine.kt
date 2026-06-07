@@ -43,13 +43,16 @@ import java.util.concurrent.TimeUnit
 class MutationEngine(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     private val timeoutMs: Long = 30000,
-    private val maxParallelMutants: Int = 4,
+    maxParallelMutants: Int = 0,
     private val enableInlinedFinally: Boolean = true,
     private val enableTestOrdering: Boolean = true,
 ) {
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators)
     private val coverageAnalyzer = CoverageAnalyzer()
+
+    /** 0 = use all available processors. */
+    private val parallelism = if (maxParallelMutants > 0) maxParallelMutants else Runtime.getRuntime().availableProcessors()
 
     /**
      * Runs mutation testing on the given classpath.
@@ -62,8 +65,10 @@ class MutationEngine(
         testClassLoader: ClassLoader? = null,
     ): MutationReport {
         val startTime = System.currentTimeMillis()
+        val scanStart = System.currentTimeMillis()
         val allMutations = generateAllMutations(classFiles)
-        logger.info("Generated ${allMutations.size} mutations")
+        val scanTime = System.currentTimeMillis() - scanStart
+        System.err.println("[MutKt] Scanned ${allMutations.size} mutations in ${scanTime}ms")
 
         // Combine class files with test class files
         val allClassFiles = classFiles + testClassBytes
@@ -107,7 +112,12 @@ class MutationEngine(
             }
 
         // Run tests against each mutant
+        val testStart = System.currentTimeMillis()
         val results = runMutants(mutationsAfterInlined, allClassFiles, orderedTestNames, testClassLoader)
+        val testTime = System.currentTimeMillis() - testStart
+        System.err.println(
+            "[MutKt] Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
+        )
 
         // Subsumption analysis disabled until per-test kill attribution is available.
         // Currently className is used as kill-set proxy, producing nonsensical results.
@@ -166,11 +176,15 @@ class MutationEngine(
     ): List<MutationResult> {
         if (mutations.isEmpty()) return emptyList()
 
+        // Reset the shared class-loading failure cache for this run.
+        MutantClassLoaderFactory.resetCache()
+
         val results = mutableListOf<MutationResult>()
         val executor: ExecutorService =
-            Executors.newFixedThreadPool(maxParallelMutants) { runnable ->
+            Executors.newFixedThreadPool(parallelism) { runnable ->
                 Thread(runnable, "mutation-worker").apply { isDaemon = true }
             }
+        System.err.println("[MutKt] Running $parallelism parallel workers for ${mutations.size} mutations")
 
         try {
             val futures =
@@ -244,7 +258,16 @@ class MutationEngine(
     ): MutationResult {
         val startTime = System.currentTimeMillis()
 
-        // Don't pre-mutate — let MutantClassLoader apply the mutation
+        // Pre-compute mutated bytes for the target class.
+        val targetClassKey = mutation.className.replace('.', '/')
+        val originalClassBytes = classFiles[targetClassKey]
+        val preMutatedBytes =
+            if (originalClassBytes != null) {
+                mutator.applyMutation(originalClassBytes, mutation)
+            } else {
+                mutatedBytes
+            }
+
         val parentLoader = testClassLoader ?: this.javaClass.classLoader
         val classLoader =
             MutantClassLoaderFactory.create(
@@ -252,6 +275,7 @@ class MutationEngine(
                 classFiles,
                 mutation,
                 mutator,
+                preMutatedBytes,
             )
 
         // Run tests with mutant classloader
@@ -280,23 +304,49 @@ class MutationEngine(
                         it.getAnnotation(org.junit.jupiter.api.Test::class.java) != null
                     }
 
+                // Discover lifecycle methods (JUnit 5).
+                val beforeEachMethods =
+                    testClass.declaredMethods.filter {
+                        it.isAnnotationPresent(org.junit.jupiter.api.BeforeEach::class.java)
+                    }
+                val afterEachMethods =
+                    testClass.declaredMethods.filter {
+                        it.isAnnotationPresent(org.junit.jupiter.api.AfterEach::class.java)
+                    }
+
                 for (method in testMethods) {
                     hasTests = true
                     val instance = testClass.getDeclaredConstructor().newInstance()
                     try {
+                        // Run @BeforeEach setup methods.
+                        for (setup in beforeEachMethods) {
+                            setup.isAccessible = true
+                            setup.invoke(instance)
+                        }
                         method.invoke(instance)
                     } catch (e: java.lang.reflect.InvocationTargetException) {
                         val cause = e.targetException
-                        if (cause is AssertionError) {
-                            hasFailures = true
-                            logger.debug("Test failed (mutation killed): ${method.name}", cause)
-                        } else {
-                            hasErrors = true
-                            logger.debug("Test error: ${method.name}", cause)
-                        }
-                    } catch (e: Exception) {
+                        // Any exception from test execution (assertion, NPE, AIOOBE, etc.)
+                        // means the mutation is detected — the test suite caught the broken code.
                         hasFailures = true
-                        logger.debug("Test failed: ${method.name}", e)
+                        logger.debug("Test failed (mutation killed): ${method.name}", cause)
+                        // Early termination: mutation is killed, no need to run more tests.
+                        return MutationStatus.KILLED
+                    } catch (e: Exception) {
+                        // Non-invocation exceptions (e.g. instantiate failure, class not found)
+                        // indicate infrastructure issues, not mutation detection.
+                        hasErrors = true
+                        logger.debug("Test error: ${method.name}", e)
+                    } finally {
+                        // Always run @AfterEach teardown methods.
+                        for (teardown in afterEachMethods) {
+                            try {
+                                teardown.isAccessible = true
+                                teardown.invoke(instance)
+                            } catch (_: Exception) {
+                                // Teardown failure doesn't mask test result.
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
