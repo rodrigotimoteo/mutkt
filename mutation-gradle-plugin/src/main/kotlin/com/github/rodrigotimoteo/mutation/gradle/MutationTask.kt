@@ -192,13 +192,13 @@ abstract class MutationTask : DefaultTask() {
             if (coverageExecFile.isPresent) {
                 coverageExecFile.get().asFile
             } else {
-                // Auto-detect coverage file
-                val buildDir = reportsDir.get().asFile.parentFile?.parentFile ?: project.buildDir
+                // Auto-detect coverage file using layout.buildDirectory (Gradle 9.x safe)
+                val buildDirFile = project.layout.buildDirectory.asFile.get()
                 val possiblePaths =
                     listOf(
-                        File(buildDir, "jacoco/test.exec"),
-                        File(buildDir, "jacoco/jacocoTestReport.exec"),
-                        File(buildDir, "reports/jacoco/test/jacocoTestReport.exec"),
+                        File(buildDirFile, "jacoco/test.exec"),
+                        File(buildDirFile, "jacoco/jacocoTestReport.exec"),
+                        File(buildDirFile, "reports/jacoco/test/jacocoTestReport.exec"),
                     )
                 possiblePaths.firstOrNull { it.exists() }
             }
@@ -295,11 +295,12 @@ abstract class MutationTask : DefaultTask() {
                 if (hasClasses) return file
             }
         }
-        // Fallback to build directory — check kotlin and java output dirs
+        // Fallback to build directory — use layout.buildDirectory (Gradle 9.x safe)
         val subDir = if (isTestClasses) "test" else "main"
-        return File(project.buildDir, "classes/kotlin/$subDir")
+        val buildDirFile = project.layout.buildDirectory.asFile.get()
+        return File(buildDirFile, "classes/kotlin/$subDir")
             .takeIf { it.exists() }
-            ?: File(project.buildDir, "classes/java/$subDir")
+            ?: File(buildDirFile, "classes/java/$subDir")
     }
 
     private fun generateReports(report: MutationReport) {

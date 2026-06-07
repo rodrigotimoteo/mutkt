@@ -11,31 +11,32 @@ import kotlin.test.assertTrue
 
 class CoverageAnalyzerTest {
     @Test
-    fun `loadExecutionData on non-existent file returns empty map`() {
+    fun `loadExecutionData on non-existent file returns empty data`() {
         val analyzer = CoverageAnalyzer()
         val result = analyzer.loadExecutionData(File("/non/existent/file.exec"))
-        assertEquals(0, result.size)
+        assertTrue(result.empty)
     }
 
     @Test
-    fun `loadExecutionData on existing file returns empty map (stub)`() {
+    fun `loadExecutionData on existing file returns non-empty data`() {
         val analyzer = CoverageAnalyzer()
         val file = File.createTempFile("test", ".exec")
         file.deleteOnExit()
+        file.writeBytes(ByteArray(10) { it.toByte() })
         val result = analyzer.loadExecutionData(file)
-        // Current stub returns empty regardless
-        assertEquals(0, result.size)
+        // File exists and has content — should not be empty
+        assertEquals(false, result.empty)
     }
 
     @Test
-    fun `loadExecutionData on empty file returns empty map`(
+    fun `loadExecutionData on empty file returns empty data`(
         @TempDir tempDir: Path,
     ) {
         val analyzer = CoverageAnalyzer()
         val file = tempDir.resolve("empty.exec").toFile()
         file.writeBytes(ByteArray(0))
         val result = analyzer.loadExecutionData(file)
-        assertEquals(0, result.size)
+        assertTrue(result.empty)
     }
 
     @Test
@@ -45,7 +46,7 @@ class CoverageAnalyzerTest {
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                executionData = emptyMap(),
+                coverageData = CoverageAnalyzer.CoverageData(empty = true),
                 mutations = emptyList(),
             )
         assertEquals(0, result.size)
@@ -59,7 +60,7 @@ class CoverageAnalyzerTest {
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                executionData = emptyMap(),
+                coverageData = CoverageAnalyzer.CoverageData(empty = true),
                 mutations = listOf(mutation),
             )
         assertEquals(1, result.size)
@@ -74,7 +75,7 @@ class CoverageAnalyzerTest {
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                executionData = emptyMap(),
+                coverageData = CoverageAnalyzer.CoverageData(empty = true),
                 mutations = listOf(mutation),
             )
         assertEquals(mutation, result.first().mutation)
@@ -93,7 +94,7 @@ class CoverageAnalyzerTest {
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                executionData = emptyMap(),
+                coverageData = CoverageAnalyzer.CoverageData(empty = true),
                 mutations = mutations,
             )
         assertEquals(3, result.size)
@@ -111,7 +112,7 @@ class CoverageAnalyzerTest {
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                executionData = emptyMap(),
+                coverageData = CoverageAnalyzer.CoverageData(empty = true),
                 mutations = mutations,
             )
         result.forEach { coverage ->
