@@ -12,6 +12,10 @@ dependencies {
 
     // JUnit for test execution via reflection
     implementation(libs.junit.jupiter)
+    implementation("org.junit.jupiter:junit-jupiter-params:5.10.2")
+
+    // JUnit Platform Launcher for native JUnit 5 support
+    implementation(libs.junit.platform.launcher)
 
     // Testing
     testImplementation(libs.kotlin.test)

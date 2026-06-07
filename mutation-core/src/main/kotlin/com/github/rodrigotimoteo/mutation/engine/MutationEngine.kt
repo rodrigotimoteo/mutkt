@@ -10,6 +10,7 @@ import com.github.rodrigotimoteo.mutation.mutator.InlinedFinallyDetector
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
+import com.github.rodrigotimoteo.mutation.runner.ReflectionTestRunner
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.concurrent.Callable
@@ -46,6 +47,7 @@ class MutationEngine(
     maxParallelMutants: Int = 0,
     private val enableInlinedFinally: Boolean = true,
     private val enableTestOrdering: Boolean = true,
+    private val changedClasses: Set<String> = emptySet(),
 ) {
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators)
@@ -111,9 +113,27 @@ class MutationEngine(
                 testClassNames
             }
 
+        // Filter by changed classes for incremental analysis
+        val mutationsAfterIncremental =
+            if (changedClasses.isNotEmpty()) {
+                val filtered =
+                    mutationsAfterInlined.filter { (mutation, _) ->
+                        mutation.className in changedClasses
+                    }
+                val skippedIncremental = mutationsAfterInlined.size - filtered.size
+                if (skippedIncremental > 0) {
+                    System.err.println(
+                        "[MutKt] Incremental: skipped $skippedIncremental mutations (only testing ${changedClasses.size} changed classes)",
+                    )
+                }
+                filtered
+            } else {
+                mutationsAfterInlined
+            }
+
         // Run tests against each mutant
         val testStart = System.currentTimeMillis()
-        val results = runMutants(mutationsAfterInlined, allClassFiles, orderedTestNames, testClassLoader)
+        val results = runMutants(mutationsAfterIncremental, allClassFiles, orderedTestNames, testClassLoader)
         val testTime = System.currentTimeMillis() - testStart
         System.err.println(
             "[MutKt] Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
@@ -142,8 +162,8 @@ class MutationEngine(
         classFiles: Map<String, ByteArray>,
         coverageExecFile: File,
     ): List<Pair<MutationInfo, ByteArray>> {
-        val executionData = coverageAnalyzer.loadExecutionData(coverageExecFile)
-        if (executionData.isEmpty()) {
+        val coverageData = coverageAnalyzer.loadExecutionData(coverageExecFile)
+        if (coverageData.empty) {
             logger.warn("Empty coverage data, skipping coverage filtering")
             return allMutations
         }
@@ -157,7 +177,7 @@ class MutationEngine(
                     coverageAnalyzer.analyzeCoverage(
                         classBytes,
                         mutation.className,
-                        executionData,
+                        coverageData,
                         listOf(mutation),
                     )
                 if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
@@ -179,20 +199,42 @@ class MutationEngine(
         // Reset the shared class-loading failure cache for this run.
         MutantClassLoaderFactory.resetCache()
 
+        val parentLoader = testClassLoader ?: this.javaClass.classLoader
+        val testClassByteMap =
+            classFiles.filterKeys { key ->
+                testClassNames.any { it.replace('.', '/') == key }
+            }
+
+        // Group mutations by target class. Each group shares a BaseProjectClassLoader
+        // that loads all non-target project classes once, avoiding repeated defineClass.
+        val mutationsByClass = mutations.groupBy { it.first.className }
+        System.err.println("[MutKt] ${mutations.size} mutations across ${mutationsByClass.size} classes")
+
+        // Pre-create BaseProjectClassLoader per target class (shared across mutations).
+        val baseLoaders = mutableMapOf<String, com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader>()
+        for ((className, _) in mutationsByClass) {
+            val targetKey = className.replace('.', '/')
+            baseLoaders[className] =
+                MutantClassLoaderFactory.createGroup(
+                    parentLoader, classFiles, testClassByteMap, targetKey,
+                )
+        }
+
         val results = mutableListOf<MutationResult>()
         val executor: ExecutorService =
             Executors.newFixedThreadPool(parallelism) { runnable ->
                 Thread(runnable, "mutation-worker").apply { isDaemon = true }
             }
-        System.err.println("[MutKt] Running $parallelism parallel workers for ${mutations.size} mutations")
+        System.err.println("[MutKt] Running $parallelism parallel workers")
 
         try {
             val futures =
                 mutations.mapIndexed { index, (mutation, mutatedBytes) ->
+                    val baseLoader = baseLoaders[mutation.className]!!
                     index to
                         executor.submit(
                             Callable {
-                                runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames, testClassLoader)
+                                runSingleMutantBatched(mutation, mutatedBytes, classFiles, baseLoader, testClassNames, testClassByteMap)
                             },
                         )
                 }
@@ -249,6 +291,49 @@ class MutationEngine(
         return results
     }
 
+    /**
+     * Batched mutation testing: uses shared BaseProjectClassLoader per target class.
+     * Only defines mutated target + test classes per mutation (not all project classes).
+     */
+    private fun runSingleMutantBatched(
+        mutation: MutationInfo,
+        mutatedBytes: ByteArray,
+        classFiles: Map<String, ByteArray>,
+        baseLoader: com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader,
+        testClassNames: List<String>,
+        testClassByteMap: Map<String, ByteArray>,
+    ): MutationResult {
+        val startTime = System.currentTimeMillis()
+
+        val targetClassKey = mutation.className.replace('.', '/')
+        val originalClassBytes = classFiles[targetClassKey]
+        val preMutatedBytes =
+            if (originalClassBytes != null) {
+                mutator.applyMutation(originalClassBytes, mutation)
+            } else {
+                mutatedBytes
+            }
+
+        val classLoader =
+            MutantClassLoaderFactory.createMutationLoader(
+                baseLoader,
+                targetClassKey,
+                preMutatedBytes,
+                testClassByteMap,
+            )
+
+        val status = runTestsWithClassLoader(classLoader, testClassNames)
+
+        return MutationResult(
+            mutation = toMutation(mutation),
+            status = status,
+            executionTimeMs = System.currentTimeMillis() - startTime,
+        )
+    }
+
+    /**
+     * Legacy single-mutant path (used by tests that don't group by class).
+     */
     private fun runSingleMutant(
         mutation: MutationInfo,
         mutatedBytes: ByteArray,
@@ -258,7 +343,6 @@ class MutationEngine(
     ): MutationResult {
         val startTime = System.currentTimeMillis()
 
-        // Pre-compute mutated bytes for the target class.
         val targetClassKey = mutation.className.replace('.', '/')
         val originalClassBytes = classFiles[targetClassKey]
         val preMutatedBytes =
@@ -278,7 +362,6 @@ class MutationEngine(
                 preMutatedBytes,
             )
 
-        // Run tests with mutant classloader
         val status = runTestsWithClassLoader(classLoader, testClassNames)
 
         return MutationResult(
@@ -292,74 +375,17 @@ class MutationEngine(
         classLoader: ClassLoader,
         testClassNames: List<String>,
     ): MutationStatus {
-        var hasTests = false
-        var hasFailures = false
-        var hasErrors = false
+        // Use ReflectionTestRunner which supports @Nested, @ParameterizedTest, @RepeatedTest
+        val runner = ReflectionTestRunner(classLoader)
+        val results = runner.runTests(testClassNames)
 
-        for (testClassName in testClassNames) {
-            try {
-                val testClass = classLoader.loadClass(testClassName)
-                val testMethods =
-                    testClass.declaredMethods.filter {
-                        it.getAnnotation(org.junit.jupiter.api.Test::class.java) != null
-                    }
-
-                // Discover lifecycle methods (JUnit 5).
-                val beforeEachMethods =
-                    testClass.declaredMethods.filter {
-                        it.isAnnotationPresent(org.junit.jupiter.api.BeforeEach::class.java)
-                    }
-                val afterEachMethods =
-                    testClass.declaredMethods.filter {
-                        it.isAnnotationPresent(org.junit.jupiter.api.AfterEach::class.java)
-                    }
-
-                for (method in testMethods) {
-                    hasTests = true
-                    val instance = testClass.getDeclaredConstructor().newInstance()
-                    try {
-                        // Run @BeforeEach setup methods.
-                        for (setup in beforeEachMethods) {
-                            setup.isAccessible = true
-                            setup.invoke(instance)
-                        }
-                        method.invoke(instance)
-                    } catch (e: java.lang.reflect.InvocationTargetException) {
-                        val cause = e.targetException
-                        // Any exception from test execution (assertion, NPE, AIOOBE, etc.)
-                        // means the mutation is detected — the test suite caught the broken code.
-                        hasFailures = true
-                        logger.debug("Test failed (mutation killed): ${method.name}", cause)
-                        // Early termination: mutation is killed, no need to run more tests.
-                        return MutationStatus.KILLED
-                    } catch (e: Exception) {
-                        // Non-invocation exceptions (e.g. instantiate failure, class not found)
-                        // indicate infrastructure issues, not mutation detection.
-                        hasErrors = true
-                        logger.debug("Test error: ${method.name}", e)
-                    } finally {
-                        // Always run @AfterEach teardown methods.
-                        for (teardown in afterEachMethods) {
-                            try {
-                                teardown.isAccessible = true
-                                teardown.invoke(instance)
-                            } catch (_: Exception) {
-                                // Teardown failure doesn't mask test result.
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                logger.debug("Could not load test class: $testClassName", e)
-                hasErrors = true
-            }
+        if (!results.hasTests) {
+            return if (results.failureMessages.isNotEmpty()) MutationStatus.ERROR else MutationStatus.NO_COVERAGE
         }
 
         return when {
-            !hasTests && hasErrors -> MutationStatus.ERROR
-            !hasTests -> MutationStatus.NO_COVERAGE
-            hasFailures -> MutationStatus.KILLED
-            hasErrors -> MutationStatus.ERROR
+            results.hasFailures -> MutationStatus.KILLED
+            results.failureMessages.isNotEmpty() -> MutationStatus.ERROR
             else -> MutationStatus.SURVIVED
         }
     }
