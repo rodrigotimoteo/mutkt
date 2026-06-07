@@ -179,20 +179,42 @@ class MutationEngine(
         // Reset the shared class-loading failure cache for this run.
         MutantClassLoaderFactory.resetCache()
 
+        val parentLoader = testClassLoader ?: this.javaClass.classLoader
+        val testClassByteMap =
+            classFiles.filterKeys { key ->
+                testClassNames.any { it.replace('.', '/') == key }
+            }
+
+        // Group mutations by target class. Each group shares a BaseProjectClassLoader
+        // that loads all non-target project classes once, avoiding repeated defineClass.
+        val mutationsByClass = mutations.groupBy { it.first.className }
+        System.err.println("[MutKt] ${mutations.size} mutations across ${mutationsByClass.size} classes")
+
+        // Pre-create BaseProjectClassLoader per target class (shared across mutations).
+        val baseLoaders = mutableMapOf<String, com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader>()
+        for ((className, _) in mutationsByClass) {
+            val targetKey = className.replace('.', '/')
+            baseLoaders[className] =
+                MutantClassLoaderFactory.createGroup(
+                    parentLoader, classFiles, testClassByteMap, targetKey,
+                )
+        }
+
         val results = mutableListOf<MutationResult>()
         val executor: ExecutorService =
             Executors.newFixedThreadPool(parallelism) { runnable ->
                 Thread(runnable, "mutation-worker").apply { isDaemon = true }
             }
-        System.err.println("[MutKt] Running $parallelism parallel workers for ${mutations.size} mutations")
+        System.err.println("[MutKt] Running $parallelism parallel workers")
 
         try {
             val futures =
                 mutations.mapIndexed { index, (mutation, mutatedBytes) ->
+                    val baseLoader = baseLoaders[mutation.className]!!
                     index to
                         executor.submit(
                             Callable {
-                                runSingleMutant(mutation, mutatedBytes, classFiles, testClassNames, testClassLoader)
+                                runSingleMutantBatched(mutation, mutatedBytes, classFiles, baseLoader, testClassNames, testClassByteMap)
                             },
                         )
                 }
@@ -249,6 +271,49 @@ class MutationEngine(
         return results
     }
 
+    /**
+     * Batched mutation testing: uses shared BaseProjectClassLoader per target class.
+     * Only defines mutated target + test classes per mutation (not all project classes).
+     */
+    private fun runSingleMutantBatched(
+        mutation: MutationInfo,
+        mutatedBytes: ByteArray,
+        classFiles: Map<String, ByteArray>,
+        baseLoader: com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader,
+        testClassNames: List<String>,
+        testClassByteMap: Map<String, ByteArray>,
+    ): MutationResult {
+        val startTime = System.currentTimeMillis()
+
+        val targetClassKey = mutation.className.replace('.', '/')
+        val originalClassBytes = classFiles[targetClassKey]
+        val preMutatedBytes =
+            if (originalClassBytes != null) {
+                mutator.applyMutation(originalClassBytes, mutation)
+            } else {
+                mutatedBytes
+            }
+
+        val classLoader =
+            MutantClassLoaderFactory.createMutationLoader(
+                baseLoader,
+                targetClassKey,
+                preMutatedBytes,
+                testClassByteMap,
+            )
+
+        val status = runTestsWithClassLoader(classLoader, testClassNames)
+
+        return MutationResult(
+            mutation = toMutation(mutation),
+            status = status,
+            executionTimeMs = System.currentTimeMillis() - startTime,
+        )
+    }
+
+    /**
+     * Legacy single-mutant path (used by tests that don't group by class).
+     */
     private fun runSingleMutant(
         mutation: MutationInfo,
         mutatedBytes: ByteArray,
@@ -258,7 +323,6 @@ class MutationEngine(
     ): MutationResult {
         val startTime = System.currentTimeMillis()
 
-        // Pre-compute mutated bytes for the target class.
         val targetClassKey = mutation.className.replace('.', '/')
         val originalClassBytes = classFiles[targetClassKey]
         val preMutatedBytes =
@@ -278,7 +342,6 @@ class MutationEngine(
                 preMutatedBytes,
             )
 
-        // Run tests with mutant classloader
         val status = runTestsWithClassLoader(classLoader, testClassNames)
 
         return MutationResult(
