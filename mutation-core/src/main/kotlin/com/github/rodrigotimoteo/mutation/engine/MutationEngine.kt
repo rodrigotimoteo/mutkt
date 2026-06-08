@@ -216,10 +216,11 @@ class MutationEngine(
                 val subsumed = subsumptionAnalyzer.predictSubsumed(mutations, historicalKillSets)
                 if (subsumed.isNotEmpty()) {
                     System.err.println("[MutKt] Subsumption (pre-test): ${subsumed.size} likely redundant mutations will be skipped")
-                    mutationsAfterSubsumption = mutationsAfterIncremental.filter { (info, _) ->
-                        val id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}"
-                        id !in subsumed
-                    }
+                    mutationsAfterSubsumption =
+                        mutationsAfterIncremental.filter { (info, _) ->
+                            val id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}"
+                            id !in subsumed
+                        }
                     predictedSubsumed = subsumed
                 } else {
                     mutationsAfterSubsumption = mutationsAfterIncremental
@@ -262,7 +263,15 @@ class MutationEngine(
         // Verify pre-test subsumption and re-run if needed
         val verifiedResults =
             if (enableSubsumption && predictedSubsumed.isNotEmpty() && killSetStorage != null) {
-                verifyAndRerunSubsumption(results, predictedSubsumed, killSets, mutationsAfterIncremental, allClassFiles, orderedTestNames, testClassLoader)
+                verifyAndRerunSubsumption(
+                    results,
+                    predictedSubsumed,
+                    killSets,
+                    mutationsAfterIncremental,
+                    allClassFiles,
+                    orderedTestNames,
+                    testClassLoader,
+                )
             } else {
                 results
             }
@@ -449,23 +458,27 @@ class MutationEngine(
         testClassLoader: ClassLoader?,
     ): List<MutationResult> {
         // Find mutations that were predicted as subsumed but were actually killed
-        val incorrectlySubsumed = predictedSubsumed.filter { mutationId ->
-            val killingTests = actualKillSets[mutationId]
-            killingTests != null && killingTests.isNotEmpty()
-        }
+        val incorrectlySubsumed =
+            predictedSubsumed.filter { mutationId ->
+                val killingTests = actualKillSets[mutationId]
+                killingTests != null && killingTests.isNotEmpty()
+            }
 
         if (incorrectlySubsumed.isEmpty()) {
             System.err.println("[MutKt] Subsumption verification: all predictions correct")
             return results
         }
 
-        System.err.println("[MutKt] Subsumption verification: ${incorrectlySubsumed.size} mutations were incorrectly predicted as subsumed, re-running")
+        System.err.println(
+            "[MutKt] Subsumption verification: ${incorrectlySubsumed.size} mutations were incorrectly predicted as subsumed, re-running",
+        )
 
         // Find the mutations to re-run
-        val toRerun = allMutations.filter { (info, _) ->
-            val mutationId = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}"
-            mutationId in incorrectlySubsumed
-        }
+        val toRerun =
+            allMutations.filter { (info, _) ->
+                val mutationId = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}"
+                mutationId in incorrectlySubsumed
+            }
 
         if (toRerun.isEmpty()) {
             System.err.println("[MutKt] Subsumption verification: could not find mutations to re-run")

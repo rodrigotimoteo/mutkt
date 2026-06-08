@@ -32,10 +32,11 @@ class KillSetStorageTest {
     @Test
     fun `save and load roundtrip`() {
         val storage = createStorage()
-        val killSets = mapOf(
-            "ARITHMETIC::com.example.Calc::add::10" to setOf("CalcTest", "MathTest"),
-            "RETURN_VALUE::com.example.Calc::add::15" to setOf("CalcTest"),
-        )
+        val killSets =
+            mapOf(
+                "ARITHMETIC::com.example.Calc::add::10" to setOf("CalcTest", "MathTest"),
+                "RETURN_VALUE::com.example.Calc::add::15" to setOf("CalcTest"),
+            )
 
         storage.save(killSets)
         val loaded = storage.load()
@@ -68,14 +69,16 @@ class KillSetStorageTest {
     @Test
     fun `merge prefers new data over historical`() {
         val storage = createStorage()
-        val historical = mapOf(
-            "M1" to setOf("Test1"),
-            "M2" to setOf("Test2"),
-        )
-        val newKillSets = mapOf(
-            "M1" to setOf("Test1", "Test3"),
-            "M3" to setOf("Test4"),
-        )
+        val historical =
+            mapOf(
+                "M1" to setOf("Test1"),
+                "M2" to setOf("Test2"),
+            )
+        val newKillSets =
+            mapOf(
+                "M1" to setOf("Test1", "Test3"),
+                "M3" to setOf("Test4"),
+            )
 
         val merged = storage.merge(historical, newKillSets)
 
