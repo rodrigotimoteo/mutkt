@@ -19,7 +19,57 @@ import com.github.rodrigotimoteo.mutation.model.Mutation
  */
 class SubsumptionAnalyzer {
     /**
-     * Analyze mutations for subsumption.
+     * Predict subsumed mutations using historical kill sets (pre-test).
+     *
+     * Uses kill sets from previous runs to identify mutations likely to be
+     * subsumed before testing. This is a heuristic — actual subsumption is
+     * verified post-test.
+     *
+     * @param mutations List of mutations to analyze
+     * @param historicalKillSets Kill sets from previous runs
+     * @return Set of mutation IDs likely to be subsumed (should be skipped)
+     */
+    fun predictSubsumed(
+        mutations: List<com.github.rodrigotimoteo.mutation.model.Mutation>,
+        historicalKillSets: Map<String, Set<String>>,
+    ): Set<String> {
+        if (mutations.size < 2 || historicalKillSets.isEmpty()) return emptySet()
+
+        val subsumed = mutableSetOf<String>()
+
+        // Group mutations by class+method (subsumption only within same method)
+        val grouped = mutations.groupBy { "${it.className}::${it.methodName}" }
+
+        for ((_, methodMutations) in grouped) {
+            if (methodMutations.size < 2) continue
+
+            // Only consider mutations with historical kill data
+            val withHistory = methodMutations.filter { historicalKillSets.containsKey(it.id) }
+
+            for (i in withHistory.indices) {
+                if (withHistory[i].id in subsumed) continue
+
+                val killSetI = historicalKillSets[withHistory[i].id] ?: continue
+
+                for (j in withHistory.indices) {
+                    if (i == j) continue
+                    if (withHistory[j].id in subsumed) continue
+
+                    val killSetJ = historicalKillSets[withHistory[j].id] ?: continue
+
+                    // If killSetJ ⊆ killSetI, then i subsumes j
+                    if (killSetJ.isNotEmpty() && killSetI.containsAll(killSetJ)) {
+                        subsumed.add(withHistory[j].id)
+                    }
+                }
+            }
+        }
+
+        return subsumed
+    }
+
+    /**
+     * Analyze mutations for subsumption using actual test results.
      *
      * @param mutations List of mutations to analyze
      * @param killSets Map of mutation ID to set of test class names that killed it

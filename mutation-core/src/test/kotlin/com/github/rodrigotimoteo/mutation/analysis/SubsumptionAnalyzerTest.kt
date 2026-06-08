@@ -201,6 +201,68 @@ class SubsumptionAnalyzerTest {
         assertEquals(1, subsumed.size)
     }
 
+    // predictSubsumed tests
+
+    @Test
+    fun `predictSubsumed returns empty when no historical data`() {
+        val mutations =
+            listOf(
+                createMutation("A", "method1", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 }),
+            )
+
+        val subsumed = analyzer.predictSubsumed(mutations, emptyMap())
+        assertTrue(subsumed.isEmpty())
+    }
+
+    @Test
+    fun `predictSubsumed returns empty for single mutation`() {
+        val mutations =
+            listOf(
+                createMutation("A", "method1", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 }),
+            )
+        val historical = mapOf(mutations[0].id to setOf("Test1"))
+
+        val subsumed = analyzer.predictSubsumed(mutations, historical)
+        assertTrue(subsumed.isEmpty())
+    }
+
+    @Test
+    fun `predictSubsumed identifies subsumed mutations from history`() {
+        val mutations =
+            listOf(
+                createMutation("A", "method1", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 }),
+                createMutation("A", "method1", 20, ByteArray(10) { 0x03 }, ByteArray(10) { 0x04 }),
+            )
+        // M1 killed by {T1, T2}, M2 killed by {T1, T2, T3} → M2 subsumes M1
+        val historical =
+            mapOf(
+                mutations[0].id to setOf("Test1", "Test2"),
+                mutations[1].id to setOf("Test1", "Test2", "Test3"),
+            )
+
+        val subsumed = analyzer.predictSubsumed(mutations, historical)
+        assertEquals(1, subsumed.size)
+        assertTrue(subsumed.contains(mutations[0].id))
+    }
+
+    @Test
+    fun `predictSubsumed only considers same class and method`() {
+        val mutations =
+            listOf(
+                createMutation("A", "method1", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 }),
+                createMutation("A", "method2", 20, ByteArray(10) { 0x03 }, ByteArray(10) { 0x04 }),
+            )
+        val historical =
+            mapOf(
+                mutations[0].id to setOf("Test1", "Test2"),
+                mutations[1].id to setOf("Test1", "Test2", "Test3"),
+            )
+
+        val subsumed = analyzer.predictSubsumed(mutations, historical)
+        // Different methods → no subsumption
+        assertTrue(subsumed.isEmpty())
+    }
+
     private fun createMutation(
         className: String,
         methodName: String,
