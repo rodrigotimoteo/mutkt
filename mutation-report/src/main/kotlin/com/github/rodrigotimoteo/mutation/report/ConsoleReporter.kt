@@ -70,7 +70,7 @@ class ConsoleReporter {
         sb.appendLine("║")
         sb.appendLine("║  Execution Time:     ${report.totalExecutionTimeMs / 1000.0}s")
 
-        if (report.totalMutations > 0) {
+        if (report.totalMutations > 0 && report.totalExecutionTimeMs > 0) {
             val throughput = report.totalMutations.toDouble() / (report.totalExecutionTimeMs / 1000.0)
             sb.appendLine("║  Throughput:         ${throughput.toLong()} mutations/sec")
         }

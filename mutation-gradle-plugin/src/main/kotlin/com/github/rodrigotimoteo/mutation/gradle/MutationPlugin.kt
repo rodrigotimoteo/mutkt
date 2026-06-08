@@ -80,6 +80,7 @@ class MutationPlugin : Plugin<Project> {
                 task.autoRunJaCoCo.set(extension.autoRunJaCoCo)
                 task.showClassScores.set(extension.showClassScores)
                 task.generateGraph.set(extension.generateGraph)
+                task.enableCache.set(extension.enableCache)
             }
 
         // Auto-detect sourceSets after project evaluation

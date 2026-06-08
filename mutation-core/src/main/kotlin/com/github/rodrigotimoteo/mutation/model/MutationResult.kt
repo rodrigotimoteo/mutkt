@@ -18,7 +18,10 @@ data class MutationResult(
     val executionTimeMs: Long = 0,
     val errorMessage: String? = null,
 ) {
-    val isKilled: Boolean get() = status == MutationStatus.KILLED
+    val isKilled: Boolean get() =
+        status == MutationStatus.KILLED ||
+            status == MutationStatus.WEAK_KILLED ||
+            status == MutationStatus.SUBSUMED
     val isSurvived: Boolean get() = status == MutationStatus.SURVIVED
 }
 

@@ -46,6 +46,20 @@ class BaselineStorage(private val projectDir: File) {
     }
 
     /**
+     * Save with merge — preserves historical data for classes not in current run.
+     * Used by incremental analysis to avoid losing baseline data.
+     *
+     * @param results New results to merge into baseline
+     */
+    fun saveMerged(results: Map<String, List<Triple<String, Int, MutationStatus>>>) {
+        val existing = load().toMutableMap()
+        for ((className, mutations) in results) {
+            existing[className] = mutations
+        }
+        save(existing)
+    }
+
+    /**
      * Load previous baseline.
      *
      * @return Map of className to (operator, lineNumber, status) or empty map

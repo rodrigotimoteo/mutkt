@@ -147,7 +147,7 @@ class MutationEngine(
                 val coveredLinesMap = getCoveredLines(coverageExecFile)
                 val (reachable, unreachable) =
                     mutationsAfterCoverage.partition { (mutation, _) ->
-                        val classLines = coveredLinesMap[mutation.className]
+                        val classLines = coveredLinesMap[mutation.className] ?: coveredLinesMap[mutation.className.replace('.', '/')]
                         classLines != null && mutation.lineNumber in classLines
                     }
                 if (unreachable.isNotEmpty()) {
@@ -206,37 +206,8 @@ class MutationEngine(
                 mutationsAfterInlined
             }
 
-        // Pre-test subsumption: use historical kill sets to skip likely-subsumed mutants
-        val mutationsAfterSubsumption: List<Pair<MutationInfo, ByteArray>>
-        val predictedSubsumed: Set<String>
-        if (enableSubsumption && killSetStorage != null && mutationsAfterIncremental.size > 10) {
-            val historicalKillSets = killSetStorage.load()
-            if (historicalKillSets.isNotEmpty()) {
-                val mutations = mutationsAfterIncremental.map { toMutation(it.first) }
-                val subsumed = subsumptionAnalyzer.predictSubsumed(mutations, historicalKillSets)
-                if (subsumed.isNotEmpty()) {
-                    System.err.println("[MutKt] Subsumption (pre-test): ${subsumed.size} likely redundant mutations will be skipped")
-                    mutationsAfterSubsumption =
-                        mutationsAfterIncremental.filter { (info, _) ->
-                            val id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}"
-                            id !in subsumed
-                        }
-                    predictedSubsumed = subsumed
-                } else {
-                    mutationsAfterSubsumption = mutationsAfterIncremental
-                    predictedSubsumed = emptySet()
-                }
-            } else {
-                mutationsAfterSubsumption = mutationsAfterIncremental
-                predictedSubsumed = emptySet()
-            }
-        } else {
-            mutationsAfterSubsumption = mutationsAfterIncremental
-            predictedSubsumed = emptySet()
-        }
-
         // Check cache for previously tested mutations
-        val (mutationsToTest, cachedResults) = filterByCache(mutationsAfterSubsumption)
+        val (mutationsToTest, cachedResults) = filterByCache(mutationsAfterIncremental)
         if (cachedResults.isNotEmpty()) {
             System.err.println("[MutKt] Cache: ${cachedResults.size} mutations already tested")
         }
@@ -260,35 +231,23 @@ class MutationEngine(
             testStrengthOrdering.flushHistory()
         }
 
-        // Verify pre-test subsumption and re-run if needed
-        val verifiedResults =
-            if (enableSubsumption && predictedSubsumed.isNotEmpty() && killSetStorage != null) {
-                verifyAndRerunSubsumption(
-                    results,
-                    predictedSubsumed,
-                    killSets,
-                    mutationsAfterIncremental,
-                    allClassFiles,
-                    orderedTestNames,
-                    testClassLoader,
-                )
-            } else {
-                results
-            }
-
-        // Save kill sets for future pre-test subsumption
+        // Save kill sets for future subsumption analysis (merge on incremental runs)
         if (enableSubsumption && killSetStorage != null) {
-            killSetStorage.save(killSets)
+            if (changedClasses.isNotEmpty()) {
+                killSetStorage.saveMerged(killSets)
+            } else {
+                killSetStorage.save(killSets)
+            }
         }
 
-        // Post-hoc subsumption analysis (for mutations that weren't pre-filtered)
+        // Post-hoc subsumption analysis (identify redundant mutations after testing)
         val finalResults =
-            if (enableSubsumption && verifiedResults.size > 10) {
-                val mutations = verifiedResults.map { it.mutation }
+            if (enableSubsumption && results.size > 10) {
+                val mutations = results.map { it.mutation }
                 val (essential, subsumed) = subsumptionAnalyzer.analyze(mutations, killSets)
                 if (subsumed.isNotEmpty()) {
-                    System.err.println("[MutKt] Subsumption (post-test): ${subsumed.size} redundant mutations identified")
-                    verifiedResults.map { result ->
+                    System.err.println("[MutKt] Subsumption: ${subsumed.size} redundant mutations identified")
+                    results.map { result ->
                         if (result.mutation.id in subsumed) {
                             result.copy(status = MutationStatus.SUBSUMED)
                         } else {
@@ -296,15 +255,15 @@ class MutationEngine(
                         }
                     }
                 } else {
-                    verifiedResults
+                    results
                 }
             } else {
-                verifiedResults
+                results
             }
 
-        // Save baseline for future comparison
+        // Save baseline for future comparison (merge on incremental runs to avoid data loss)
         if (baselineStorage != null) {
-            saveBaseline(finalResults)
+            saveBaseline(finalResults, useMerge = changedClasses.isNotEmpty())
         }
 
         val totalTime = System.currentTimeMillis() - startTime
@@ -443,67 +402,12 @@ class MutationEngine(
     }
 
     /**
-     * Verify pre-test subsumption predictions and re-run incorrectly skipped mutants.
-     *
-     * Compares historical kill sets with actual kill sets. If a mutation was predicted
-     * as subsumed but was actually killed by a test, re-run it to get correct results.
-     */
-    private fun verifyAndRerunSubsumption(
-        results: List<MutationResult>,
-        predictedSubsumed: Set<String>,
-        actualKillSets: Map<String, Set<String>>,
-        allMutations: List<Pair<MutationInfo, ByteArray>>,
-        classFiles: Map<String, ByteArray>,
-        testClassNames: List<String>,
-        testClassLoader: ClassLoader?,
-    ): List<MutationResult> {
-        // Find mutations that were predicted as subsumed but were actually killed
-        val incorrectlySubsumed =
-            predictedSubsumed.filter { mutationId ->
-                val killingTests = actualKillSets[mutationId]
-                killingTests != null && killingTests.isNotEmpty()
-            }
-
-        if (incorrectlySubsumed.isEmpty()) {
-            System.err.println("[MutKt] Subsumption verification: all predictions correct")
-            return results
-        }
-
-        System.err.println(
-            "[MutKt] Subsumption verification: ${incorrectlySubsumed.size} mutations were incorrectly predicted as subsumed, re-running",
-        )
-
-        // Find the mutations to re-run
-        val toRerun =
-            allMutations.filter { (info, _) ->
-                val mutationId = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}"
-                mutationId in incorrectlySubsumed
-            }
-
-        if (toRerun.isEmpty()) {
-            System.err.println("[MutKt] Subsumption verification: could not find mutations to re-run")
-            return results
-        }
-
-        // Re-run the incorrectly subsumed mutations
-        val (rerunResults, _) = runMutants(toRerun, classFiles, testClassNames, testClassLoader)
-
-        // Merge results: replace with actual results
-        val rerunById = rerunResults.associateBy { it.mutation.id }
-
-        return results.map { result ->
-            if (result.mutation.id in rerunById) {
-                rerunById[result.mutation.id]!!
-            } else {
-                result
-            }
-        }
-    }
-
-    /**
      * Save baseline for future comparison.
      */
-    private fun saveBaseline(results: List<MutationResult>) {
+    private fun saveBaseline(
+        results: List<MutationResult>,
+        useMerge: Boolean = false,
+    ) {
         if (baselineStorage == null) return
 
         val baselineData =
@@ -518,7 +422,11 @@ class MutationEngine(
                     }
                 }
 
-        baselineStorage.save(baselineData)
+        if (useMerge) {
+            baselineStorage.saveMerged(baselineData)
+        } else {
+            baselineStorage.save(baselineData)
+        }
     }
 
     /**

@@ -182,7 +182,7 @@ class SubsumptionAnalyzerTest {
 
     @Test
     fun `analyze handles same kill set`() {
-        // Same kill set → each subsumes the other? No — only one should be essential
+        // Same kill set → neither subsumes the other (strict subset required)
         val mutationA = createMutation("Foo", "bar", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 })
         val mutationB = createMutation("Foo", "bar", 20, ByteArray(10) { 0x01 }, ByteArray(10) { 0x03 })
 
@@ -195,10 +195,9 @@ class SubsumptionAnalyzerTest {
 
         val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
-        // Both subsume each other (A⊆B and B⊆A), but we skip already-subsumed
-        // Result: one essential, one subsumed
-        assertEquals(1, essential.size)
-        assertEquals(1, subsumed.size)
+        // Equal kill sets: neither is a strict subset, so both are essential
+        assertEquals(2, essential.size)
+        assertEquals(0, subsumed.size)
     }
 
     // predictSubsumed tests

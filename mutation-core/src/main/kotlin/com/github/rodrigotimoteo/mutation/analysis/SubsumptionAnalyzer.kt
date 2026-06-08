@@ -57,8 +57,8 @@ class SubsumptionAnalyzer {
 
                     val killSetJ = historicalKillSets[withHistory[j].id] ?: continue
 
-                    // If killSetJ ⊆ killSetI, then i subsumes j
-                    if (killSetJ.isNotEmpty() && killSetI.containsAll(killSetJ)) {
+                    // If killSetJ ⊆ killSetI and killSetJ is a strict subset, then i subsumes j
+                    if (killSetJ.isNotEmpty() && killSetI != killSetJ && killSetI.containsAll(killSetJ)) {
                         subsumed.add(withHistory[j].id)
                     }
                 }
@@ -103,8 +103,8 @@ class SubsumptionAnalyzer {
 
                     val killSetJ = killSets[killedMutations[j].id] ?: continue
 
-                    // If killSetJ ⊆ killSetI, then i subsumes j
-                    if (killSetJ.isNotEmpty() && killSetI.containsAll(killSetJ)) {
+                    // If killSetJ ⊆ killSetI and killSetJ is a strict subset, then i subsumes j
+                    if (killSetJ.isNotEmpty() && killSetI != killSetJ && killSetI.containsAll(killSetJ)) {
                         subsumed.add(killedMutations[j].id)
                     }
                 }

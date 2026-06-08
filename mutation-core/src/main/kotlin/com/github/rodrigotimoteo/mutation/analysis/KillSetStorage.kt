@@ -62,6 +62,17 @@ class KillSetStorage(private val projectDir: File) {
     }
 
     /**
+     * Save with merge — preserves historical data for mutations not in current run.
+     * Used by incremental analysis to avoid losing kill set data.
+     *
+     * @param newKillSets New kill sets to merge into historical data
+     */
+    fun saveMerged(newKillSets: Map<String, Set<String>>) {
+        val historical = load()
+        save(merge(historical, newKillSets))
+    }
+
+    /**
      * Merge new kill sets with historical data.
      *
      * New data takes precedence. Historical data is preserved for mutations

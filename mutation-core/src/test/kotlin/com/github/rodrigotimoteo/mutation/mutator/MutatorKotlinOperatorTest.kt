@@ -412,7 +412,7 @@ class MutatorKotlinOperatorTest {
         val mutations = Mutator(setOf(MutationOperator.NULL_SAFETY)).scanMutations(bytes)
         val ifnullMutation = mutations.find { it.originalOpcode == Opcodes.IFNULL }
         assertNotNull(ifnullMutation)
-        assertEquals(Opcodes.GOTO, ifnullMutation.mutatedOpcode, "IFNULL should mutate to GOTO")
+        assertEquals(Opcodes.NOP, ifnullMutation.mutatedOpcode, "IFNULL should mutate to NOP")
     }
 
     @Test
@@ -429,7 +429,7 @@ class MutatorKotlinOperatorTest {
         val mutations = Mutator(setOf(MutationOperator.NULL_SAFETY)).scanMutations(bytes)
         val ifnonnullMutation = mutations.find { it.originalOpcode == Opcodes.IFNONNULL }
         assertNotNull(ifnonnullMutation)
-        assertEquals(Opcodes.GOTO, ifnonnullMutation.mutatedOpcode, "IFNONNULL should mutate to GOTO")
+        assertEquals(Opcodes.NOP, ifnonnullMutation.mutatedOpcode, "IFNONNULL should mutate to NOP")
     }
 
     @Test

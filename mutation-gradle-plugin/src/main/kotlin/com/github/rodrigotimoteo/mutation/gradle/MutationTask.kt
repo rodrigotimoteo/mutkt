@@ -119,7 +119,7 @@ abstract class MutationTask : DefaultTask() {
     /** Timeout per mutant in milliseconds (separate from per-test timeout). */
     @Input
     @Optional
-    val mutantTimeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(10000)
+    val mutantTimeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(0)
 
     /** Target classes to mutate (regex patterns). */
     @Input
@@ -243,9 +243,9 @@ abstract class MutationTask : DefaultTask() {
             }
         val allExcludePatterns = excludeRegexPatterns + excludeGlobPatterns
 
-        // Use mutantTimeoutMs if set, otherwise timeoutMs
+        // Use mutantTimeoutMs if explicitly set (> 0), otherwise timeoutMs
         val effectiveTimeout =
-            if (mutantTimeoutMs.isPresent && mutantTimeoutMs.get() > 0) {
+            if (mutantTimeoutMs.getOrElse(0) > 0) {
                 mutantTimeoutMs.get()
             } else {
                 timeoutMs.get()

@@ -119,8 +119,8 @@ class MutationPluginExtensionTest {
     }
 
     @Test
-    fun `mutantTimeoutMs defaults to 10000`() {
-        assertThat(extension.mutantTimeoutMs.get()).isEqualTo(10000L)
+    fun `mutantTimeoutMs defaults to 0`() {
+        assertThat(extension.mutantTimeoutMs.get()).isEqualTo(0L)
     }
 
     @Test

@@ -508,7 +508,7 @@ private class MutationScannerMethodVisitor(
             when (opcode) {
                 Opcodes.IFNULL -> {
                     // ?.safe call: ifnull skips the non-null path
-                    // Mutation: replace ifnull with goto (always take non-null path)
+                    // Mutation: replace ifnull with nop (fall through to call → NPE if null)
                     tryAddMutation(
                         MutationInfo(
                             operator = MutationOperator.NULL_SAFETY,
@@ -518,13 +518,13 @@ private class MutationScannerMethodVisitor(
                             lineNumber = currentLineNumber,
                             description = "Remove null check: ?.",
                             originalOpcode = Opcodes.IFNULL,
-                            mutatedOpcode = Opcodes.GOTO,
+                            mutatedOpcode = Opcodes.NOP,
                         ),
                     )
                 }
                 Opcodes.IFNONNULL -> {
                     // ?: elvis: ifnonnull skips the default value path
-                    // Mutation: replace ifnonnull with goto (always take default path)
+                    // Mutation: replace ifnonnull with nop (fall through to default → ignores value)
                     tryAddMutation(
                         MutationInfo(
                             operator = MutationOperator.NULL_SAFETY,
@@ -534,7 +534,7 @@ private class MutationScannerMethodVisitor(
                             lineNumber = currentLineNumber,
                             description = "Remove null check: ?:",
                             originalOpcode = Opcodes.IFNONNULL,
-                            mutatedOpcode = Opcodes.GOTO,
+                            mutatedOpcode = Opcodes.NOP,
                         ),
                     )
                 }
@@ -675,11 +675,22 @@ private class MutationScannerMethodVisitor(
         }
     }
 
-    private fun checkBooleanReturnMutations(opcode: Int) {
-        val returnType = Type.getReturnType(methodDescriptor)
-        if (returnType.sort != Type.BOOLEAN) return
+    private var previousOpcode = -1
 
-        if (MutationOperator.TRUE_RETURNS in enabledOperators && opcode == Opcodes.ICONST_1) {
+    private fun checkBooleanReturnMutations(opcode: Int) {
+        // Only create mutations when we see IRETURN preceded by ICONST_1 or ICONST_0
+        // This ensures we only mutate actual return values, not local variable assignments
+        if (opcode != Opcodes.IRETURN) {
+            previousOpcode = opcode
+            return
+        }
+        val returnType = Type.getReturnType(methodDescriptor)
+        if (returnType.sort != Type.BOOLEAN) {
+            previousOpcode = opcode
+            return
+        }
+
+        if (MutationOperator.TRUE_RETURNS in enabledOperators && previousOpcode == Opcodes.ICONST_1) {
             tryAddMutation(
                 MutationInfo(
                     operator = MutationOperator.TRUE_RETURNS,
@@ -688,12 +699,12 @@ private class MutationScannerMethodVisitor(
                     methodDescriptor = methodDescriptor,
                     lineNumber = currentLineNumber,
                     description = "Boolean return: true -> false",
-                    originalOpcode = opcode,
+                    originalOpcode = Opcodes.ICONST_1,
                     mutatedOpcode = Opcodes.ICONST_0,
                 ),
             )
         }
-        if (MutationOperator.FALSE_RETURNS in enabledOperators && opcode == Opcodes.ICONST_0) {
+        if (MutationOperator.FALSE_RETURNS in enabledOperators && previousOpcode == Opcodes.ICONST_0) {
             tryAddMutation(
                 MutationInfo(
                     operator = MutationOperator.FALSE_RETURNS,
@@ -702,11 +713,12 @@ private class MutationScannerMethodVisitor(
                     methodDescriptor = methodDescriptor,
                     lineNumber = currentLineNumber,
                     description = "Boolean return: false -> true",
-                    originalOpcode = opcode,
+                    originalOpcode = Opcodes.ICONST_0,
                     mutatedOpcode = Opcodes.ICONST_1,
                 ),
             )
         }
+        previousOpcode = opcode
     }
 
     private fun checkIncrementMutations(increment: Int) {
@@ -908,6 +920,12 @@ private class MutationApplierMethodVisitor(
         label: org.objectweb.asm.Label,
     ) {
         if (!applied && currentLineNumber == targetMutation.lineNumber && opcode == targetMutation.originalOpcode) {
+            // NULL_SAFETY: replace IFNULL/IFNONNULL with NOP (remove branch entirely)
+            if (targetMutation.operator == MutationOperator.NULL_SAFETY) {
+                super.visitInsn(Opcodes.NOP)
+                applied = true
+                return
+            }
             val mutatedOpcode = getMutatedOpcode(opcode)
             if (mutatedOpcode != opcode) {
                 super.visitJumpInsn(mutatedOpcode, label)

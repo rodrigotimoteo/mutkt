@@ -184,7 +184,7 @@ open class MutationPluginExtension(project: Project) {
      * Timeout per mutant in milliseconds.
      */
 
-    val mutantTimeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(10000)
+    val mutantTimeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(0)
 
     // === Regex Filtering ===
 
