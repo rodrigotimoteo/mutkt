@@ -68,25 +68,55 @@ jobs:
 
       - name: Close and release to Maven Central
         run: |
-          echo "Finding open staging repository..."
-          REPO_ID=$(curl -sS -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/repository" \
-            | jq -r '.[].repositoryId' | head -1)
+          set -e
 
-          if [ -z "$REPO_ID" ]; then
-            echo "No open repository found via API."
-            echo "Deployment should appear at: https://central.sonatype.com/publishing/deployments"
+          echo "Step 1: Find staging repositories..."
+          # List all staging repositories (open ones)
+          RESP=$(curl -sS --fail-with-body \
+            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
+            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/repositories" 2>&1) || true
+
+          echo "Response: $RESP"
+
+          # Try to extract repo ID
+          REPO_ID=$(echo "$RESP" | jq -r '.[] | select(.type=="open") | .repositoryId' 2>/dev/null | head -1) || true
+
+          if [ -z "$REPO_ID" ] || [ "$REPO_ID" = "null" ]; then
+            echo "No open staging repo found. Trying profile_repositories..."
+            RESP2=$(curl -sS --fail-with-body \
+              -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
+              "https://ossrh-staging-api.central.sonatype.com/service/local/staging/profile_repositories" 2>&1) || true
+            echo "Profile repos: $RESP2"
+            REPO_ID=$(echo "$RESP2" | jq -r '.data[] | select(.status=="open") | .repositoryId' 2>/dev/null | head -1) || true
+          fi
+
+          if [ -z "$REPO_ID" ] || [ "$REPO_ID" = "null" ]; then
+            echo ""
+            echo "=== NO OPEN STAGING REPOSITORY FOUND ==="
+            echo "Check: https://central.sonatype.com/publishing/deployments"
+            echo "If deployment is in 'pending', click 'Publish' manually."
             exit 0
           fi
 
-          echo "Closing repository: $REPO_ID"
-          curl -sS -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
+          echo "Found open staging repo: $REPO_ID"
+          echo "Step 2: Closing..."
+          curl -sS --fail-with-body \
+            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
             -X POST \
             -H "Content-Type: application/json" \
             -d "{\"data\":{\"stagedRepositoryIds\":[\"$REPO_ID\"],\"description\":\"MutKt ${{ github.ref_name }}\"}}" \
             "https://ossrh-staging-api.central.sonatype.com/service/local/staging/bulk/close"
-
-          echo "Release initiated. Check status at: https://central.sonatype.com/publishing/deployments"
+          echo ""
+          echo "Step 3: Releasing..."
+          curl -sS --fail-with-body \
+            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"data\":{\"stagedRepositoryIds\":[\"$REPO_ID\"],\"autoDropAfterRelease\":true}}" \
+            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/bulk/promote"
+          echo ""
+          echo "Done! Artifacts will appear on Maven Central in ~10-30 min."
+          echo "https://central.sonatype.com/publishing/deployments"
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
