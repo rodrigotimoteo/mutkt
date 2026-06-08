@@ -32,13 +32,10 @@ class Mutator(
      * Scans a class for mutation points without applying mutations.
      * Returns list of potential mutations.
      */
-    fun scanMutations(
-        classBytes: ByteArray,
-        sourceFiles: Map<String, String> = emptyMap(),
-    ): List<MutationInfo> {
+    fun scanMutations(classBytes: ByteArray): List<MutationInfo> {
         val mutations = mutableListOf<MutationInfo>()
         val reader = ClassReader(classBytes)
-        val visitor = MutationScannerVisitor(mutations, enabledOperators, sourceFiles)
+        val visitor = MutationScannerVisitor(mutations, enabledOperators)
         reader.accept(visitor, ClassReader.SKIP_FRAMES)
         return mutations
     }
@@ -108,7 +105,6 @@ class Mutator(
 private class MutationScannerVisitor(
     private val mutations: MutableList<MutationInfo>,
     private val enabledOperators: Set<MutationOperator>,
-    private val sourceFiles: Map<String, String> = emptyMap(),
 ) : ClassVisitor(Opcodes.ASM9) {
     private var currentClassName = ""
     private var isKotlinClass = false
@@ -1184,15 +1180,6 @@ internal object ArithmeticMutator {
 }
 
 internal object ReturnValueMutator {
-    fun mutateReturnStatic(
-        opcode: Int,
-        returnType: Type,
-    ): Int =
-        when (opcode) {
-            Opcodes.IRETURN, Opcodes.LRETURN, Opcodes.FRETURN, Opcodes.DRETURN, Opcodes.ARETURN -> opcode
-            else -> opcode
-        }
-
     fun isCollectionOrArrayStatic(type: Type): Boolean {
         if (type.sort == Type.ARRAY) return true
         val cn = type.className

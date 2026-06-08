@@ -291,38 +291,6 @@ class ArithmeticMutatorTest {
 
 class ReturnValueMutatorTest {
     @Test
-    fun `mutateReturnStatic IRETURN returns IRETURN (no mutation for return ops)`() {
-        // ReturnValueMutator only mutates void returns. For typed returns,
-        // it just returns the same opcode (other mutators handle them)
-        assertEquals(Opcodes.IRETURN, ReturnValueMutator.mutateReturnStatic(Opcodes.IRETURN, Type.INT_TYPE))
-    }
-
-    @Test
-    fun `mutateReturnStatic LRETURN returns LRETURN`() {
-        assertEquals(Opcodes.LRETURN, ReturnValueMutator.mutateReturnStatic(Opcodes.LRETURN, Type.LONG_TYPE))
-    }
-
-    @Test
-    fun `mutateReturnStatic ARETURN returns ARETURN`() {
-        assertEquals(Opcodes.ARETURN, ReturnValueMutator.mutateReturnStatic(Opcodes.ARETURN, Type.getType(String::class.java)))
-    }
-
-    @Test
-    fun `mutateReturnStatic FRETURN returns FRETURN`() {
-        assertEquals(Opcodes.FRETURN, ReturnValueMutator.mutateReturnStatic(Opcodes.FRETURN, Type.FLOAT_TYPE))
-    }
-
-    @Test
-    fun `mutateReturnStatic DRETURN returns DRETURN`() {
-        assertEquals(Opcodes.DRETURN, ReturnValueMutator.mutateReturnStatic(Opcodes.DRETURN, Type.DOUBLE_TYPE))
-    }
-
-    @Test
-    fun `mutateReturnStatic unknown opcode returns same`() {
-        assertEquals(Opcodes.ICONST_0, ReturnValueMutator.mutateReturnStatic(Opcodes.ICONST_0, Type.INT_TYPE))
-    }
-
-    @Test
     fun `isCollectionOrArrayStatic List is collection`() {
         assertTrue(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(List::class.java)))
     }
