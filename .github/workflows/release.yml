@@ -58,6 +58,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify Sonatype credentials
+        run: |
+          echo "Testing Sonatype auth..."
+          RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
+            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
+            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/profiles" 2>&1)
+          HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
+          BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
+          echo "HTTP code: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "401" ]; then
+            echo ""
+            echo "❌ 401 Unauthorized - credentials are OLD OSSRH tokens"
+            echo "   Need Central Portal User Tokens instead."
+            echo "   Generate at: https://central.sonatype.com/account"
+            echo "   Update GitHub secrets: SONATYPE_USERNAME, SONATYPE_PASSWORD"
+          elif [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Auth works! Profiles found:"
+            echo "$BODY" | jq '.data[].profileName' 2>/dev/null || echo "$BODY"
+          else
+            echo "Response: $BODY"
+          fi
+
       - name: Publish to Sonatype staging
         run: ./gradlew publishMavenPublicationToMavenCentralRepository --no-daemon
         env:
