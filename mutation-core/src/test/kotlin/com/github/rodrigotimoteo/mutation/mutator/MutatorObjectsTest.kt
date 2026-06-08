@@ -289,37 +289,6 @@ class ArithmeticMutatorTest {
     }
 }
 
-class InvertNegsMutatorTest {
-    @Test
-    fun `mutateStatic IADD returns same (no-op)`() {
-        assertEquals(Opcodes.IADD, InvertNegsMutator.mutateStatic(Opcodes.IADD))
-    }
-
-    @Test
-    fun `mutateStatic IFEQ returns same (no-op)`() {
-        assertEquals(Opcodes.IFEQ, InvertNegsMutator.mutateStatic(Opcodes.IFEQ))
-    }
-
-    @Test
-    fun `mutateStatic ICONST_0 returns same (no-op)`() {
-        assertEquals(Opcodes.ICONST_0, InvertNegsMutator.mutateStatic(Opcodes.ICONST_0))
-    }
-
-    @Test
-    fun `mutateStatic all opcodes are no-op`() {
-        // INVERT_NEGS is intentionally a no-op per the source
-        val allOpcodes =
-            listOf(
-                Opcodes.IADD, Opcodes.ISUB, Opcodes.IMUL, Opcodes.IDIV, Opcodes.IREM,
-                Opcodes.IFNE, Opcodes.IFEQ, Opcodes.IFLT, Opcodes.IFGE, Opcodes.IFGT, Opcodes.IFLE,
-                Opcodes.ICONST_0, Opcodes.ICONST_1, Opcodes.RETURN, Opcodes.IRETURN,
-            )
-        for (op in allOpcodes) {
-            assertEquals(op, InvertNegsMutator.mutateStatic(op), "INVERT_NEGS should be no-op for $op")
-        }
-    }
-}
-
 class ReturnValueMutatorTest {
     @Test
     fun `mutateReturnStatic IRETURN returns IRETURN (no mutation for return ops)`() {

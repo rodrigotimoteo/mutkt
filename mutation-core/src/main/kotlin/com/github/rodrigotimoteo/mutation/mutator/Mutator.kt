@@ -382,24 +382,6 @@ private class MutationScannerMethodVisitor(
                     ),
                 )
             }
-            // runBlocking detection (kotlinx.coroutines)
-            if (opcode == Opcodes.INVOKESTATIC &&
-                owner == "kotlinx/coroutines/BuildersKt" &&
-                name == "runBlocking"
-            ) {
-                tryAddMutation(
-                    MutationInfo(
-                        operator = MutationOperator.COROUTINE,
-                        className = className,
-                        methodName = methodName,
-                        methodDescriptor = methodDescriptor,
-                        lineNumber = currentLineNumber,
-                        description = "runBlocking call mutation",
-                        originalOpcode = opcode,
-                        mutatedOpcode = Opcodes.NOP,
-                    ),
-                )
-            }
         }
 
         // NULL_SAFETY: detect Kotlin null check intrinsics
@@ -485,23 +467,6 @@ private class MutationScannerMethodVisitor(
                         methodDescriptor = methodDescriptor,
                         lineNumber = currentLineNumber,
                         description = "Negate: $opcode -> $mutated",
-                        originalOpcode = opcode,
-                        mutatedOpcode = mutated,
-                    ),
-                )
-            }
-        }
-        if (MutationOperator.INVERT_NEGS in enabledOperators) {
-            val mutated = InvertNegsMutator.mutateStatic(opcode)
-            if (mutated != opcode) {
-                tryAddMutation(
-                    MutationInfo(
-                        operator = MutationOperator.INVERT_NEGS,
-                        className = className,
-                        methodName = methodName,
-                        methodDescriptor = methodDescriptor,
-                        lineNumber = currentLineNumber,
-                        description = "Invert: $opcode -> $mutated",
                         originalOpcode = opcode,
                         mutatedOpcode = mutated,
                     ),
@@ -1048,7 +1013,6 @@ private class MutationApplierMethodVisitor(
         return when (targetMutation.operator) {
             MutationOperator.CONDITIONALS_BOUNDARY -> ConditionalMutator.mutateBoundaryStatic(opcode)
             MutationOperator.NEGATE_CONDITIONALS -> ConditionalMutator.mutateNegateStatic(opcode)
-            MutationOperator.INVERT_NEGS -> InvertNegsMutator.mutateStatic(opcode)
             MutationOperator.ARITHMETIC -> ArithmeticMutator.mutateStatic(opcode)
             MutationOperator.TRUE_RETURNS -> if (opcode == Opcodes.ICONST_1) Opcodes.ICONST_0 else opcode
             MutationOperator.FALSE_RETURNS -> if (opcode == Opcodes.ICONST_0) Opcodes.ICONST_1 else opcode
@@ -1227,14 +1191,6 @@ internal object ArithmeticMutator {
             Opcodes.DNEG -> Opcodes.DNEG
             else -> opcode
         }
-}
-
-internal object InvertNegsMutator {
-    fun mutateStatic(opcode: Int): Int =
-        // INVERT_NEGS is now intentionally a no-op - negation mutations are fully
-        // covered by NEGATE_CONDITIONALS (mutateNegateStatic). This operator is kept
-        // for API stability but does not generate duplicate mutations.
-        opcode
 }
 
 internal object ReturnValueMutator {
