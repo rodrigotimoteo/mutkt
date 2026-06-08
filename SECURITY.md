@@ -26,7 +26,7 @@ We will respond within 48 hours and work with you to understand and address the 
 
 We use [OWASP Dependency Check](https://owasp.org/www-project-dependency-check/) to scan for known vulnerabilities in our dependencies.
 
-Dependencies with a CVSS score >= 7.0 will fail the build.
+Dependencies with a CVSS score >= 7.0 are flagged in the report (build continues).
 
 ## Supply Chain Security
 

@@ -64,7 +64,7 @@ mutationTest {
 
 **New: Annotation-based suppression**
 ```kotlin
-import com.github.rodrigotimeteo.mutation.annotation.SuppressMutations
+import com.github.rodrigotimoteo.mutation.annotation.SuppressMutations
 
 @SuppressMutations(reason = "Generated code")
 class BuildConfig { }

@@ -88,7 +88,7 @@ class BaselineStorage(private val projectDir: File) {
             val exitCode = process.waitFor()
 
             if (exitCode != 0) {
-                System.err.println("[MutKt] git diff failed (exit code $exitCode), treating all classes as changed")
+                System.err.println("[MutKt] git diff failed (exit code $exitCode), no incremental filtering applied")
                 return emptySet()
             }
 

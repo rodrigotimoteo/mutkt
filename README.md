@@ -227,7 +227,7 @@ Generate API docs:
 ./gradlew dokkaHtmlMultiModule  # all modules aggregated
 ```
 
-Output: `build/dokka/html/index.html`
+Output: `build/dokka/htmlMultiModule/index.html`
 
 ## Requirements
 

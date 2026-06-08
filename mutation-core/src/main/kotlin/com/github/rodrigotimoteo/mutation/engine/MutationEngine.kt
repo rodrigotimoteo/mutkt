@@ -78,8 +78,8 @@ class MutationEngine(
     private val includePatterns: List<String> = emptyList(),
     private val excludePatterns: List<String> = emptyList(),
     private val enableCache: Boolean = false,
-    private val enableSubsumption: Boolean = false,
-    private val enableWeakMutation: Boolean = false,
+    private val enableSubsumption: Boolean = true,
+    private val enableWeakMutation: Boolean = true,
     private val projectDir: File? = null,
 ) {
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
