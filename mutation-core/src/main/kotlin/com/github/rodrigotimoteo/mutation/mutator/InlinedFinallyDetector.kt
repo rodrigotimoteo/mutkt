@@ -181,7 +181,7 @@ class InlinedFinallyDetector {
             if (insn is org.objectweb.asm.tree.JumpInsnNode) {
                 // Check if this jump targets the handler
                 if (insn.label == handler.handler) {
-                    val line = getLineNumber(methodNode, insn.label)
+                    val line = getLineNumber(methodNode, insn)
                     if (line != null) {
                         exitPoints.add(line)
                     }

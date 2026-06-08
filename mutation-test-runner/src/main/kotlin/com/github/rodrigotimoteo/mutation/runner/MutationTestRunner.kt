@@ -44,8 +44,12 @@ class MutationTestRunner(
         val urls = classpath.map { it.toURI().toURL() }.toTypedArray()
         val testClassLoader = java.net.URLClassLoader(urls, javaClass.classLoader)
 
-        // Run mutation testing with the test classloader
-        return engine.runMutationTesting(classFiles, testClassNames, testClassBytes, coverageExecFile, testClassLoader)
+        return try {
+            // Run mutation testing with the test classloader
+            engine.runMutationTesting(classFiles, testClassNames, testClassBytes, coverageExecFile, testClassLoader)
+        } finally {
+            testClassLoader.close()
+        }
     }
 
     private fun loadClassFiles(dir: File): Map<String, ByteArray> {
@@ -82,8 +86,9 @@ class MutationTestRunner(
                             .replace("/", ".")
                             .replace("\\", ".")
                     val simpleName = className.substringAfterLast('.')
+                    // Exclude inner/nested classes (contain $) — ReflectionTestRunner discovers them via @Nested
+                    if (className.contains("$")) return@forEach
                     // Match classes named *Test, *Tests, Test*, or *Spec
-                    // to avoid false positives like com.example.LatestReport
                     if (simpleName.endsWith("Test") ||
                         simpleName.endsWith("Tests") ||
                         simpleName.startsWith("Test") ||

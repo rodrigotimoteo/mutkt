@@ -119,8 +119,8 @@ class IncrementalAnalyzer(
                         .removeSuffix(".java")
                         .replace("/", ".")
 
-                // Validate it looks like a class name
-                if (className.contains(".") && className[0].isLowerCase()) {
+                // Validate it looks like a class name (non-empty, derived from source file)
+                if (className.isNotEmpty()) {
                     return className
                 }
             }

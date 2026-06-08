@@ -144,16 +144,16 @@ class MutationEngine(
         // Weak mutation analysis (skip unreachable mutations)
         val mutationsAfterWeak =
             if (enableWeakMutation && coverageExecFile != null && coverageExecFile.exists()) {
-                val coveredLines = getCoveredLines(coverageExecFile)
+                val coveredLinesMap = getCoveredLines(coverageExecFile)
                 val (reachable, unreachable) =
-                    weakMutationAnalyzer.classifyByReachability(
-                        mutationsAfterCoverage.map { it.first },
-                        coveredLines,
-                    )
+                    mutationsAfterCoverage.partition { (mutation, _) ->
+                        val classLines = coveredLinesMap[mutation.className]
+                        classLines != null && mutation.lineNumber in classLines
+                    }
                 if (unreachable.isNotEmpty()) {
                     System.err.println("[MutKt] Weak mutation: skipped ${unreachable.size} unreachable mutations")
                 }
-                mutationsAfterCoverage.filter { it.first in reachable }
+                reachable
             } else {
                 mutationsAfterCoverage
             }
@@ -162,10 +162,11 @@ class MutationEngine(
         val mutationsAfterInlined =
             if (enableInlinedFinally) {
                 val detector = InlinedFinallyDetector()
+                val blockCache = mutableMapOf<String, List<InlinedFinallyDetector.InlinedFinallyBlock>>()
                 mutationsAfterWeak.filter { (mutation, _) ->
                     val classBytes = classFiles[mutation.className.replace('.', '/')]
                     if (classBytes != null) {
-                        val blocks = detector.detect(classBytes)
+                        val blocks = blockCache.getOrPut(mutation.className) { detector.detect(classBytes) }
                         !detector.isInInlinedBlock(mutation.lineNumber, blocks)
                     } else {
                         true
@@ -299,19 +300,19 @@ class MutationEngine(
      * Parses .exec files using JaCoCo API to determine which lines
      * were actually executed by tests.
      */
-    private fun getCoveredLines(coverageExecFile: File): Set<Int> {
+    private fun getCoveredLines(coverageExecFile: File): Map<String, Set<Int>> {
         if (!coverageExecFile.exists() || coverageExecFile.length() == 0L) {
-            return emptySet()
+            return emptyMap()
         }
 
         return try {
             val coveredLinesMap = coverageAnalyzer.getCoveredLines(coverageExecFile, classFilesMap)
-            val allCoveredLines = coveredLinesMap.values.flatten().toSet()
-            logger.info("Weak mutation: ${allCoveredLines.size} covered lines across ${coveredLinesMap.size} classes")
-            allCoveredLines
+            val totalLines = coveredLinesMap.values.flatten().size
+            logger.info("Weak mutation: $totalLines covered lines across ${coveredLinesMap.size} classes")
+            coveredLinesMap
         } catch (e: Exception) {
             logger.warn("Failed to parse coverage data: ${e.message}")
-            emptySet()
+            emptyMap()
         }
     }
 
