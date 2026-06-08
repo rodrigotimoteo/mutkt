@@ -59,30 +59,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to Maven Central (staging)
-        run: ./gradlew publishMavenPublicationToMavenCentralRepository
+        run: |
+          ./gradlew publishMavenPublicationToMavenCentralRepository
+          echo ""
+          echo "============================================================"
+          echo "Artifacts uploaded to Sonatype staging."
+          echo "To complete the release, visit:"
+          echo "  https://central.sonatype.com/publishing/deployments"
+          echo "Find the deployment and click 'Publish'."
+          echo "============================================================"
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
-
-      - name: Close and release staging repository
-        run: |
-          echo "Searching for staging repositories..."
-          REPO_ID=$(curl -sS -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/profile_repositories" \
-            | jq -r '.data[] | select(.profileName | contains("io.github.rodrigotimoteo")) | .repositoryId' | head -1)
-          echo "Found repository: $REPO_ID"
-          echo "Closing staging repository..."
-          curl -sS -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d "{\"data\":{\"stagedRepositoryIds\":[\"$REPO_ID\"]}}" \
-            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/bulk/close"
-          echo "Closed. Deployment now visible at https://central.sonatype.com/publishing/deployments"
-        env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
 
   release:
     name: Create Release
