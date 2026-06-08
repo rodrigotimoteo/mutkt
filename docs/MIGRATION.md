@@ -90,7 +90,7 @@ Two new report formats are available:
 
 ```kotlin
 mutationTest {
-    reportFormat.set("json")  // or "xml", "html", "console"
+    reportFormats.set(setOf("json"))  // or "xml", "html", "console"
 }
 ```
 

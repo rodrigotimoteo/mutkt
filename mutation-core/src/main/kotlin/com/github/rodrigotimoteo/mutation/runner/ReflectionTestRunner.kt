@@ -139,18 +139,27 @@ class ReflectionTestRunner(
             }
         }
 
-        // Handle @Nested inner classes
+        // Handle @Nested inner classes — need outer instance for constructor
         val nestedClasses =
             testClass.declaredClasses.filter { innerClass ->
                 innerClass.isAnnotationPresent(Nested::class.java)
             }
 
-        for (nestedClass in nestedClasses) {
-            val nestedResults = runTestClass(nestedClass, "${className}\$${nestedClass.simpleName}")
-            testsFound += nestedResults.first
-            testsSucceeded += nestedResults.second
-            testsFailed += nestedResults.third
-            failures.addAll(nestedResults.fourth)
+        if (nestedClasses.isNotEmpty()) {
+            val outerInstance =
+                try {
+                    testClass.getDeclaredConstructor().newInstance()
+                } catch (_: Exception) {
+                    null
+                }
+
+            for (nestedClass in nestedClasses) {
+                val nestedResults = runNestedTestClass(nestedClass, outerInstance, "${className}\$${nestedClass.simpleName}")
+                testsFound += nestedResults.first
+                testsSucceeded += nestedResults.second
+                testsFailed += nestedResults.third
+                failures.addAll(nestedResults.fourth)
+            }
         }
 
         return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)
@@ -304,6 +313,99 @@ class ReflectionTestRunner(
         if (testsFound == 0) {
             testsFound = 1
             failures.add("${testClass.name}.${method.name}: Could not resolve @ParameterizedTest parameters")
+        }
+
+        return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)
+    }
+
+    /**
+     * Runs a @Nested inner class with the outer instance for proper constructor injection.
+     */
+    private fun runNestedTestClass(
+        testClass: Class<*>,
+        outerInstance: Any?,
+        className: String,
+    ): TestClassResult {
+        var testsFound = 0
+        var testsSucceeded = 0
+        var testsFailed = 0
+        val failures = mutableListOf<String>()
+
+        val testMethods =
+            testClass.declaredMethods.filter { method ->
+                method.isAnnotationPresent(org.junit.jupiter.api.Test::class.java) ||
+                    method.isAnnotationPresent(RepeatedTest::class.java) ||
+                    method.isAnnotationPresent(ParameterizedTest::class.java)
+            }
+
+        val beforeEachMethods = testClass.declaredMethods.filter { it.isAnnotationPresent(BeforeEach::class.java) }
+        val afterEachMethods = testClass.declaredMethods.filter { it.isAnnotationPresent(AfterEach::class.java) }
+
+        for (method in testMethods) {
+            if (method.isAnnotationPresent(ParameterizedTest::class.java)) {
+                val paramResults = runParameterizedTest(testClass, method, beforeEachMethods, afterEachMethods)
+                testsFound += paramResults.first
+                testsSucceeded += paramResults.second
+                testsFailed += paramResults.third
+                failures.addAll(paramResults.fourth)
+            } else {
+                val repeatedAnnotation = method.getAnnotation(RepeatedTest::class.java)
+                val repetitions = repeatedAnnotation?.value ?: 1
+                testsFound += repetitions
+                for (rep in 1..repetitions) {
+                    val instance =
+                        if (outerInstance != null) {
+                            try {
+                                testClass.getDeclaredConstructor(outerInstance.javaClass).newInstance(outerInstance)
+                            } catch (_: Exception) {
+                                testClass.getDeclaredConstructor().newInstance()
+                            }
+                        } else {
+                            testClass.getDeclaredConstructor().newInstance()
+                        }
+                    try {
+                        for (setup in beforeEachMethods) {
+                            setup.isAccessible = true
+                            setup.invoke(instance)
+                        }
+                        method.invoke(instance)
+                        testsSucceeded++
+                    } catch (e: java.lang.reflect.InvocationTargetException) {
+                        testsFailed++
+                        failures.add("$className.${method.name}: ${e.targetException?.message}")
+                    } catch (e: Exception) {
+                        testsFailed++
+                        failures.add("$className.${method.name}: ${e.message}")
+                    } finally {
+                        for (teardown in afterEachMethods) {
+                            try {
+                                teardown.isAccessible = true
+                                teardown.invoke(instance)
+                            } catch (_: Exception) {
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Recurse into nested classes
+        val nestedClasses = testClass.declaredClasses.filter { it.isAnnotationPresent(Nested::class.java) }
+        if (nestedClasses.isNotEmpty()) {
+            val nestedOuter =
+                try {
+                    testClass.getDeclaredConstructor().newInstance()
+                } catch (_: Exception) {
+                    null
+                }
+
+            for (nestedClass in nestedClasses) {
+                val nestedResults = runNestedTestClass(nestedClass, nestedOuter, "$className\$${nestedClass.simpleName}")
+                testsFound += nestedResults.first
+                testsSucceeded += nestedResults.second
+                testsFailed += nestedResults.third
+                failures.addAll(nestedResults.fourth)
+            }
         }
 
         return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)

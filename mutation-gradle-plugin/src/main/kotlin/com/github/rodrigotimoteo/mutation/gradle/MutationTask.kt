@@ -234,15 +234,32 @@ abstract class MutationTask : DefaultTask() {
         logger.lifecycle("Timeout: ${timeoutMs.get()}ms, Max parallel mutants: ${maxParallelMutants.get()}")
 
         // Create runner with all new features
+        // Merge excludedClasses (extension defaults, glob patterns) with excludeClassPatterns (user regex)
+        val excludeRegexPatterns = excludeClassPatterns.getOrElse(emptySet()).toList()
+        val excludeGlobPatterns =
+            excludedClasses.getOrElse(emptySet()).toList().map { glob ->
+                // Convert glob patterns to regex: **/*.Test → .*.Test, *Test → .*Test
+                glob.replace("**/", ".*").replace("*", ".*").replace("?", ".")
+            }
+        val allExcludePatterns = excludeRegexPatterns + excludeGlobPatterns
+
+        // Use mutantTimeoutMs if set, otherwise timeoutMs
+        val effectiveTimeout =
+            if (mutantTimeoutMs.isPresent && mutantTimeoutMs.get() > 0) {
+                mutantTimeoutMs.get()
+            } else {
+                timeoutMs.get()
+            }
+
         val runner =
             MutationTestRunnerFactory.create(
-                timeoutMs = timeoutMs.get(),
+                timeoutMs = effectiveTimeout,
                 maxParallelMutants = maxParallelMutants.get(),
                 enabledOperators = operators.toSet(),
                 enableInlinedFinally = enableInlinedFinally.get(),
                 enableTestOrdering = enableTestOrdering.get(),
                 includePatterns = targetClassPatterns.getOrElse(emptySet()).toList(),
-                excludePatterns = excludeClassPatterns.getOrElse(emptySet()).toList(),
+                excludePatterns = allExcludePatterns,
                 enableCache = enableCache.get(),
                 enableSubsumption = enableSubsumption.get(),
                 enableWeakMutation = enableWeakMutation.get(),

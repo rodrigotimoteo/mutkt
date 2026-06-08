@@ -6,7 +6,7 @@ Thank you for your interest in contributing! This document provides guidelines a
 
 ### Prerequisites
 
-- JDK 21 or later
+- JDK 17 or later
 - Gradle 8.10 or later
 - Git
 

@@ -497,12 +497,7 @@ private class MutationScannerMethodVisitor(
 
     private fun checkArithmeticIinc(increment: Int) {
         if (MutationOperator.ARITHMETIC in enabledOperators) {
-            val mutated =
-                when (increment) {
-                    1 -> -1
-                    -1 -> 1
-                    else -> increment
-                }
+            val mutated = -increment
             if (mutated != increment) {
                 tryAddMutation(
                     MutationInfo(
@@ -826,12 +821,7 @@ private class MutationApplierMethodVisitor(
         if (!applied && currentLineNumber == targetMutation.lineNumber) {
             when (targetMutation.operator) {
                 MutationOperator.ARITHMETIC -> {
-                    val mutated =
-                        when (increment) {
-                            1 -> -1
-                            -1 -> 1
-                            else -> increment
-                        }
+                    val mutated = -increment
                     if (mutated != increment) {
                         super.visitIincInsn(varIndex, mutated)
                         applied = true

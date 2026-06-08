@@ -35,7 +35,8 @@ The core module provides the fundamental mutation testing infrastructure.
 
 - **`Mutator`**: Scans bytecode for mutation points and applies mutations
 - **`MutationEngine`**: Orchestrates the mutation testing process
-- **`MutationHistoryManager`**: Manages incremental analysis
+- **`IncrementalAnalyzer`**: Manages incremental analysis via git diff
+- **`BaselineStorage`**: Persists mutation results for baseline comparison
 - **`MutationScannerVisitor`**: ASM visitor for scanning mutation points
 - **`MutationApplierVisitor`**: ASM visitor for applying mutations
 
@@ -48,7 +49,7 @@ enum class MutationOperator(val operatorName: String, val description: String) {
     CONDITIONALS_BOUNDARY("CONDITIONALS_BOUNDARY", "..."),
     NEGATE_CONDITIONALS("NEGATE_CONDITIONALS", "..."),
     ARITHMETIC("ARITHMETIC", "..."),
-    // ... 18 total operators
+    // ... 16 total operators (1 dead operator removed)
 }
 ```
 

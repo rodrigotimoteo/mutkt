@@ -47,6 +47,7 @@ enum class MutationOperator(val operatorName: String, val description: String) {
     ),
 
     // Boolean mutations
+    @Deprecated("No-op operator, use NEGATE_CONDITIONALS instead")
     INVERT_NEGS(
         "INVERT_NEGS",
         "Inverts boolean negation: !x -> x, x -> !x",

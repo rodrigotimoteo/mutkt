@@ -16,7 +16,7 @@ MutKt is a mutation testing library for Kotlin and Java that runs your existing 
 // build.gradle.kts
 plugins {
     kotlin("jvm") version "2.1.10"
-    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.1.0"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.2.0"
 }
 ```
 
@@ -36,7 +36,7 @@ For explicit control over which code blocks are mutated:
 
 ```kotlin
 dependencies {
-    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.1.0")
+    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.2.0")
 }
 
 @ExtendWith(MutKtExtension::class)
@@ -195,7 +195,7 @@ mutationTest {
 ```
 
 ### Custom Mutators
-Implement `CustomMutator` interface to add domain-specific mutation operators.
+MutKt supports custom mutation operators via the `MutationOperator` enum.
 
 ## Architecture
 
@@ -223,7 +223,8 @@ Implement `CustomMutator` interface to add domain-specific mutation operators.
 
 Generate API docs:
 ```bash
-./gradlew dokkaHtml
+./gradlew dokkaGenerate  # single module
+./gradlew dokkaHtmlMultiModule  # all modules aggregated
 ```
 
 Output: `build/dokka/html/index.html`

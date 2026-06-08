@@ -226,6 +226,7 @@ class MutantClassLoader(
                 return clazz
             } catch (e: LinkageError) {
                 failedClassCache.add(slashedName)
+                if (slashedName == targetClassName) throw e
             }
         }
 
