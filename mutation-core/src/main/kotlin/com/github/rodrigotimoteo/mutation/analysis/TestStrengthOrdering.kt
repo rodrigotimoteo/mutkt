@@ -123,6 +123,10 @@ class TestStrengthOrdering(private val projectDir: File) {
             when {
                 trimmed.matches(Regex("^\"[^\"]+\":\\s*\\{$")) -> {
                     currentTest = trimmed.substringAfter("\"").substringBefore("\"")
+                    totalKills = 0
+                    totalRuns = 0
+                    totalMutations = 0
+                    lastRun = 0L
                 }
                 trimmed.contains("\"totalKills\":") -> {
                     totalKills = trimmed.substringAfter(":").trim().removeSuffix(",").toIntOrNull() ?: 0

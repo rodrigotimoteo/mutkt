@@ -103,7 +103,7 @@ class BaselineStorage(private val projectDir: File) {
                 }
                 .toSet()
         } catch (e: Exception) {
-            System.err.println("[MutKt] git not available: ${e.message}, treating all classes as changed")
+            System.err.println("[MutKt] git not available: ${e.message}, running all mutations (no filtering)")
             emptySet()
         }
     }

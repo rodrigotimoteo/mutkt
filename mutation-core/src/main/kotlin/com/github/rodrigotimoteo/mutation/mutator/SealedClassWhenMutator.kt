@@ -113,4 +113,5 @@ data class InstructionInfo(
     val opcode: Int,
     val lineNumber: Int,
     val label: org.objectweb.asm.Label? = null,
+    val owner: String? = null,
 )

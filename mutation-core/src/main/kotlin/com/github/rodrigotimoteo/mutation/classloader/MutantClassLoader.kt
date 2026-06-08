@@ -84,7 +84,7 @@ class MutationClassLoader(
                 return clazz
             } catch (e: LinkageError) {
                 failedClassCache.add(slashedName)
-                return super.loadClass(binaryName, resolve)
+                throw e
             }
         }
 

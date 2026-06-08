@@ -58,11 +58,10 @@ object CoroutineMutator {
      * Dispatchers are typically loaded as static fields.
      */
     fun isDispatcherLoad(instructions: List<InstructionInfo>): Boolean {
-        // Look for GETSTATIC on Dispatchers class
         for (instruction in instructions) {
-            if (instruction.opcode == Opcodes.GETSTATIC) {
-                // In real implementation, would check the field name
-                // For now, assume any GETSTATIC in suspend context is dispatcher
+            if (instruction.opcode == Opcodes.GETSTATIC &&
+                instruction.owner == "kotlinx/coroutines/Dispatchers"
+            ) {
                 return true
             }
         }

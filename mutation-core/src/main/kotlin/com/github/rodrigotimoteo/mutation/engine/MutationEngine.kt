@@ -305,7 +305,7 @@ class MutationEngine(
         }
 
         return try {
-            val coveredLinesMap = coverageAnalyzer.getCoveredLines(coverageExecFile, scanClassFiles())
+            val coveredLinesMap = coverageAnalyzer.getCoveredLines(coverageExecFile, classFilesMap)
             val allCoveredLines = coveredLinesMap.values.flatten().toSet()
             logger.info("Weak mutation: ${allCoveredLines.size} covered lines across ${coveredLinesMap.size} classes")
             allCoveredLines
@@ -313,24 +313,6 @@ class MutationEngine(
             logger.warn("Failed to parse coverage data: ${e.message}")
             emptySet()
         }
-    }
-
-    /**
-     * Scan class files from the output directory.
-     */
-    private fun scanClassFiles(): Map<String, ByteArray> {
-        val outputDir = File(projectDir ?: return emptyMap(), "build/classes/kotlin/main")
-        if (!outputDir.exists()) return emptyMap()
-
-        val result = mutableMapOf<String, ByteArray>()
-        outputDir.walkTopDown().forEach { file ->
-            if (file.extension == "class") {
-                val relativePath = file.relativeTo(outputDir).path
-                val className = relativePath.removeSuffix(".class").replace(File.separatorChar, '/')
-                result[className] = file.readBytes()
-            }
-        }
-        return result
     }
 
     /**

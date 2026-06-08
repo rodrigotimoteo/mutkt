@@ -88,7 +88,7 @@ class CoroutineMutatorExtendedTest {
     fun `isDispatcherLoad true for GETSTATIC instruction`() {
         val instructions =
             listOf(
-                InstructionInfo(opcode = Opcodes.GETSTATIC, lineNumber = 1),
+                InstructionInfo(opcode = Opcodes.GETSTATIC, lineNumber = 1, owner = "kotlinx/coroutines/Dispatchers"),
             )
         assertTrue(CoroutineMutator.isDispatcherLoad(instructions))
     }
@@ -109,13 +109,21 @@ class CoroutineMutatorExtendedTest {
     }
 
     @Test
-    fun `isDispatcherLoad true for any GETSTATIC in suspend context`() {
-        // Per current implementation, any GETSTATIC in suspend context is a dispatcher
+    fun `isDispatcherLoad true for GETSTATIC on Dispatchers`() {
         val instructions =
             listOf(
-                InstructionInfo(opcode = Opcodes.GETSTATIC, lineNumber = 1),
+                InstructionInfo(opcode = Opcodes.GETSTATIC, lineNumber = 1, owner = "kotlinx/coroutines/Dispatchers"),
             )
         assertTrue(CoroutineMutator.isDispatcherLoad(instructions))
+    }
+
+    @Test
+    fun `isDispatcherLoad false for GETSTATIC on other class`() {
+        val instructions =
+            listOf(
+                InstructionInfo(opcode = Opcodes.GETSTATIC, lineNumber = 1, owner = "java/lang/System"),
+            )
+        assertFalse(CoroutineMutator.isDispatcherLoad(instructions))
     }
 
     @Test
