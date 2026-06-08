@@ -2,7 +2,6 @@ package com.github.rodrigotimoteo.mutation.engine
 
 import com.github.rodrigotimoteo.mutation.analysis.SubsumptionAnalyzer
 import com.github.rodrigotimoteo.mutation.analysis.TestStrengthOrdering
-import com.github.rodrigotimoteo.mutation.analysis.WeakMutationAnalyzer
 import com.github.rodrigotimoteo.mutation.baseline.BaselineStorage
 import com.github.rodrigotimoteo.mutation.cache.MutKtCache
 import com.github.rodrigotimoteo.mutation.classloader.MutantClassLoaderFactory
@@ -85,7 +84,6 @@ class MutationEngine(
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators)
     private val coverageAnalyzer = CoverageAnalyzer()
-    private val weakMutationAnalyzer = WeakMutationAnalyzer()
     private val subsumptionAnalyzer = SubsumptionAnalyzer()
     private val testStrengthOrdering = projectDir?.let { TestStrengthOrdering(it) }
     private val cache = projectDir?.let { MutKtCache(it) }

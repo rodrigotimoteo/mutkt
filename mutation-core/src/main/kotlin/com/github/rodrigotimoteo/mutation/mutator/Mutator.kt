@@ -242,6 +242,7 @@ private class MutationScannerMethodVisitor(
     private val isKotlinClass: Boolean = false,
 ) : MethodVisitor(Opcodes.ASM9) {
     private var currentLineNumber = -1
+    private var instanceofCount = 0
 
     /**
      * Check if mutation should be suppressed.
@@ -271,7 +272,16 @@ private class MutationScannerMethodVisitor(
         label: org.objectweb.asm.Label,
     ) {
         checkConditionalMutations(opcode)
+        checkNullSafetyBranchMutations(opcode, label)
         super.visitJumpInsn(opcode, label)
+    }
+
+    override fun visitTypeInsn(
+        opcode: Int,
+        type: String,
+    ) {
+        checkSealedWhenInstanceofMutations(opcode, type)
+        super.visitTypeInsn(opcode, type)
     }
 
     override fun visitInsn(opcode: Int) {
@@ -336,8 +346,8 @@ private class MutationScannerMethodVisitor(
         name: String,
         descriptor: String,
     ) {
-        // DATA_CLASS_COPY: call to copy() method (data class generated)
-        // Kotlin data classes use INVOKEVIRTUAL for copy(), not INVOKESPECIAL
+        // DATA_CLASS_COPY: call to copy() or copy$default() method (data class generated)
+        // Kotlin data classes use INVOKEVIRTUAL for copy() and INVOKESTATIC for copy$default()
         if (MutationOperator.DATA_CLASS_COPY in enabledOperators) {
             if ((opcode == Opcodes.INVOKESPECIAL || opcode == Opcodes.INVOKEVIRTUAL) && name == "copy") {
                 tryAddMutation(
@@ -348,6 +358,21 @@ private class MutationScannerMethodVisitor(
                         methodDescriptor = methodDescriptor,
                         lineNumber = currentLineNumber,
                         description = "Data class copy() call mutation",
+                        originalOpcode = opcode,
+                        mutatedOpcode = Opcodes.NOP,
+                    ),
+                )
+            }
+            // Also detect copy$default() — Kotlin compiles copy(age = x) to this static method
+            if (opcode == Opcodes.INVOKESTATIC && name == "copy\$default") {
+                tryAddMutation(
+                    MutationInfo(
+                        operator = MutationOperator.DATA_CLASS_COPY,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Data class copy\$default() call mutation",
                         originalOpcode = opcode,
                         mutatedOpcode = Opcodes.NOP,
                     ),
@@ -384,7 +409,12 @@ private class MutationScannerMethodVisitor(
         if (MutationOperator.NULL_SAFETY in enabledOperators) {
             if (opcode == Opcodes.INVOKESTATIC &&
                 owner == "kotlin/jvm/internal/Intrinsics" &&
-                (name == "checkNotNull" || name == "checkNotNullParameter" || name == "throwUninitializedPropertyAccessException")
+                (
+                    name == "checkNotNull" ||
+                        name == "checkNotNullParameter" ||
+                        name == "checkNotNullExpressionValue" ||
+                        name == "throwUninitializedPropertyAccessException"
+                )
             ) {
                 tryAddMutation(
                     MutationInfo(
@@ -430,6 +460,84 @@ private class MutationScannerMethodVisitor(
                             ),
                     ),
                 )
+            }
+        }
+    }
+
+    /**
+     * Detect sealed class when expressions via instanceof chain pattern.
+     * Kotlin compiles sealed class when with data class subclasses to instanceof chains.
+     */
+    private fun checkSealedWhenInstanceofMutations(
+        opcode: Int,
+        type: String,
+    ) {
+        if (opcode == Opcodes.INSTANCEOF && MutationOperator.SEALED_WHEN in enabledOperators && isKotlinClass) {
+            // Track instanceof instructions — if we see multiple instanceof on the same line,
+            // it's likely a when-expression branch chain
+            instanceofCount++
+            if (instanceofCount >= 2) {
+                // Create mutation: remove this instanceof branch by replacing with pop+iconst_0
+                // This effectively makes the branch always false (skips it)
+                tryAddMutation(
+                    MutationInfo(
+                        operator = MutationOperator.SEALED_WHEN,
+                        className = className,
+                        methodName = methodName,
+                        methodDescriptor = methodDescriptor,
+                        lineNumber = currentLineNumber,
+                        description = "Remove when branch: instanceof ${type.substringAfterLast('/')}",
+                        originalOpcode = Opcodes.INSTANCEOF,
+                        mutatedOpcode = Opcodes.NOP,
+                        metadata = mapOf("type" to type),
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
+     * Detect null safety mutations for IFNULL/IFNONNULL patterns.
+     * Kotlin compiles ?. and ?: to IFNULL/IFNONNULL branch instructions.
+     */
+    private fun checkNullSafetyBranchMutations(
+        opcode: Int,
+        label: org.objectweb.asm.Label,
+    ) {
+        if (MutationOperator.NULL_SAFETY in enabledOperators && isKotlinClass) {
+            when (opcode) {
+                Opcodes.IFNULL -> {
+                    // ?.safe call: ifnull skips the non-null path
+                    // Mutation: replace ifnull with goto (always take non-null path)
+                    tryAddMutation(
+                        MutationInfo(
+                            operator = MutationOperator.NULL_SAFETY,
+                            className = className,
+                            methodName = methodName,
+                            methodDescriptor = methodDescriptor,
+                            lineNumber = currentLineNumber,
+                            description = "Remove null check: ?.",
+                            originalOpcode = Opcodes.IFNULL,
+                            mutatedOpcode = Opcodes.GOTO,
+                        ),
+                    )
+                }
+                Opcodes.IFNONNULL -> {
+                    // ?: elvis: ifnonnull skips the default value path
+                    // Mutation: replace ifnonnull with goto (always take default path)
+                    tryAddMutation(
+                        MutationInfo(
+                            operator = MutationOperator.NULL_SAFETY,
+                            className = className,
+                            methodName = methodName,
+                            methodDescriptor = methodDescriptor,
+                            lineNumber = currentLineNumber,
+                            description = "Remove null check: ?:",
+                            originalOpcode = Opcodes.IFNONNULL,
+                            mutatedOpcode = Opcodes.GOTO,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -808,6 +916,24 @@ private class MutationApplierMethodVisitor(
             }
         }
         super.visitJumpInsn(opcode, label)
+    }
+
+    override fun visitTypeInsn(
+        opcode: Int,
+        type: String,
+    ) {
+        if (!applied && currentLineNumber == targetMutation.lineNumber &&
+            opcode == targetMutation.originalOpcode &&
+            targetMutation.operator == MutationOperator.SEALED_WHEN
+        ) {
+            // SEALED_WHEN instanceof mutation: replace instanceof with pop+iconst_0
+            // This makes the branch always false (skips it)
+            super.visitInsn(Opcodes.POP)
+            super.visitInsn(Opcodes.ICONST_0)
+            applied = true
+            return
+        }
+        super.visitTypeInsn(opcode, type)
     }
 
     override fun visitIincInsn(
