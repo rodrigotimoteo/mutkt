@@ -28,4 +28,10 @@ enum class MutationStatus {
 
     /** Mutant not covered by any test */
     NO_COVERAGE,
+
+    /** Mutant killed but mutation was never reached (killed by test side effect) */
+    WEAK_KILLED,
+
+    /** Mutant killed by same tests as another mutant (subsumed) */
+    SUBSUMED,
 }

@@ -1,0 +1,176 @@
+package com.github.rodrigotimoteo.mutation.report
+
+import com.github.rodrigotimoteo.mutation.model.Mutation
+import com.github.rodrigotimoteo.mutation.model.MutationReport
+import com.github.rodrigotimoteo.mutation.model.MutationResult
+import com.github.rodrigotimoteo.mutation.model.MutationStatus
+import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+
+class ConsoleReporterTest {
+    private lateinit var reporter: ConsoleReporter
+
+    @BeforeEach
+    fun setUp() {
+        reporter = ConsoleReporter()
+    }
+
+    @Test
+    fun `progress returns formatted string`() {
+        val result = reporter.progress(50, 100, "TestMutation")
+        assertTrue(result.contains("50/100"))
+        assertTrue(result.contains("50.0%"))
+        assertTrue(result.contains("TestMutation"))
+    }
+
+    @Test
+    fun `progress handles 0 percent`() {
+        val result = reporter.progress(0, 100, "TestMutation")
+        assertTrue(result.contains("0/100"))
+        assertTrue(result.contains("0.0%"))
+    }
+
+    @Test
+    fun `progress handles 100 percent`() {
+        val result = reporter.progress(100, 100, "TestMutation")
+        assertTrue(result.contains("100/100"))
+        assertTrue(result.contains("100.0%"))
+    }
+
+    @Test
+    fun `generate returns formatted report`() {
+        val report = createTestReport()
+        val result = reporter.generate(report)
+        assertTrue(result.contains("MutKt Mutation Report"))
+        assertTrue(result.contains("Total Mutations:    10"))
+        assertTrue(result.contains("Killed:             7"))
+        assertTrue(result.contains("Survived:           2"))
+        assertTrue(result.contains("Kill Rate:"))
+    }
+
+    @Test
+    fun `generate includes survived mutations`() {
+        val report = createTestReport()
+        val result = reporter.generate(report)
+        assertTrue(result.contains("Survived Mutations"))
+        assertTrue(result.contains("com.example.Foo"))
+    }
+
+    @Test
+    fun `generate includes error mutations`() {
+        val report = createTestReportWithErrors()
+        val result = reporter.generate(report)
+        assertTrue(result.contains("Error Mutations"))
+    }
+
+    @Test
+    fun `update returns formatted string`() {
+        val result = reporter.update(5, 2, "TestMutation")
+        assertTrue(result.contains("Killed: 5"))
+        assertTrue(result.contains("Survived: 2"))
+        assertTrue(result.contains("Kill Rate:"))
+        assertTrue(result.contains("TestMutation"))
+    }
+
+    @Test
+    fun `update handles zero killed`() {
+        val result = reporter.update(0, 5, "TestMutation")
+        assertTrue(result.contains("Kill Rate: 0.0%"))
+    }
+
+    @Test
+    fun `clearLine returns escape sequence`() {
+        val result = reporter.clearLine()
+        assertEquals("\r\u001B[K", result)
+    }
+
+    private fun createTestReport(): MutationReport {
+        val results = mutableListOf<MutationResult>()
+
+        // 7 killed
+        for (i in 1..7) {
+            results.add(
+                MutationResult(
+                    mutation = createMutation("com.example.Foo", "bar$i", i * 10),
+                    status = MutationStatus.KILLED,
+                    executionTimeMs = 100,
+                ),
+            )
+        }
+
+        // 2 survived
+        for (i in 1..2) {
+            results.add(
+                MutationResult(
+                    mutation = createMutation("com.example.Foo", "baz$i", i * 20),
+                    status = MutationStatus.SURVIVED,
+                    executionTimeMs = 100,
+                ),
+            )
+        }
+
+        // 1 no coverage
+        results.add(
+            MutationResult(
+                mutation = createMutation("com.example.Bar", "method", 50),
+                status = MutationStatus.NO_COVERAGE,
+                executionTimeMs = 0,
+            ),
+        )
+
+        return MutationReport(
+            results = results,
+            totalMutations = 10,
+            killedMutations = 7,
+            survivedMutations = 2,
+            errorMutations = 0,
+            timeoutMutations = 0,
+            noCoverageMutations = 1,
+            totalExecutionTimeMs = 1000,
+        )
+    }
+
+    private fun createTestReportWithErrors(): MutationReport {
+        val results =
+            listOf(
+                MutationResult(
+                    mutation = createMutation("com.example.Foo", "bar", 10),
+                    status = MutationStatus.ERROR,
+                    errorMessage = "NullPointerException",
+                    executionTimeMs = 50,
+                ),
+            )
+
+        return MutationReport(
+            results = results,
+            totalMutations = 1,
+            killedMutations = 0,
+            survivedMutations = 0,
+            errorMutations = 1,
+            timeoutMutations = 0,
+            noCoverageMutations = 0,
+            totalExecutionTimeMs = 50,
+        )
+    }
+
+    private fun createMutation(
+        className: String,
+        methodName: String,
+        lineNumber: Int,
+    ): Mutation {
+        return Mutation(
+            id = "ARITHMETIC::$className::$methodName::$lineNumber",
+            className = className,
+            methodName = methodName,
+            methodDescriptor = "()V",
+            operator = MutationOperator.ARITHMETIC,
+            lineNumber = lineNumber,
+            originalBytecode = ByteArray(10),
+            mutatedBytecode = ByteArray(10),
+            description = "Test mutation",
+        )
+    }
+}

@@ -107,6 +107,13 @@ object MutationTestRunnerFactory {
         enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
         enableInlinedFinally: Boolean = true,
         enableTestOrdering: Boolean = true,
+        changedClasses: Set<String> = emptySet(),
+        includePatterns: List<String> = emptyList(),
+        excludePatterns: List<String> = emptyList(),
+        enableCache: Boolean = false,
+        enableSubsumption: Boolean = false,
+        enableWeakMutation: Boolean = false,
+        projectDir: java.io.File? = null,
     ): MutationTestRunner {
         val engine =
             MutationEngine(
@@ -115,6 +122,13 @@ object MutationTestRunnerFactory {
                 maxParallelMutants = maxParallelMutants,
                 enableInlinedFinally = enableInlinedFinally,
                 enableTestOrdering = enableTestOrdering,
+                changedClasses = changedClasses,
+                includePatterns = includePatterns,
+                excludePatterns = excludePatterns,
+                enableCache = enableCache,
+                enableSubsumption = enableSubsumption,
+                enableWeakMutation = enableWeakMutation,
+                projectDir = projectDir,
             )
         return MutationTestRunner(engine)
     }

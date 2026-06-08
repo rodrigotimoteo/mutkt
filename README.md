@@ -114,6 +114,7 @@ mutationTest {
     enableWeakMutation.set(true)     // Check weak mutants first
     enableInlinedFinally.set(true)   // Detect inlined finally blocks
     enableTestOrdering.set(true)     // Run most-likely-to-kill tests first
+    enableCache.set(true)            // Cache results for faster re-runs
     
     // Thresholds
     failOnScoreThreshold.set(70)     // Fail if score < 70%
@@ -174,6 +175,24 @@ Detects `finally` blocks that the compiler inlined into each exit path, preventi
 
 ### Incremental Analysis
 Tracks mutation results across commits. Only re-tests mutations in changed files.
+
+### Test Result Caching
+File-based caching of mutation results. On re-run, skips previously tested mutations for faster feedback.
+
+```kotlin
+mutationTest {
+    enableCache.set(true)  // Enable caching
+}
+```
+
+### Test Strength Ordering
+Tracks which tests kill the most mutations and runs them first. Enables faster kill detection.
+
+```kotlin
+mutationTest {
+    enableTestOrdering.set(true)  // Run strongest tests first (default: true)
+}
+```
 
 ### Custom Mutators
 Implement `CustomMutator` interface to add domain-specific mutation operators.

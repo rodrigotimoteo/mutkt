@@ -176,6 +176,11 @@ abstract class MutationTask : DefaultTask() {
     @Optional
     val generateGraph: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 
+    /** Enable file-based caching of mutation results. */
+    @Input
+    @Optional
+    val enableCache: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
     @TaskAction
     fun runMutationTests() {
         logger.lifecycle("=".repeat(60))
@@ -228,7 +233,7 @@ abstract class MutationTask : DefaultTask() {
         logger.lifecycle("Enabled operators: ${operators.joinToString { it.operatorName }}")
         logger.lifecycle("Timeout: ${timeoutMs.get()}ms, Max parallel mutants: ${maxParallelMutants.get()}")
 
-        // Create runner
+        // Create runner with all new features
         val runner =
             MutationTestRunnerFactory.create(
                 timeoutMs = timeoutMs.get(),
@@ -236,6 +241,12 @@ abstract class MutationTask : DefaultTask() {
                 enabledOperators = operators.toSet(),
                 enableInlinedFinally = enableInlinedFinally.get(),
                 enableTestOrdering = enableTestOrdering.get(),
+                includePatterns = targetClassPatterns.getOrElse(emptySet()).toList(),
+                excludePatterns = excludeClassPatterns.getOrElse(emptySet()).toList(),
+                enableCache = enableCache.get(),
+                enableSubsumption = enableSubsumption.get(),
+                enableWeakMutation = enableWeakMutation.get(),
+                projectDir = project.projectDir,
             )
 
         // Run mutation testing
