@@ -60,7 +60,7 @@ class ReflectionTestRunner(
                     failedTestClasses.add(testClassName)
                 }
             } catch (e: Exception) {
-                logger.debug("Could not load test class: $testClassName", e)
+                logger.warn("Could not load test class: $testClassName — ${e.message}")
             }
         }
 

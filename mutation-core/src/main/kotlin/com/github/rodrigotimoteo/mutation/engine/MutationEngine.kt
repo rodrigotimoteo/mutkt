@@ -558,7 +558,7 @@ class MutationEngine(
 
     /**
      * Batched mutation testing: uses shared BaseProjectClassLoader per target class.
-     * Only defines mutated target + test classes per mutation (not all project classes).
+     * Uses pre-computed mutated bytes from generateAllMutations (no re-application).
      */
     private fun runSingleMutantBatched(
         mutation: MutationInfo,
@@ -571,19 +571,12 @@ class MutationEngine(
         val startTime = System.currentTimeMillis()
 
         val targetClassKey = mutation.className.replace('.', '/')
-        val originalClassBytes = classFiles[targetClassKey]
-        val preMutatedBytes =
-            if (originalClassBytes != null) {
-                mutator.applyMutation(originalClassBytes, mutation)
-            } else {
-                mutatedBytes
-            }
 
         val classLoader =
             MutantClassLoaderFactory.createMutationLoader(
                 baseLoader,
                 targetClassKey,
-                preMutatedBytes,
+                mutatedBytes,
                 testClassByteMap,
             )
 

@@ -57,9 +57,6 @@ object DataClassCopyMutator {
         for (i in paramTypes.indices) {
             val paramType = paramTypes[i]
 
-            // Skip 'this' parameter for extension functions
-            val startIndex = if (method.isStatic) 0 else 0
-
             // Create mutation info for replacing this parameter with default
             val defaultValue = getDefaultValue(paramType)
             mutations.add(
