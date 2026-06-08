@@ -340,11 +340,11 @@ abstract class MutationTask : DefaultTask() {
         for (format in formats) {
             when (format.lowercase()) {
                 "html" -> {
-                    val htmlReport = HtmlReportGenerator.generate(report, outputDirFile)
+                    val htmlReport = com.github.rodrigotimoteo.mutation.report.HtmlReportGenerator().generate(report, outputDirFile)
                     logger.lifecycle("HTML report: $htmlReport")
                 }
                 "console" -> {
-                    val consoleReport = ConsoleReportGenerator.generate(report)
+                    val consoleReport = com.github.rodrigotimoteo.mutation.report.ConsoleReporter().generate(report)
                     logger.lifecycle(consoleReport)
                 }
                 "csv" -> {

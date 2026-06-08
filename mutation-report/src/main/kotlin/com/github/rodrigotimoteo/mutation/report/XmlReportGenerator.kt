@@ -39,8 +39,9 @@ object XmlReportGenerator {
                     appendLine("      <lineNumber>${result.mutation.lineNumber}</lineNumber>")
                     appendLine("      <description>${escapeXml(result.mutation.description)}</description>")
                     appendLine("      <executionTimeMs>${result.executionTimeMs}</executionTimeMs>")
-                    if (result.errorMessage != null) {
-                        appendLine("      <errorMessage>${escapeXml(result.errorMessage)}</errorMessage>")
+                    val errMsg = result.errorMessage
+                    if (errMsg != null) {
+                        appendLine("      <errorMessage>${escapeXml(errMsg)}</errorMessage>")
                     }
                     appendLine("    </mutation>")
                 }

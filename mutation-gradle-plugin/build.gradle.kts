@@ -14,6 +14,7 @@ gradlePlugin {
 
 dependencies {
     implementation(project(":mutation-core"))
+    implementation(project(":mutation-report"))
     implementation(project(":mutation-test-runner"))
 
     // Gradle API

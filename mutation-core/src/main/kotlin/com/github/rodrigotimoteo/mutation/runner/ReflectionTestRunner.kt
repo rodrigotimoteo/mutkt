@@ -1,6 +1,8 @@
 package com.github.rodrigotimoteo.mutation.runner
 
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.RepeatedTest
@@ -96,6 +98,31 @@ class ReflectionTestRunner(
             testClass.allDeclaredMethods().filter {
                 it.isAnnotationPresent(AfterEach::class.java)
             }
+
+        // Discover @BeforeAll/@AfterAll (static or instance methods)
+        val beforeAllMethods =
+            testClass.allDeclaredMethods().filter {
+                it.isAnnotationPresent(BeforeAll::class.java)
+            }
+        val afterAllMethods =
+            testClass.allDeclaredMethods().filter {
+                it.isAnnotationPresent(AfterAll::class.java)
+            }
+
+        // Run @BeforeAll once before all tests
+        for (setup in beforeAllMethods) {
+            try {
+                setup.isAccessible = true
+                if (java.lang.reflect.Modifier.isStatic(setup.modifiers)) {
+                    setup.invoke(null)
+                } else {
+                    val instance = createInstance(testClass, null)
+                    setup.invoke(instance)
+                }
+            } catch (e: Exception) {
+                failures.add("$className.@BeforeAll ${setup.name}: ${e.message}")
+            }
+        }
 
         // Run each test method
         for (method in testMethods) {
@@ -212,96 +239,89 @@ class ReflectionTestRunner(
                     }
                 }
             }
-            return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)
-        }
+        } else {
+            // Try to get parameters from @MethodSource
+            if (methodSource != null) {
+                val factoryMethodName = methodSource.value.firstOrNull()
+                if (factoryMethodName != null) {
+                    try {
+                        val (factoryMethod, receiver) = findFactoryMethod(testClass, factoryMethodName) ?: (null to null)
+                        if (factoryMethod != null && factoryMethod.parameterTypes.isEmpty()) {
+                            val params = factoryMethod.invoke(receiver)
 
-        // Try to get parameters from @MethodSource
-        if (methodSource != null) {
-            val factoryMethodName = methodSource.value.firstOrNull()
-            if (factoryMethodName != null) {
-                try {
-                    val (factoryMethod, receiver) = findFactoryMethod(testClass, factoryMethodName) ?: (null to null)
-                    if (factoryMethod != null && factoryMethod.parameterTypes.isEmpty()) {
-                        val params = factoryMethod.invoke(receiver)
-
-                        if (params is Iterable<*>) {
-                            for (param in params) {
-                                testsFound++
-                                val instance = createInstance(testClass, outerInstance)
-                                try {
-                                    for (setup in beforeEachMethods) {
-                                        setup.isAccessible = true
-                                        setup.invoke(instance)
-                                    }
-                                    when (param) {
-                                        is Array<*> -> method.invoke(instance, *param)
-                                        else -> method.invoke(instance, param)
-                                    }
-                                    testsSucceeded++
-                                } catch (e: java.lang.reflect.InvocationTargetException) {
-                                    testsFailed++
-                                    failures.add("${testClass.name}.${method.name}: ${e.targetException?.message}")
-                                } catch (e: Exception) {
-                                    testsFailed++
-                                    failures.add("${testClass.name}.${method.name}: ${e.message}")
-                                } finally {
-                                    for (teardown in afterEachMethods) {
-                                        try {
-                                            teardown.isAccessible = true
-                                            teardown.invoke(instance)
-                                        } catch (_: Exception) {
+                            if (params is Iterable<*>) {
+                                for (param in params) {
+                                    testsFound++
+                                    val inst = createInstance(testClass, outerInstance)
+                                    try {
+                                        for (setup in beforeEachMethods) {
+                                            setup.isAccessible = true
+                                            setup.invoke(inst)
+                                        }
+                                        when (param) {
+                                            is Array<*> -> method.invoke(inst, *param)
+                                            else -> method.invoke(inst, param)
+                                        }
+                                        testsSucceeded++
+                                    } catch (e: java.lang.reflect.InvocationTargetException) {
+                                        testsFailed++
+                                        failures.add("${testClass.name}.${method.name}: ${e.targetException?.message}")
+                                    } catch (e: Exception) {
+                                        testsFailed++
+                                        failures.add("${testClass.name}.${method.name}: ${e.message}")
+                                    } finally {
+                                        for (teardown in afterEachMethods) {
+                                            try {
+                                                teardown.isAccessible = true
+                                                teardown.invoke(inst)
+                                            } catch (_: Exception) {
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                    } catch (e: Exception) {
+                        logger.debug("Could not invoke parameterized test factory: $factoryMethodName", e)
                     }
-                } catch (e: Exception) {
-                    logger.debug("Could not invoke parameterized test factory: $factoryMethodName", e)
                 }
             }
-        }
 
-        // Fallback: try @ValueSource
-        if (valueSource != null && testsFound == 0) {
-            val strings = valueSource.strings
-            val ints = valueSource.ints
-            val longs = valueSource.longs
-            val floats = valueSource.floats
-            val doubles = valueSource.doubles
-
-            val values: List<Any?> =
-                when {
-                    strings.isNotEmpty() -> strings.toList()
-                    ints.isNotEmpty() -> ints.toList()
-                    longs.isNotEmpty() -> longs.toList()
-                    floats.isNotEmpty() -> floats.toList()
-                    doubles.isNotEmpty() -> doubles.toList()
-                    else -> emptyList()
-                }
-
-            for (value in values) {
-                testsFound++
-                val instance = createInstance(testClass, outerInstance)
-                try {
-                    for (setup in beforeEachMethods) {
-                        setup.isAccessible = true
-                        setup.invoke(instance)
+            // Fallback: try @ValueSource
+            if (valueSource != null && testsFound == 0) {
+                val values: List<Any?> =
+                    when {
+                        valueSource.strings.isNotEmpty() -> valueSource.strings.toList()
+                        valueSource.ints.isNotEmpty() -> valueSource.ints.toList()
+                        valueSource.longs.isNotEmpty() -> valueSource.longs.toList()
+                        valueSource.floats.isNotEmpty() -> valueSource.floats.toList()
+                        valueSource.doubles.isNotEmpty() -> valueSource.doubles.toList()
+                        else -> emptyList()
                     }
-                    method.invoke(instance, value)
-                    testsSucceeded++
-                } catch (e: java.lang.reflect.InvocationTargetException) {
-                    testsFailed++
-                    failures.add("${testClass.name}.${method.name}: ${e.targetException?.message}")
-                } catch (e: Exception) {
-                    testsFailed++
-                    failures.add("${testClass.name}.${method.name}: ${e.message}")
-                } finally {
-                    for (teardown in afterEachMethods) {
-                        try {
-                            teardown.isAccessible = true
-                            teardown.invoke(instance)
-                        } catch (_: Exception) {
+
+                for (value in values) {
+                    testsFound++
+                    val inst = createInstance(testClass, outerInstance)
+                    try {
+                        for (setup in beforeEachMethods) {
+                            setup.isAccessible = true
+                            setup.invoke(inst)
+                        }
+                        method.invoke(inst, value)
+                        testsSucceeded++
+                    } catch (e: java.lang.reflect.InvocationTargetException) {
+                        testsFailed++
+                        failures.add("${testClass.name}.${method.name}: ${e.targetException?.message}")
+                    } catch (e: Exception) {
+                        testsFailed++
+                        failures.add("${testClass.name}.${method.name}: ${e.message}")
+                    } finally {
+                        for (teardown in afterEachMethods) {
+                            try {
+                                teardown.isAccessible = true
+                                teardown.invoke(inst)
+                            } catch (_: Exception) {
+                            }
                         }
                     }
                 }

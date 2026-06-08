@@ -38,6 +38,7 @@ allprojects {
 // root aggregated output. See https://kotlinlang.org/docs/dokka-migration.html
 dependencies {
     dokka(project(":mutation-core"))
+    dokka(project(":mutation-report"))
     dokka(project(":mutation-test-runner"))
     dokka(project(":mutation-gradle-plugin"))
     dokka(project(":mutation-sample"))

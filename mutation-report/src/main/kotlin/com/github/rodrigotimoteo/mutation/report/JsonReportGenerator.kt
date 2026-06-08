@@ -38,8 +38,9 @@ object JsonReportGenerator {
                     appendLine("      \"lineNumber\": ${result.mutation.lineNumber},")
                     appendLine("      \"description\": \"${escapeJson(result.mutation.description)}\",")
                     appendLine("      \"executionTimeMs\": ${result.executionTimeMs}")
-                    if (result.errorMessage != null) {
-                        appendLine(",      \"errorMessage\": \"${escapeJson(result.errorMessage)}\"")
+                    val errMsg = result.errorMessage
+                    if (errMsg != null) {
+                        appendLine(",      \"errorMessage\": \"${escapeJson(errMsg)}\"")
                     }
                     if (index < report.results.size - 1) {
                         appendLine("    },")
