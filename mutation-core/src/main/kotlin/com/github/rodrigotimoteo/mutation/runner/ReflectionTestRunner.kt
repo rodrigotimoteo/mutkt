@@ -62,7 +62,12 @@ class ReflectionTestRunner(
                     failedTestClasses.add(testClassName)
                 }
             } catch (e: Exception) {
-                logger.warn("Could not load test class: $testClassName — ${e.message}")
+                val cause = if (e is java.lang.reflect.InvocationTargetException) e.targetException?.message else e.message
+                val errorMsg = "Could not load test class $testClassName: $cause"
+                logger.warn(errorMsg)
+                failures.add(errorMsg)
+                testsFailed++
+                failedTestClasses.add(testClassName)
             }
         }
 

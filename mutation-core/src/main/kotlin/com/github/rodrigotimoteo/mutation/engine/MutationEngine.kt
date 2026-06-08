@@ -120,6 +120,10 @@ class MutationEngine(
         val scanTime = System.currentTimeMillis() - scanStart
         System.err.println("[MutKt] Scanned ${allMutations.size} mutations in ${scanTime}ms")
 
+        if (allMutations.isEmpty()) {
+            System.err.println("[MutKt] WARNING: No mutations found. Check enabled operators and class filter patterns.")
+        }
+
         // Combine class files with test class files
         val allClassFiles = classFiles + testClassBytes
 

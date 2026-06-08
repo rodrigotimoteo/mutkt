@@ -92,9 +92,14 @@ class Mutator(
      */
     fun generateMutants(classBytes: ByteArray): List<Pair<MutationInfo, ByteArray>> {
         val mutations = scanMutations(classBytes)
-        return mutations.map { mutation ->
+        return mutations.mapNotNull { mutation ->
             val mutatedBytes = applyMutation(classBytes, mutation)
-            mutation to mutatedBytes
+            if (mutatedBytes.contentEquals(classBytes)) {
+                // Mutation was not actually applied — skip to avoid false SURVIVED
+                null
+            } else {
+                mutation to mutatedBytes
+            }
         }
     }
 }
@@ -243,6 +248,7 @@ private class MutationScannerMethodVisitor(
 ) : MethodVisitor(Opcodes.ASM9) {
     private var currentLineNumber = -1
     private var instanceofCount = 0
+    private var previousOpcode = -1
 
     /**
      * Check if mutation should be suppressed.
@@ -264,6 +270,7 @@ private class MutationScannerMethodVisitor(
         start: org.objectweb.asm.Label?,
     ) {
         currentLineNumber = line
+        instanceofCount = 0 // Reset per line — SEALED_WHEN chains are per-line
         super.visitLineNumber(line, start)
     }
 
@@ -675,8 +682,6 @@ private class MutationScannerMethodVisitor(
         }
     }
 
-    private var previousOpcode = -1
-
     private fun checkBooleanReturnMutations(opcode: Int) {
         // Only create mutations when we see IRETURN preceded by ICONST_1 or ICONST_0
         // This ensures we only mutate actual return values, not local variable assignments
@@ -920,8 +925,9 @@ private class MutationApplierMethodVisitor(
         label: org.objectweb.asm.Label,
     ) {
         if (!applied && currentLineNumber == targetMutation.lineNumber && opcode == targetMutation.originalOpcode) {
-            // NULL_SAFETY: replace IFNULL/IFNONNULL with NOP (remove branch entirely)
+            // NULL_SAFETY: replace IFNULL/IFNONNULL with POP+NOP (consume stack value + remove branch)
             if (targetMutation.operator == MutationOperator.NULL_SAFETY) {
+                super.visitInsn(Opcodes.POP) // consume the reference IFNULL/IFNONNULL would pop
                 super.visitInsn(Opcodes.NOP)
                 applied = true
                 return
