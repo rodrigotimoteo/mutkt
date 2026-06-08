@@ -58,19 +58,47 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to Maven Central
-        run: |
-          ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository
-          echo ""
-          echo "============================================================"
-          echo "Published to Maven Central. Available in ~10-30 minutes at:"
-          echo "  https://repo1.maven.org/maven2/io/github/rodrigotimoteo/"
-          echo "============================================================"
+      - name: Publish to Sonatype staging
+        run: ./gradlew publishMavenPublicationToMavenCentralRepository --no-daemon
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
+
+      - name: Close and release to Maven Central
+        run: |
+          if [ -z "$CENTRAL_PORTAL_USERNAME" ] || [ -z "$CENTRAL_PORTAL_PASSWORD" ]; then
+            echo "::warning::CENTRAL_PORTAL_USERNAME/PASSWORD secrets not set."
+            echo "Generate User Tokens at: https://central.sonatype.com/account"
+            echo "Store as GitHub secrets: CENTRAL_PORTAL_USERNAME, CENTRAL_PORTAL_PASSWORD"
+            echo "Then manually publish at: https://central.sonatype.com/publishing/deployments"
+            exit 0
+          fi
+
+          echo "Finding open staging repository..."
+          REPO_ID=$(curl -sS -u "$CENTRAL_PORTAL_USERNAME:$CENTRAL_PORTAL_PASSWORD" \
+            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/repository" \
+            | jq -r '.data[] | select(.type == "open") | .repositoryId' | head -1)
+
+          if [ -z "$REPO_ID" ]; then
+            echo "No open repository found via API. Check Portal:"
+            echo "  https://central.sonatype.com/publishing/deployments"
+            exit 0
+          fi
+
+          echo "Closing repository: $REPO_ID"
+          curl -sS -u "$CENTRAL_PORTAL_USERNAME:$CENTRAL_PORTAL_PASSWORD" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"data\":{\"stagedRepositoryIds\":[\"$REPO_ID\"],\"description\":\"MutKt ${{ github.ref_name }}\"}}" \
+            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/bulk/close"
+
+          echo "Release initiated. Check status at:"
+          echo "  https://central.sonatype.com/publishing/deployments"
+        env:
+          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
 
   release:
     name: Create Release
