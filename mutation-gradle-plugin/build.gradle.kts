@@ -41,7 +41,7 @@ tasks.withType<Test>().configureEach {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(17)
     compilerOptions {
         freeCompilerArgs.addAll(
             listOf(

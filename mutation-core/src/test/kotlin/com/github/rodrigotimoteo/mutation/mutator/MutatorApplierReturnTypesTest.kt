@@ -205,7 +205,7 @@ class MutatorApplierReturnTypesTest {
                 else -> "()I" to Opcodes.ICONST_0
             }
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -247,7 +247,7 @@ class MutatorApplierReturnTypesTest {
                 else -> Opcodes.ICONST_0
             }
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -270,7 +270,7 @@ class MutatorApplierReturnTypesTest {
 
     private fun buildVoidClassWithReturn(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -290,7 +290,7 @@ class MutatorApplierReturnTypesTest {
 
     private fun buildClassWithTrueReturn(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -311,7 +311,7 @@ class MutatorApplierReturnTypesTest {
 
     private fun buildClassWithFalseReturn(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "Test", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)

@@ -167,7 +167,7 @@ class MutantTestTaskTest {
 
     private fun buildCalculatorClass(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Calc", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Calc", null, "java/lang/Object", null)
         cw.visitField(Opcodes.ACC_PUBLIC, "result", "I", null, null).visitEnd()
         val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "add", "(II)I", null, null)
         mv?.visitCode()
@@ -191,7 +191,7 @@ class MutantTestTaskTest {
 
     private fun buildTestClassThatReturnsNormally(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -213,7 +213,7 @@ class MutantTestTaskTest {
 
     private fun buildClassWithNoTestMethods(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)

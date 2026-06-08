@@ -37,7 +37,7 @@ class MutatorKotlinApplierTest {
 
     private fun buildClassWithCopyMethod(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/DataClass", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/DataClass", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor.visitCode()
         ctor.visitVarInsn(Opcodes.ALOAD, 0)
@@ -80,7 +80,7 @@ class MutatorKotlinApplierTest {
 
     private fun buildClassWithCoroutineCall(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/CoroutineUser", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/CoroutineUser", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor.visitCode()
         ctor.visitVarInsn(Opcodes.ALOAD, 0)
@@ -141,7 +141,7 @@ class MutatorKotlinApplierTest {
 
     private fun buildClassWithVoidNullCheck(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/NullCheck", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/NullCheck", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor.visitCode()
         ctor.visitVarInsn(Opcodes.ALOAD, 0)
@@ -171,7 +171,7 @@ class MutatorKotlinApplierTest {
 
     private fun buildClassWithReturnNullCheck(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/NullCheck", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/NullCheck", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor.visitCode()
         ctor.visitVarInsn(Opcodes.ALOAD, 0)
@@ -213,7 +213,7 @@ class MutatorKotlinApplierTest {
 
     private fun buildClassWithTableSwitch(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/WhenExpr", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/WhenExpr", null, "java/lang/Object", null)
         // Add @kotlin.Metadata annotation so scanner recognizes as Kotlin class
         val meta = cw.visitAnnotation("Lkotlin/Metadata;", true)
         meta.visit("mv", intArrayOf(1, 9, 0))

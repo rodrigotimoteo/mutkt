@@ -48,7 +48,7 @@ object MutationRegistry {
      * Get or create state for current thread.
      */
     fun current(): ThreadState {
-        return threads.computeIfAbsent(Thread.currentThread().threadId()) {
+        return threads.computeIfAbsent(Thread.currentThread().id) {
             ThreadState()
         }
     }
@@ -58,7 +58,7 @@ object MutationRegistry {
      */
     fun beginClass(className: String) {
         classThreads.computeIfAbsent(className) { ConcurrentHashMap.newKeySet() }
-            .add(Thread.currentThread().threadId())
+            .add(Thread.currentThread().id)
     }
 
     /**
@@ -106,7 +106,7 @@ object MutationRegistry {
      * Returns true if current thread has been running longer than the timeout.
      */
     fun checkTimeout(): Boolean {
-        val state = threads[Thread.currentThread().threadId()] ?: return false
+        val state = threads[Thread.currentThread().id] ?: return false
         val start = state.startTimeMs.get()
         if (start == 0L) return false // Not marked yet
         val elapsed = System.currentTimeMillis() - start
@@ -125,7 +125,7 @@ object MutationRegistry {
      * Does NOT create ThreadState as side-effect.
      */
     fun isMutationTriggered(mutationId: String): Boolean {
-        val state = threads[Thread.currentThread().threadId()] ?: return false
+        val state = threads[Thread.currentThread().id] ?: return false
         return state.triggeredMutations.contains(mutationId)
     }
 
@@ -150,7 +150,7 @@ object MutationRegistry {
      * Clean up state for the current thread.
      */
     fun cleanup() {
-        val threadId = Thread.currentThread().threadId()
+        val threadId = Thread.currentThread().id
         threads.remove(threadId)
         // Also remove from classThreads sets
         classThreads.values.forEach { it.remove(threadId) }

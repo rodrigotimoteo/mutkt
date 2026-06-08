@@ -248,7 +248,7 @@ class MutationEngineTest {
     @Test
     fun `engine with synthetic-only class generates no mutations`() {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC + Opcodes.ACC_SYNTHETIC, "com/example/Synth", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC + Opcodes.ACC_SYNTHETIC, "com/example/Synth", null, "java/lang/Object", null)
         cw.visitEnd()
         val bytes = cw.toByteArray()
         val engine = MutationEngine(enabledOperators = MutationOperator.MVP_OPERATORS)
@@ -313,7 +313,7 @@ class MutationEngineTest {
 
     private fun buildClassWithArithmetic(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Calc", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Calc", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -336,14 +336,14 @@ class MutationEngineTest {
 
     private fun buildEmptyClass(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Empty", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Empty", null, "java/lang/Object", null)
         cw.visitEnd()
         return cw.toByteArray()
     }
 
     private fun buildClassWithSuppressMutations(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Suppressed", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Suppressed", null, "java/lang/Object", null)
         val av = cw.visitAnnotation("Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;", true)
         av?.visitEnd()
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
@@ -371,7 +371,7 @@ class MutationEngineTest {
         expected: Int,
     ): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -415,7 +415,7 @@ class MutationEngineTest {
 
     private fun buildTestClassWithNoTestMethods(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)

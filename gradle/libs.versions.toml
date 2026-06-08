@@ -1,6 +1,6 @@
 [versions]
 kotlin = "2.1.10"
-jvmTarget = "21"
+jvmTarget = "17"
 kover = "0.7.6"
 detekt = "1.23.8"
 ktlint = "12.1.1"

@@ -96,7 +96,7 @@ class MutatorSuppressionTest {
 
     private fun buildClassWithIAdd(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -119,7 +119,7 @@ class MutatorSuppressionTest {
 
     private fun buildClassWithConditionalOperator(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -146,7 +146,7 @@ class MutatorSuppressionTest {
 
     private fun buildClassWithBothArithmeticAndConditional(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -175,7 +175,7 @@ class MutatorSuppressionTest {
 
     private fun buildClassWithClassLevelSuppression(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         // Class-level @SuppressMutations with no operators — suppresses all
         val av = cw.visitAnnotation("Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;", true)
         av?.visitEnd()
@@ -194,7 +194,7 @@ class MutatorSuppressionTest {
 
     private fun buildClassWithOperatorSuppression(operators: List<String>): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         val av = cw.visitAnnotation("Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;", true)
         if (operators.isNotEmpty()) {
             val arr = av?.visitArray("operators")

@@ -65,7 +65,7 @@ class InlinedFinallyDetectorTreeTest {
     fun `detect with direct tree construction finds inlined finally`() {
         val detector = InlinedFinallyDetector()
         val classNode = ClassNode()
-        classNode.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        classNode.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
 
         val methodNode = MethodNode(Opcodes.ACC_PUBLIC, "doIt", "()V", null, null)
         val startLabel = LabelNode(Label())
@@ -114,7 +114,7 @@ class InlinedFinallyDetectorTreeTest {
     fun `detect handles null tryCatchBlocks`() {
         val detector = InlinedFinallyDetector()
         val classNode = ClassNode()
-        classNode.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        classNode.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
 
         val methodNode = MethodNode(Opcodes.ACC_PUBLIC, "doIt", "()V", null, null)
         // No tryCatchBlocks set
@@ -137,7 +137,7 @@ class InlinedFinallyDetectorTreeTest {
     fun `detect handles method with null instructions`() {
         val detector = InlinedFinallyDetector()
         val classNode = ClassNode()
-        classNode.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        classNode.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
 
         val methodNode = MethodNode(Opcodes.ACC_PUBLIC, "doIt", "()V", null, null)
         // tryCatchBlocks is non-null
@@ -284,7 +284,7 @@ class InlinedFinallyDetectorTreeTest {
     fun `findDuplicatedExitPoints finds throw and return exits`() {
         val detector = InlinedFinallyDetector()
         val classNode = ClassNode()
-        classNode.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        classNode.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
 
         val methodNode = MethodNode(Opcodes.ACC_PUBLIC, "doIt", "()V", null, null)
         val startLabel = LabelNode(Label())
@@ -349,14 +349,14 @@ class InlinedFinallyDetectorTreeTest {
 
     private fun buildClassWithNoMethods(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         cw.visitEnd()
         return cw.toByteArray()
     }
 
     private fun buildClassWithSimpleMethod(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -378,7 +378,7 @@ class InlinedFinallyDetectorTreeTest {
 
     private fun buildClassWithTryCatchNotFinally(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -408,7 +408,7 @@ class InlinedFinallyDetectorTreeTest {
 
     private fun buildClassWithFinallyNoLineNumber(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -433,7 +433,7 @@ class InlinedFinallyDetectorTreeTest {
 
     private fun buildClassWithFinallySingleExit(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        cw.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)

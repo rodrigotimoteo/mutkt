@@ -18,7 +18,7 @@ class MutantVisibilityTest {
     fun `mutation is visible to code loaded by parent classloader`() {
         // Build TargetClass: getValue() returns 42
         val targetCW = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        targetCW.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "target/TargetClass", null, "java/lang/Object", null)
+        targetCW.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "target/TargetClass", null, "java/lang/Object", null)
         val initMV = targetCW.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         initMV.visitCode()
         initMV.visitVarInsn(Opcodes.ALOAD, 0)
@@ -46,7 +46,7 @@ class MutantVisibilityTest {
 
         // Build CallerClass: callGetValue() calls TargetClass.getValue()
         val callerCW = ClassWriter(ClassWriter.COMPUTE_FRAMES)
-        callerCW.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "caller/CallerClass", null, "java/lang/Object", null)
+        callerCW.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "caller/CallerClass", null, "java/lang/Object", null)
         val callerInit = callerCW.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         callerInit.visitCode()
         callerInit.visitVarInsn(Opcodes.ALOAD, 0)

@@ -30,7 +30,7 @@ class MutationCoreSelfTest {
         // Build a minimal class with IADD
         val cw = org.objectweb.asm.ClassWriter(org.objectweb.asm.ClassWriter.COMPUTE_FRAMES)
         cw.visit(
-            org.objectweb.asm.Opcodes.V21,
+            org.objectweb.asm.Opcodes.V17,
             org.objectweb.asm.Opcodes.ACC_PUBLIC,
             "com/example/SimpleCalc",
             null,
@@ -79,7 +79,7 @@ class MutationCoreSelfTest {
     fun `mutation engine produces a report`() {
         val cw = org.objectweb.asm.ClassWriter(org.objectweb.asm.ClassWriter.COMPUTE_FRAMES)
         cw.visit(
-            org.objectweb.asm.Opcodes.V21,
+            org.objectweb.asm.Opcodes.V17,
             org.objectweb.asm.Opcodes.ACC_PUBLIC,
             "com/example/SimpleCalc",
             null,

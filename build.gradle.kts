@@ -55,6 +55,8 @@ subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
     extensions.configure<JavaPluginExtension> {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
         withSourcesJar()
         withJavadocJar()
     }
