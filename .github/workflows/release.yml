@@ -70,53 +70,34 @@ jobs:
         run: |
           set -e
 
-          echo "Step 1: Find staging repositories..."
-          # List all staging repositories (open ones)
-          RESP=$(curl -sS --fail-with-body \
-            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/repositories" 2>&1) || true
+          echo "=== Transferring deployment to Central Publisher Portal ==="
 
-          echo "Response: $RESP"
+          # Generate Bearer token from User Token credentials
+          TOKEN=$(echo -n "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" | base64)
 
-          # Try to extract repo ID
-          REPO_ID=$(echo "$RESP" | jq -r '.[] | select(.type=="open") | .repositoryId' 2>/dev/null | head -1) || true
+          echo "Uploading to Portal with publishing_type=automatic..."
+          RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
+            -H "Authorization: Bearer $TOKEN" \
+            -X POST \
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/io.github.rodrigotimoteo?publishing_type=automatic" 2>&1)
 
-          if [ -z "$REPO_ID" ] || [ "$REPO_ID" = "null" ]; then
-            echo "No open staging repo found. Trying profile_repositories..."
-            RESP2=$(curl -sS --fail-with-body \
-              -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-              "https://ossrh-staging-api.central.sonatype.com/service/local/staging/profile_repositories" 2>&1) || true
-            echo "Profile repos: $RESP2"
-            REPO_ID=$(echo "$RESP2" | jq -r '.data[] | select(.status=="open") | .repositoryId' 2>/dev/null | head -1) || true
-          fi
+          HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
+          BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
 
-          if [ -z "$REPO_ID" ] || [ "$REPO_ID" = "null" ]; then
+          echo "Response code: $HTTP_CODE"
+          echo "Response body: $BODY"
+
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
             echo ""
-            echo "=== NO OPEN STAGING REPOSITORY FOUND ==="
+            echo "✅ Deployment transferred to Portal with auto-publish."
+            echo "Artifacts will appear on Maven Central in ~10-30 minutes."
             echo "Check: https://central.sonatype.com/publishing/deployments"
-            echo "If deployment is in 'pending', click 'Publish' manually."
-            exit 0
+          else
+            echo ""
+            echo "⚠️ Portal transfer returned $HTTP_CODE"
+            echo "You may need to publish manually at:"
+            echo "  https://central.sonatype.com/publishing/deployments"
           fi
-
-          echo "Found open staging repo: $REPO_ID"
-          echo "Step 2: Closing..."
-          curl -sS --fail-with-body \
-            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d "{\"data\":{\"stagedRepositoryIds\":[\"$REPO_ID\"],\"description\":\"MutKt ${{ github.ref_name }}\"}}" \
-            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/bulk/close"
-          echo ""
-          echo "Step 3: Releasing..."
-          curl -sS --fail-with-body \
-            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d "{\"data\":{\"stagedRepositoryIds\":[\"$REPO_ID\"],\"autoDropAfterRelease\":true}}" \
-            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/bulk/promote"
-          echo ""
-          echo "Done! Artifacts will appear on Maven Central in ~10-30 min."
-          echo "https://central.sonatype.com/publishing/deployments"
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
