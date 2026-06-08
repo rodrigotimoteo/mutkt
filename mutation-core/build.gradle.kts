@@ -10,6 +10,9 @@ dependencies {
     // Logging
     implementation(libs.slf4j.api)
 
+    // JaCoCo for coverage-guided mutation testing
+    implementation(libs.jacoco.core)
+
     // JUnit for test execution via reflection
     implementation(libs.junit.jupiter)
     implementation("org.junit.jupiter:junit-jupiter-params:5.10.2")

@@ -18,14 +18,14 @@ class CoverageAnalyzerTest {
     }
 
     @Test
-    fun `loadExecutionData on existing file returns non-empty data`() {
+    fun `loadExecutionData on invalid exec file returns empty data`() {
         val analyzer = CoverageAnalyzer()
         val file = File.createTempFile("test", ".exec")
         file.deleteOnExit()
         file.writeBytes(ByteArray(10) { it.toByte() })
         val result = analyzer.loadExecutionData(file)
-        // File exists and has content — should not be empty
-        assertEquals(false, result.empty)
+        // File has content but invalid JaCoCo format — parsing fails gracefully
+        assertTrue(result.empty)
     }
 
     @Test

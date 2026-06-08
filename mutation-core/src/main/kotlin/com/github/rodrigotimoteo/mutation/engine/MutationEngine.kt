@@ -183,8 +183,6 @@ class MutationEngine(
         val orderedTestNames =
             if (enableTestOrdering && testStrengthOrdering != null) {
                 testStrengthOrdering.orderTests(testClassNames)
-            } else if (enableTestOrdering) {
-                TestOrderingStrategy().orderTests(testClassNames)
             } else {
                 testClassNames
             }
@@ -229,6 +227,7 @@ class MutationEngine(
         // Update test strength ordering
         if (enableTestOrdering && testStrengthOrdering != null) {
             updateTestStrength(results, testClassNames, killSets)
+            testStrengthOrdering.flushHistory()
         }
 
         // Subsumption analysis
@@ -297,20 +296,42 @@ class MutationEngine(
     /**
      * Get covered lines from JaCoCo execution data.
      *
-     * NOTE: JaCoCo .exec parsing requires org.jacoco.core dependency.
-     * Without it, weak mutation analysis cannot determine reachability.
-     * Returns empty set = all mutations treated as reachable (conservative).
+     * Parses .exec files using JaCoCo API to determine which lines
+     * were actually executed by tests.
      */
     private fun getCoveredLines(coverageExecFile: File): Set<Int> {
-        // JaCoCo exec parsing requires org.jacoco.core dependency
-        // Without it, we cannot determine which lines are covered
-        if (coverageExecFile.exists() && coverageExecFile.length() > 0) {
-            logger.info(
-                "Weak mutation: .exec file found but JaCoCo API not available — " +
-                    "treating all mutations as reachable. Add org.jacoco:org.jacoco.core for proper coverage.",
-            )
+        if (!coverageExecFile.exists() || coverageExecFile.length() == 0L) {
+            return emptySet()
         }
-        return emptySet()
+
+        return try {
+            val classFiles = scanClassFiles()
+            val coveredLinesMap = coverageAnalyzer.getCoveredLines(coverageExecFile, classFiles)
+            val allCoveredLines = coveredLinesMap.values.flatten().toSet()
+            logger.info("Weak mutation: ${allCoveredLines.size} covered lines across ${coveredLinesMap.size} classes")
+            allCoveredLines
+        } catch (e: Exception) {
+            logger.warn("Failed to parse coverage data: ${e.message}")
+            emptySet()
+        }
+    }
+
+    /**
+     * Scan class files from the output directory.
+     */
+    private fun scanClassFiles(): Map<String, ByteArray> {
+        val outputDir = File(projectDir, "build/classes/kotlin/main")
+        if (!outputDir.exists()) return emptyMap()
+
+        val result = mutableMapOf<String, ByteArray>()
+        outputDir.walkTopDown().forEach { file ->
+            if (file.extension == "class") {
+                val relativePath = file.relativeTo(outputDir).path
+                val className = relativePath.removeSuffix(".class").replace(File.separatorChar, '/')
+                result[className] = file.readBytes()
+            }
+        }
+        return result
     }
 
     /**

@@ -26,10 +26,14 @@ import org.objectweb.asm.Opcodes
 object CoroutineMutator {
     /**
      * Checks if a function is a suspend function.
-     * Suspend functions have ACC_SYNCHRONIZED flag in bytecode.
+     * Suspend functions have a Continuation parameter as the last argument.
      */
-    fun isSuspendFunction(access: Int): Boolean {
-        return (access and Opcodes.ACC_SYNCHRONIZED) != 0
+    fun isSuspendFunction(
+        access: Int,
+        descriptor: String,
+    ): Boolean {
+        val argTypes = org.objectweb.asm.Type.getArgumentTypes(descriptor)
+        return argTypes.isNotEmpty() && argTypes.last().className == "kotlin.coroutines.Continuation"
     }
 
     /**
@@ -75,7 +79,7 @@ object CoroutineMutator {
     ): List<MutationInfo> {
         val mutations = mutableListOf<MutationInfo>()
 
-        if (isSuspendFunction(method.access)) {
+        if (isSuspendFunction(method.access, method.descriptor)) {
             // Mutant 1: Skip suspend function body (return default)
             mutations.add(
                 MutationInfo(

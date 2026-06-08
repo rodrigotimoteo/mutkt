@@ -57,15 +57,30 @@ class Mutator(
                     type1: String,
                     type2: String,
                 ): String {
-                    // Use context classloader to resolve class hierarchies for COMPUTE_FRAMES
                     val loader = Thread.currentThread().contextClassLoader ?: javaClass.classLoader
-                    return try {
-                        Class.forName(type1.replace('/', '.'), false, loader)
-                        type1
-                    } catch (e: ClassNotFoundException) {
-                        // Fallback: return java/lang/Object if class not found
-                        "java/lang/Object"
+                    if (type1 == type2) return type1
+                    if (type1 == "java/lang/Object" || type2 == "java/lang/Object") return "java/lang/Object"
+                    val c1 =
+                        try {
+                            Class.forName(type1.replace('/', '.'), false, loader)
+                        } catch (e: ClassNotFoundException) {
+                            null
+                        }
+                    val c2 =
+                        try {
+                            Class.forName(type2.replace('/', '.'), false, loader)
+                        } catch (e: ClassNotFoundException) {
+                            null
+                        }
+                    if (c1 == null && c2 == null) return "java/lang/Object"
+                    if (c1 == null) return type2
+                    if (c2 == null) return type1
+                    var t: Class<*>? = c1
+                    while (t != null) {
+                        if (t.isAssignableFrom(c2)) return t.name.replace('.', '/')
+                        t = t.superclass
                     }
+                    return "java/lang/Object"
                 }
             }
         val reader = ClassReader(classBytes)
@@ -367,9 +382,9 @@ private class MutationScannerMethodVisitor(
                     ),
                 )
             }
-            // runBlocking, runCatching detection (kotlin stdlib)
+            // runBlocking detection (kotlinx.coroutines)
             if (opcode == Opcodes.INVOKESTATIC &&
-                owner == "kotlin/coroutines/intrinsics/IntrinsicsKt" &&
+                owner == "kotlinx/coroutines/BuildersKt" &&
                 name == "runBlocking"
             ) {
                 tryAddMutation(

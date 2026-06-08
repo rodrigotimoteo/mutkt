@@ -106,7 +106,6 @@ enum class MutationOperator(val operatorName: String, val description: String) {
                 RETURN_VALS,
                 NULL_RETURNS,
                 EMPTY_RETURNS,
-                INVERT_NEGS,
             )
 
         val KOTLIN_OPERATORS =

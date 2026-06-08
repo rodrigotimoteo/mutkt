@@ -7,16 +7,15 @@ import kotlin.test.assertTrue
 
 class MutatorOperatorTest {
     @Test
-    fun `MVP_OPERATORS contains 7 expected operators`() {
+    fun `MVP_OPERATORS contains 6 expected operators`() {
         val mvp = MutationOperator.MVP_OPERATORS
-        assertEquals(7, mvp.size)
+        assertEquals(6, mvp.size)
         assertTrue(MutationOperator.CONDITIONALS_BOUNDARY in mvp)
         assertTrue(MutationOperator.NEGATE_CONDITIONALS in mvp)
         assertTrue(MutationOperator.ARITHMETIC in mvp)
         assertTrue(MutationOperator.RETURN_VALS in mvp)
         assertTrue(MutationOperator.NULL_RETURNS in mvp)
         assertTrue(MutationOperator.EMPTY_RETURNS in mvp)
-        assertTrue(MutationOperator.INVERT_NEGS in mvp)
     }
 
     @Test

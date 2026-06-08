@@ -212,8 +212,8 @@ class MutationTaskInternalMethodsTest {
         project.plugins.apply("java")
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
         val operators = invokeParseOperators(task, emptySet())
-        // MVP_OPERATORS is 7
-        assertEquals(7, operators.size)
+        // MVP_OPERATORS is 6 (INVERT_NEGS removed — generates no mutations)
+        assertEquals(6, operators.size)
         assertTrue(operators.contains(MutationOperator.CONDITIONALS_BOUNDARY))
     }
 

@@ -19,6 +19,8 @@ import java.io.File
  */
 class TestStrengthOrdering(private val projectDir: File) {
     private val historyFile = File(projectDir, ".mutkt/test-strength.json")
+    private val inMemoryCache = mutableMapOf<String, TestStrengthEntry>()
+    private var cacheLoaded = false
 
     /**
      * Order tests by historical kill strength.
@@ -27,38 +29,41 @@ class TestStrengthOrdering(private val projectDir: File) {
      * @return Ordered list with strongest tests first
      */
     fun orderTests(testClassNames: List<String>): List<String> {
-        val history = loadHistory()
-        if (history.isEmpty()) return testClassNames
+        ensureCacheLoaded()
+        if (inMemoryCache.isEmpty()) return testClassNames
 
         return testClassNames.sortedByDescending { testClass ->
-            history[testClass]?.totalKills ?: 0
+            inMemoryCache[testClass]?.totalKills ?: 0
         }
     }
 
     /**
      * Record test results for strength tracking.
-     *
-     * @param testClassName Test class that was executed
-     * @param killedMutations Number of mutations killed by this test
-     * @param totalMutations Total mutations executed
+     * Accumulates in memory — call flushHistory() to persist.
      */
     fun recordResults(
         testClassName: String,
         killedMutations: Int,
         totalMutations: Int,
     ) {
-        val history = loadHistory().toMutableMap()
-        val existing = history[testClassName] ?: TestStrengthEntry()
+        ensureCacheLoaded()
+        val existing = inMemoryCache[testClassName] ?: TestStrengthEntry()
 
-        history[testClassName] =
+        inMemoryCache[testClassName] =
             existing.copy(
                 totalKills = existing.totalKills + killedMutations,
                 totalRuns = existing.totalRuns + 1,
                 totalMutations = existing.totalMutations + totalMutations,
                 lastRun = System.currentTimeMillis(),
             )
+    }
 
-        saveHistory(history)
+    /**
+     * Flush in-memory cache to disk. Call once after all recordResults calls.
+     */
+    fun flushHistory() {
+        ensureCacheLoaded()
+        saveHistory(inMemoryCache)
     }
 
     /**
@@ -70,24 +75,34 @@ class TestStrengthOrdering(private val projectDir: File) {
      * @return Strength score (0.0 to 1.0)
      */
     fun getStrengthScore(testClassName: String): Double {
-        val history = loadHistory()
-        val entry = history[testClassName] ?: return 0.0
+        ensureCacheLoaded()
+        val entry = inMemoryCache[testClassName] ?: return 0.0
         if (entry.totalMutations == 0) return 0.0
         return entry.totalKills.toDouble() / entry.totalMutations
     }
 
     /**
      * Get statistics for all tracked tests.
-     *
-     * @return Map of test class name to strength entry
      */
-    fun getStats(): Map<String, TestStrengthEntry> = loadHistory()
+    fun getStats(): Map<String, TestStrengthEntry> {
+        ensureCacheLoaded()
+        return inMemoryCache.toMap()
+    }
 
     /**
      * Clear all history data.
      */
     fun clear() {
+        inMemoryCache.clear()
+        cacheLoaded = false
         historyFile.delete()
+    }
+
+    private fun ensureCacheLoaded() {
+        if (!cacheLoaded) {
+            inMemoryCache.putAll(loadHistory())
+            cacheLoaded = true
+        }
     }
 
     private fun loadHistory(): Map<String, TestStrengthEntry> {

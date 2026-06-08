@@ -9,27 +9,31 @@ import kotlin.test.assertTrue
 
 class CoroutineMutatorExtendedTest {
     @Test
-    fun `isSuspendFunction true for synchronized flag`() {
-        val access = Opcodes.ACC_PUBLIC or Opcodes.ACC_SYNCHRONIZED
-        assertTrue(CoroutineMutator.isSuspendFunction(access))
-    }
-
-    @Test
-    fun `isSuspendFunction false without synchronized flag`() {
+    fun `isSuspendFunction true for Continuation parameter`() {
         val access = Opcodes.ACC_PUBLIC
-        assertFalse(CoroutineMutator.isSuspendFunction(access))
+        val descriptor = "(Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;"
+        assertTrue(CoroutineMutator.isSuspendFunction(access, descriptor))
     }
 
     @Test
-    fun `isSuspendFunction false for static synchronized`() {
-        val access = Opcodes.ACC_STATIC or Opcodes.ACC_SYNCHRONIZED
-        assertTrue(CoroutineMutator.isSuspendFunction(access), "Static + synchronized is also suspend-like")
+    fun `isSuspendFunction false without Continuation parameter`() {
+        val access = Opcodes.ACC_PUBLIC
+        val descriptor = "(Ljava/lang/String;)V"
+        assertFalse(CoroutineMutator.isSuspendFunction(access, descriptor))
     }
 
     @Test
-    fun `isSuspendFunction true for private synchronized`() {
-        val access = Opcodes.ACC_PRIVATE or Opcodes.ACC_SYNCHRONIZED
-        assertTrue(CoroutineMutator.isSuspendFunction(access))
+    fun `isSuspendFunction false for empty descriptor`() {
+        val access = Opcodes.ACC_PUBLIC
+        val descriptor = "()V"
+        assertFalse(CoroutineMutator.isSuspendFunction(access, descriptor))
+    }
+
+    @Test
+    fun `isSuspendFunction true for Continuation-only parameter`() {
+        val access = Opcodes.ACC_PRIVATE
+        val descriptor = "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;"
+        assertTrue(CoroutineMutator.isSuspendFunction(access, descriptor))
     }
 
     @Test
@@ -119,8 +123,8 @@ class CoroutineMutatorExtendedTest {
         val method =
             MethodInfo(
                 name = "fetch",
-                descriptor = "()Ljava/lang/String;",
-                access = Opcodes.ACC_PUBLIC or Opcodes.ACC_SYNCHRONIZED,
+                descriptor = "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+                access = Opcodes.ACC_PUBLIC,
             )
         val mutations = CoroutineMutator.generateMutations("com.Foo", method, 10)
         assertEquals(2, mutations.size)
@@ -157,8 +161,8 @@ class CoroutineMutatorExtendedTest {
         val method =
             MethodInfo(
                 name = "runBlocking",
-                descriptor = "()Ljava/lang/Object;",
-                access = Opcodes.ACC_PUBLIC or Opcodes.ACC_SYNCHRONIZED,
+                descriptor = "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+                access = Opcodes.ACC_PUBLIC,
             )
         val mutations = CoroutineMutator.generateMutations("com.Foo", method, 10)
         assertEquals(3, mutations.size)
@@ -169,13 +173,13 @@ class CoroutineMutatorExtendedTest {
         val method =
             MethodInfo(
                 name = "fetch",
-                descriptor = "()Ljava/lang/String;",
-                access = Opcodes.ACC_PUBLIC or Opcodes.ACC_SYNCHRONIZED,
+                descriptor = "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+                access = Opcodes.ACC_PUBLIC,
             )
         val mutations = CoroutineMutator.generateMutations("com.Foo", method, 10)
         val skip = mutations.first { it.metadata["mutationType"] == "SKIP_SUSPEND_BODY" }
         assertNotNull(skip)
-        assertEquals("java.lang.String", skip.metadata["returnType"])
+        assertEquals("java.lang.Object", skip.metadata["returnType"])
     }
 
     @Test
@@ -183,8 +187,8 @@ class CoroutineMutatorExtendedTest {
         val method =
             MethodInfo(
                 name = "fetch",
-                descriptor = "()V",
-                access = Opcodes.ACC_PUBLIC or Opcodes.ACC_SYNCHRONIZED,
+                descriptor = "(Lkotlin/coroutines/Continuation;)V",
+                access = Opcodes.ACC_PUBLIC,
             )
         val mutations = CoroutineMutator.generateMutations("com.Foo", method, 10)
         val throwMutation = mutations.first { it.metadata["mutationType"] == "THROW_CANCELLATION" }
