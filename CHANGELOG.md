@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.2] - 2026-06-08
+## [0.2.0] - 2026-06-08
 
 ### Added
 - **Test result caching** (MutKtCache): File-based caching for faster re-runs
