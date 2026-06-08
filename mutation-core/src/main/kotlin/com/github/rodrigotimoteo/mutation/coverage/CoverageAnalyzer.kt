@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutation.coverage
 import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import org.jacoco.core.analysis.Analyzer
 import org.jacoco.core.analysis.CoverageBuilder
+import org.jacoco.core.analysis.ICounter
 import org.jacoco.core.data.ExecutionDataStore
 import org.jacoco.core.tools.ExecFileLoader
 import org.slf4j.LoggerFactory
@@ -90,16 +91,14 @@ class CoverageAnalyzer {
             val result = mutableMapOf<String, MutableSet<Int>>()
             for (classCoverage in coverageBuilder.getClasses()) {
                 val coveredLines = mutableSetOf<Int>()
-                val lineCounter = classCoverage.getLineCounter()
-                // JaCoCo line coverage is probed by probes, not exact line numbers
-                // We use the line counter's covered count as a heuristic
-                if (lineCounter.getCoveredCount() > 0) {
-                    // Mark all lines as covered if any line in the class is covered
-                    // This is conservative — real per-line data requires source file analysis
-                    // For mutation testing, this is sufficient: if any test reaches this class,
-                    // we assume the class is instrumented and has coverage
-                    for (i in 1..lineCounter.getTotalCount()) {
-                        coveredLines.add(i)
+                val firstLine = classCoverage.getFirstLine()
+                val lastLine = classCoverage.getLastLine()
+                if (firstLine > 0 && lastLine > 0) {
+                    for (lineNr in firstLine..lastLine) {
+                        val line = classCoverage.getLine(lineNr)
+                        if (line != null && line.getStatus() != ICounter.NOT_COVERED) {
+                            coveredLines.add(lineNr)
+                        }
                     }
                 }
                 if (coveredLines.isNotEmpty()) {
@@ -136,9 +135,17 @@ class CoverageAnalyzer {
             var coveredLines = emptySet<Int>()
             for (classCoverage in coverageBuilder.getClasses()) {
                 if (classCoverage.getName() == className) {
-                    val lineCounter = classCoverage.getLineCounter()
-                    if (lineCounter.getCoveredCount() > 0) {
-                        coveredLines = (1..lineCounter.getTotalCount()).toSet()
+                    val firstLine = classCoverage.getFirstLine()
+                    val lastLine = classCoverage.getLastLine()
+                    if (firstLine > 0 && lastLine > 0) {
+                        val lines = mutableSetOf<Int>()
+                        for (lineNr in firstLine..lastLine) {
+                            val line = classCoverage.getLine(lineNr)
+                            if (line != null && line.getStatus() != ICounter.NOT_COVERED) {
+                                lines.add(lineNr)
+                            }
+                        }
+                        coveredLines = lines
                     }
                     break
                 }

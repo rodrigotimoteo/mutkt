@@ -108,27 +108,31 @@ class ReflectionTestRunner(
                 failures.addAll(paramResults.fourth)
             } else {
                 // Standard @Test or @RepeatedTest
-                testsFound++
-                val instance = testClass.getDeclaredConstructor().newInstance()
-                try {
-                    for (setup in beforeEachMethods) {
-                        setup.isAccessible = true
-                        setup.invoke(instance)
-                    }
-                    method.invoke(instance)
-                    testsSucceeded++
-                } catch (e: java.lang.reflect.InvocationTargetException) {
-                    testsFailed++
-                    failures.add("$className.${method.name}: ${e.targetException?.message}")
-                } catch (e: Exception) {
-                    testsFailed++
-                    failures.add("$className.${method.name}: ${e.message}")
-                } finally {
-                    for (teardown in afterEachMethods) {
-                        try {
-                            teardown.isAccessible = true
-                            teardown.invoke(instance)
-                        } catch (_: Exception) {
+                val repeatedAnnotation = method.getAnnotation(RepeatedTest::class.java)
+                val repetitions = repeatedAnnotation?.value ?: 1
+                testsFound += repetitions
+                for (rep in 1..repetitions) {
+                    val instance = testClass.getDeclaredConstructor().newInstance()
+                    try {
+                        for (setup in beforeEachMethods) {
+                            setup.isAccessible = true
+                            setup.invoke(instance)
+                        }
+                        method.invoke(instance)
+                        testsSucceeded++
+                    } catch (e: java.lang.reflect.InvocationTargetException) {
+                        testsFailed++
+                        failures.add("$className.${method.name}: ${e.targetException?.message}")
+                    } catch (e: Exception) {
+                        testsFailed++
+                        failures.add("$className.${method.name}: ${e.message}")
+                    } finally {
+                        for (teardown in afterEachMethods) {
+                            try {
+                                teardown.isAccessible = true
+                                teardown.invoke(instance)
+                            } catch (_: Exception) {
+                            }
                         }
                     }
                 }
@@ -209,13 +213,8 @@ class ReflectionTestRunner(
                 try {
                     // Look for factory method in same class or companion object
                     val factoryMethod = findFactoryMethod(testClass, factoryMethodName)
-                    if (factoryMethod != null) {
-                        val params =
-                            if (factoryMethod.parameterTypes.isEmpty()) {
-                                factoryMethod.invoke(null)
-                            } else {
-                                factoryMethod.invoke(null, *Array(factoryMethod.parameterTypes.size) { null })
-                            }
+                    if (factoryMethod != null && factoryMethod.parameterTypes.isEmpty()) {
+                        val params = factoryMethod.invoke(null)
 
                         if (params is Iterable<*>) {
                             for (param in params) {

@@ -14,43 +14,7 @@ object CsvReportGenerator {
         report: MutationReport,
         outputDir: File,
     ): File {
-        val csv =
-            buildString {
-                // Header
-                appendLine(
-                    "mutation_id,status,operator,operator_description,className," +
-                        "methodName,lineNumber,description,executionTimeMs," +
-                        "strength,subsumedBy,inlined",
-                )
-
-                // Data rows
-                for (result in report.results) {
-                    appendLine(
-                        listOf(
-                            escapeCsv(result.mutation.id),
-                            result.status.name,
-                            escapeCsv(result.mutation.operator.operatorName),
-                            escapeCsv(result.mutation.operator.description),
-                            escapeCsv(result.mutation.className),
-                            escapeCsv(result.mutation.methodName),
-                            result.mutation.lineNumber.toString(),
-                            escapeCsv(result.mutation.description),
-                            result.executionTimeMs.toString(),
-                            // Default strength
-                            "STRONG",
-                            // subsumedBy (filled by SubsumptionAnalyzer)
-                            "",
-                            // inlined (filled by InlinedFinallyDetector)
-                            "false",
-                        ).joinToString(","),
-                    )
-                }
-            }
-
-        outputDir.mkdirs()
-        val file = File(outputDir, "mutations.csv")
-        file.writeText(csv)
-        return file
+        return generateEnhanced(report, emptyMap(), emptySet(), outputDir)
     }
 
     /**

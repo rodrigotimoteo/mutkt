@@ -140,12 +140,7 @@ class KotlinMetadataParserTest {
             )
         assertEquals("Foo", info.className)
         assertFalse(info.isKotlinClass)
-        assertFalse(info.isDataClass)
-        assertFalse(info.isSealedClass)
-        assertFalse(info.isInlineClass)
-        assertFalse(info.isObject)
         assertFalse(info.isInterface)
-        assertFalse(info.isEnumClass)
     }
 
     @Test

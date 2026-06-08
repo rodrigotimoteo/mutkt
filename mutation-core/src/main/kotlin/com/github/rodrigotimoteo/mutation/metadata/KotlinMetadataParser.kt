@@ -12,12 +12,7 @@ object KotlinMetadataParser {
     data class KotlinClassInfo(
         val className: String,
         val isKotlinClass: Boolean,
-        val isDataClass: Boolean = false,
-        val isSealedClass: Boolean = false,
-        val isInlineClass: Boolean = false,
-        val isObject: Boolean = false,
         val isInterface: Boolean = false,
-        val isEnumClass: Boolean = false,
     )
 
     fun parse(classBytes: ByteArray): KotlinClassInfo {
@@ -28,7 +23,6 @@ object KotlinMetadataParser {
     }
 
     fun isKotlinSyntheticMethod(name: String): Boolean {
-        // Only match known compiler-generated patterns
         return name == "copy\$default" ||
             name.startsWith("component") && name.endsWith("\$default") ||
             name.endsWith("\$serializer") ||
@@ -40,7 +34,6 @@ object KotlinMetadataParser {
 
     private class MetadataVisitor : ClassVisitor(Opcodes.ASM9) {
         var classInfo = KotlinClassInfo(className = "", isKotlinClass = false)
-        private var metadataFound = false
 
         override fun visit(
             version: Int,
@@ -52,14 +45,7 @@ object KotlinMetadataParser {
         ) {
             val className = name.replace('/', '.')
             val isInterface = (access and Opcodes.ACC_INTERFACE) != 0
-
-            // isDataClass requires proper metadata parsing
-            classInfo =
-                classInfo.copy(
-                    className = className,
-                    isInterface = isInterface,
-                    isDataClass = false,
-                )
+            classInfo = KotlinClassInfo(className = className, isKotlinClass = false, isInterface = isInterface)
             super.visit(version, access, name, signature, superName, interfaces)
         }
 
@@ -68,7 +54,6 @@ object KotlinMetadataParser {
             visible: Boolean,
         ): org.objectweb.asm.AnnotationVisitor? {
             if (desc == "Lkotlin/Metadata;") {
-                metadataFound = true
                 classInfo = classInfo.copy(isKotlinClass = true)
             }
             return super.visitAnnotation(desc, visible)

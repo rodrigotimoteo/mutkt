@@ -275,11 +275,4 @@ open class MutationPluginExtension(project: Project) {
      */
 
     val enableCache: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
-
-    /**
-     * Project root directory for caching and baseline storage.
-     * Defaults to project.projectDir
-     */
-
-    val projectDir: Property<String> = project.objects.property(String::class.java).convention(project.projectDir.absolutePath)
 }

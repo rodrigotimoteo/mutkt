@@ -110,7 +110,7 @@ class HtmlReportGenerator {
                     appendLine("          </tr>")
                     appendLine("        </thead>")
                     appendLine("        <tbody>")
-                    classScores.sortedByDescending { it.score }.forEach { classScore ->
+                    classScores.forEach { classScore ->
                         appendLine("          <tr>")
                         appendLine("            <td class=\"class-name\">${classScore.className}</td>")
                         appendLine("            <td>${classScore.totalMutations}</td>")

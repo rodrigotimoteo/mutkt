@@ -26,21 +26,9 @@ annotation class MutKtTest(
      */
     val mode: VerificationMode = VerificationMode.LENIENT,
     /**
-     * Mutation operators to enable. Empty means all operators.
-     */
-    val operators: Array<String> = [],
-    /**
      * Timeout in milliseconds for each mutation execution.
      */
     val timeoutMs: Long = 30_000L,
-    /**
-     * Maximum mutations to run (0 = unlimited).
-     */
-    val maxMutations: Int = 0,
-    /**
-     * Whether to automatically reset mutation state between runs.
-     */
-    val autoReset: Boolean = true,
     /**
      * Whether to skip mutation testing when running in IDE.
      */
