@@ -215,7 +215,7 @@ class MutationEngine(
 
         // Run tests against each mutant
         val testStart = System.currentTimeMillis()
-        val results = runMutants(mutationsToTest, allClassFiles, orderedTestNames, testClassLoader)
+        val (results, killSets) = runMutants(mutationsToTest, allClassFiles, orderedTestNames, testClassLoader)
         val testTime = System.currentTimeMillis() - testStart
         System.err.println(
             "[MutKt] Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
@@ -235,8 +235,7 @@ class MutationEngine(
         val finalResults =
             if (enableSubsumption && results.size > 10) {
                 val mutations = results.map { it.mutation }
-                val statusMap = results.associate { it.mutation.id to it.status }
-                val (essential, subsumed) = subsumptionAnalyzer.analyze(mutations, statusMap)
+                val (essential, subsumed) = subsumptionAnalyzer.analyze(mutations, killSets)
                 if (subsumed.isNotEmpty()) {
                     System.err.println("[MutKt] Subsumption: ${subsumed.size} redundant mutations skipped")
                     results.map { result ->
@@ -449,8 +448,8 @@ class MutationEngine(
         classFiles: Map<String, ByteArray>,
         testClassNames: List<String>,
         testClassLoader: ClassLoader? = null,
-    ): List<MutationResult> {
-        if (mutations.isEmpty()) return emptyList()
+    ): Pair<List<MutationResult>, Map<String, Set<String>>> {
+        if (mutations.isEmpty()) return emptyList<MutationResult>() to emptyMap()
 
         // Reset the shared class-loading failure cache for this run.
         MutantClassLoaderFactory.resetCache()
@@ -477,6 +476,7 @@ class MutationEngine(
         }
 
         val results = mutableListOf<MutationResult>()
+        val killSets = mutableMapOf<String, Set<String>>()
         val executor: ExecutorService =
             Executors.newFixedThreadPool(parallelism) { runnable ->
                 Thread(runnable, "mutation-worker").apply { isDaemon = true }
@@ -497,8 +497,11 @@ class MutationEngine(
 
             for ((index, future) in futures) {
                 try {
-                    val result = future.get(timeoutMs, TimeUnit.MILLISECONDS) as MutationResult
+                    val (result, failedTests) = future.get(timeoutMs, TimeUnit.MILLISECONDS)
                     results.add(result)
+                    if (failedTests.isNotEmpty()) {
+                        killSets[result.mutation.id] = failedTests
+                    }
                 } catch (e: java.util.concurrent.TimeoutException) {
                     future.cancel(true)
                     logger.warn("Mutation timed out after ${timeoutMs}ms: ${mutations[index].first}")
@@ -544,7 +547,7 @@ class MutationEngine(
             }
         }
 
-        return results
+        return results to killSets
     }
 
     /**
@@ -558,7 +561,7 @@ class MutationEngine(
         baseLoader: com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader,
         testClassNames: List<String>,
         testClassByteMap: Map<String, ByteArray>,
-    ): MutationResult {
+    ): Pair<MutationResult, Set<String>> {
         val startTime = System.currentTimeMillis()
 
         val targetClassKey = mutation.className.replace('.', '/')
@@ -578,32 +581,39 @@ class MutationEngine(
                 testClassByteMap,
             )
 
-        val status = runTestsWithClassLoader(classLoader, testClassNames)
+        val (status, failedTestClasses) = runTestsWithClassLoader(classLoader, testClassNames)
 
         return MutationResult(
             mutation = toMutation(mutation),
             status = status,
             executionTimeMs = System.currentTimeMillis() - startTime,
-        )
+        ) to failedTestClasses
     }
 
     private fun runTestsWithClassLoader(
         classLoader: ClassLoader,
         testClassNames: List<String>,
-    ): MutationStatus {
+    ): Pair<MutationStatus, Set<String>> {
         // Use ReflectionTestRunner which supports @Nested, @ParameterizedTest, @RepeatedTest
         val runner = ReflectionTestRunner(classLoader)
         val results = runner.runTests(testClassNames)
 
         if (!results.hasTests) {
-            return if (results.failureMessages.isNotEmpty()) MutationStatus.ERROR else MutationStatus.NO_COVERAGE
+            return if (results.failureMessages.isNotEmpty()) {
+                MutationStatus.ERROR to emptySet()
+            } else {
+                MutationStatus.NO_COVERAGE to emptySet()
+            }
         }
 
-        return when {
-            results.hasFailures -> MutationStatus.KILLED
-            results.failureMessages.isNotEmpty() -> MutationStatus.ERROR
-            else -> MutationStatus.SURVIVED
-        }
+        val status =
+            when {
+                results.hasFailures -> MutationStatus.KILLED
+                results.failureMessages.isNotEmpty() -> MutationStatus.ERROR
+                else -> MutationStatus.SURVIVED
+            }
+
+        return status to results.failedTestClasses
     }
 
     private fun toMutation(

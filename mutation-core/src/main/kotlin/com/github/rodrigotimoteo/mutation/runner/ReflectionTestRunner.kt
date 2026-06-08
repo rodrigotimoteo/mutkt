@@ -34,6 +34,8 @@ class ReflectionTestRunner(
         val testsFailed: Int,
         val testsSkipped: Int,
         val failureMessages: List<String>,
+        /** Which test classes failed (for per-test kill tracking). */
+        val failedTestClasses: Set<String> = emptySet(),
     ) {
         val hasTests: Boolean get() = testsFound > 0
         val hasFailures: Boolean get() = testsFailed > 0
@@ -44,6 +46,7 @@ class ReflectionTestRunner(
         var testsSucceeded = 0
         var testsFailed = 0
         val failures = mutableListOf<String>()
+        val failedTestClasses = mutableSetOf<String>()
 
         for (testClassName in testClassNames) {
             try {
@@ -53,12 +56,15 @@ class ReflectionTestRunner(
                 testsSucceeded += results.second
                 testsFailed += results.third
                 failures.addAll(results.fourth)
+                if (results.third > 0) {
+                    failedTestClasses.add(testClassName)
+                }
             } catch (e: Exception) {
                 logger.debug("Could not load test class: $testClassName", e)
             }
         }
 
-        return TestResults(testsFound, testsSucceeded, testsFailed, 0, failures)
+        return TestResults(testsFound, testsSucceeded, testsFailed, 0, failures, failedTestClasses)
     }
 
     /**

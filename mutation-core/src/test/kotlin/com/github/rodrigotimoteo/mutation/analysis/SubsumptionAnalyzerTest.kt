@@ -1,7 +1,6 @@
 package com.github.rodrigotimoteo.mutation.analysis
 
 import com.github.rodrigotimoteo.mutation.model.Mutation
-import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -23,81 +22,93 @@ class SubsumptionAnalyzerTest {
                 createMutation("A", "method1", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 }),
                 createMutation("B", "method1", 20, ByteArray(10) { 0x03 }, ByteArray(10) { 0x04 }),
             )
-        val results =
+        val killSets =
             mapOf(
-                mutations[0].id to MutationStatus.KILLED,
-                mutations[1].id to MutationStatus.SURVIVED,
+                mutations[0].id to setOf("TestA"),
+                mutations[1].id to setOf("TestB"),
             )
 
-        val (essential, subsumed) = analyzer.analyze(mutations, results)
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
         assertEquals(2, essential.size)
         assertTrue(subsumed.isEmpty())
     }
 
     @Test
-    fun `analyze returns all mutations as essential (conservative mode)`() {
-        val original = ByteArray(10) { 0x01 }
-        val mutatedA = ByteArray(10) { 0x01 }.also { it[0] = 0x02 }
-        val mutatedB = ByteArray(10) { 0x01 }.also { it[0] = 0x03 }
-
-        val mutationA = createMutation("Foo", "bar", 10, original, mutatedA)
-        val mutationB = createMutation("Foo", "bar", 20, original, mutatedB)
+    fun `analyze detects subsumption when kill set is subset`() {
+        val mutationA = createMutation("Foo", "bar", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 })
+        val mutationB = createMutation("Foo", "bar", 20, ByteArray(10) { 0x01 }, ByteArray(10) { 0x03 })
 
         val mutations = listOf(mutationA, mutationB)
-        val results =
+        val killSets =
             mapOf(
-                mutationA.id to MutationStatus.KILLED,
-                mutationB.id to MutationStatus.SURVIVED,
+                // A kills more tests
+                mutationA.id to setOf("Test1", "Test2", "Test3"),
+                // B kills fewer → subsumed by A
+                mutationB.id to setOf("Test1", "Test2"),
             )
 
-        val (essential, subsumed) = analyzer.analyze(mutations, results)
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
-        // Conservative: no subsumption detected
+        // B is subsumed because killers(B) ⊆ killers(A)
+        assertEquals(1, essential.size)
+        assertEquals(mutationA.id, essential[0].id)
+        assertEquals(1, subsumed.size)
+        assertTrue(subsumed.contains(mutationB.id))
+    }
+
+    @Test
+    fun `analyze does not subsume when kill sets are disjoint`() {
+        val mutationA = createMutation("Foo", "bar", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 })
+        val mutationB = createMutation("Foo", "bar", 20, ByteArray(10) { 0x01 }, ByteArray(10) { 0x03 })
+
+        val mutations = listOf(mutationA, mutationB)
+        val killSets =
+            mapOf(
+                mutationA.id to setOf("Test1"),
+                mutationB.id to setOf("Test2"),
+            )
+
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
+
         assertEquals(2, essential.size)
         assertTrue(subsumed.isEmpty())
     }
 
     @Test
     fun `analyze does not subsume across different classes`() {
-        val original = ByteArray(10) { 0x01 }
-        val mutatedA = ByteArray(10) { 0x01 }.also { it[0] = 0x02 }
-        val mutatedB = ByteArray(10) { 0x01 }.also { it[0] = 0x03 }
-
-        val mutationA = createMutation("Foo", "bar", 10, original, mutatedA)
-        val mutationB = createMutation("Baz", "bar", 20, original, mutatedB)
+        val mutationA = createMutation("Foo", "bar", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 })
+        val mutationB = createMutation("Baz", "bar", 20, ByteArray(10) { 0x01 }, ByteArray(10) { 0x03 })
 
         val mutations = listOf(mutationA, mutationB)
-        val results =
+        val killSets =
             mapOf(
-                mutationA.id to MutationStatus.KILLED,
-                mutationB.id to MutationStatus.SURVIVED,
+                mutationA.id to setOf("Test1", "Test2", "Test3"),
+                mutationB.id to setOf("Test1", "Test2"),
             )
 
-        val (essential, subsumed) = analyzer.analyze(mutations, results)
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
+        // No subsumption across different classes
         assertEquals(2, essential.size)
         assertTrue(subsumed.isEmpty())
     }
 
     @Test
     fun `analyze does not subsume across different methods`() {
-        val original = ByteArray(10) { 0x01 }
-        val mutatedA = ByteArray(10) { 0x01 }.also { it[0] = 0x02 }
-        val mutatedB = ByteArray(10) { 0x01 }.also { it[0] = 0x03 }
-
-        val mutationA = createMutation("Foo", "bar", 10, original, mutatedA)
-        val mutationB = createMutation("Foo", "baz", 20, original, mutatedB)
+        val mutationA = createMutation("Foo", "bar", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 })
+        val mutationB = createMutation("Foo", "baz", 20, ByteArray(10) { 0x01 }, ByteArray(10) { 0x03 })
 
         val mutations = listOf(mutationA, mutationB)
-        val results =
+        val killSets =
             mapOf(
-                mutationA.id to MutationStatus.KILLED,
-                mutationB.id to MutationStatus.SURVIVED,
+                mutationA.id to setOf("Test1", "Test2", "Test3"),
+                mutationB.id to setOf("Test1", "Test2"),
             )
 
-        val (essential, subsumed) = analyzer.analyze(mutations, results)
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
+        // No subsumption across different methods
         assertEquals(2, essential.size)
         assertTrue(subsumed.isEmpty())
     }
@@ -106,9 +117,9 @@ class SubsumptionAnalyzerTest {
     fun `analyze handles single mutation`() {
         val mutation = createMutation("Foo", "bar", 10, ByteArray(5), ByteArray(5))
         val mutations = listOf(mutation)
-        val results = mapOf(mutation.id to MutationStatus.KILLED)
+        val killSets = mapOf(mutation.id to setOf("Test1"))
 
-        val (essential, subsumed) = analyzer.analyze(mutations, results)
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
         assertEquals(1, essential.size)
         assertTrue(subsumed.isEmpty())
@@ -120,6 +131,74 @@ class SubsumptionAnalyzerTest {
 
         assertTrue(essential.isEmpty())
         assertTrue(subsumed.isEmpty())
+    }
+
+    @Test
+    fun `analyze chains subsumption`() {
+        // A kills {T1, T2, T3}, B kills {T1, T2}, C kills {T1}
+        // A subsumes B, A subsumes C, B subsumes C
+        val mutationA = createMutation("Foo", "bar", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 })
+        val mutationB = createMutation("Foo", "bar", 20, ByteArray(10) { 0x01 }, ByteArray(10) { 0x03 })
+        val mutationC = createMutation("Foo", "bar", 30, ByteArray(10) { 0x01 }, ByteArray(10) { 0x04 })
+
+        val mutations = listOf(mutationA, mutationB, mutationC)
+        val killSets =
+            mapOf(
+                mutationA.id to setOf("Test1", "Test2", "Test3"),
+                mutationB.id to setOf("Test1", "Test2"),
+                mutationC.id to setOf("Test1"),
+            )
+
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
+
+        // Only A is essential
+        assertEquals(1, essential.size)
+        assertEquals(mutationA.id, essential[0].id)
+        assertEquals(2, subsumed.size)
+        assertTrue(subsumed.contains(mutationB.id))
+        assertTrue(subsumed.contains(mutationC.id))
+    }
+
+    @Test
+    fun `analyze does not subsume killed by unsurvived`() {
+        // Only killed mutations can subsume
+        val mutationA = createMutation("Foo", "bar", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 })
+        val mutationB = createMutation("Foo", "bar", 20, ByteArray(10) { 0x01 }, ByteArray(10) { 0x03 })
+
+        val mutations = listOf(mutationA, mutationB)
+        val killSets =
+            mapOf(
+                // A killed
+                mutationA.id to setOf("Test1", "Test2"),
+                // B not killed (no kill set entry)
+            )
+
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
+
+        // B is not killed, so no subsumption possible
+        assertEquals(2, essential.size)
+        assertTrue(subsumed.isEmpty())
+    }
+
+    @Test
+    fun `analyze handles same kill set`() {
+        // Same kill set → each subsumes the other? No — only one should be essential
+        val mutationA = createMutation("Foo", "bar", 10, ByteArray(10) { 0x01 }, ByteArray(10) { 0x02 })
+        val mutationB = createMutation("Foo", "bar", 20, ByteArray(10) { 0x01 }, ByteArray(10) { 0x03 })
+
+        val mutations = listOf(mutationA, mutationB)
+        val killSets =
+            mapOf(
+                mutationA.id to setOf("Test1", "Test2"),
+                mutationB.id to setOf("Test1", "Test2"),
+            )
+
+        val (essential, subsumed) = analyzer.analyze(mutations, killSets)
+
+        // Both subsume each other (A⊆B and B⊆A), but we skip already-subsumed
+        // Result: one essential, one subsumed
+        assertEquals(1, essential.size)
+        assertEquals(1, subsumed.size)
     }
 
     private fun createMutation(
