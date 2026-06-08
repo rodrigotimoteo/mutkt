@@ -1,93 +1,48 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
+## [0.1.2] - 2026-06-08
 
 ### Added
-- GitHub Actions CI/CD workflows
-- Security scanning (CodeQL, secret scanning)
-- SBOM generation support
-- Contributing guide
-- Code of conduct
-- Issue templates
-- PR template
-- Security policy
-- Architecture documentation
-- Migration guide
-
-### Changed
-- Improved build configuration
-- Enhanced error messages
+- **Test result caching** (MutKtCache): File-based caching for faster re-runs
+- **Baseline diff mode** (BaselineStorage): Track results across runs, detect new/changed/removed mutations
+- **Weak mutation analysis**: Skip mutations in uncovered code
+- **Test strength ordering**: Run strongest tests first based on kill history
+- **HTML reports**: Static HTML report with per-class breakdown and kill-rate visualization
+- **Console reporter**: Real-time progress bar and kill-rate display
+- **Regex filtering**: `targetClassPatterns` and `excludeClassPatterns` in Gradle DSL
+- **JaCoCo integration**: Read .exec files for coverage-guided mutation skipping
+- **Gradle 9.x compatibility**: Replace deprecated `project.buildDir` with `layout.buildDirectory`
 
 ### Fixed
-- Build stability improvements
-
-## [0.2.0] - 2024-XX-XX
-
-### Added
-- 5 new mutation operators:
-  - `VOID_METHOD_CALLS`: Remove calls to void methods
-  - `INCREMENTS`: Replace ++ with -- and vice versa
-  - `TRUE_RETURNS`: Replace boolean returns with true
-  - `FALSE_RETURNS`: Replace boolean returns with false
-  - `CONSTRUCTOR_CALLS`: Remove constructor calls
-  - `NON_VOID_METHOD_CALLS`: Remove non-void method calls
-- `@SuppressMutations` annotation for class/function level suppression
-- Comment-based line suppression (`// mutflow:ignore`)
-- Incremental analysis with `MutationHistoryManager`
-- XML and JSON report generators
-- `MutationDescriber` for human-readable mutation names
-- Gradle plugin DSL options:
-  - `failOnScoreThreshold`
-  - `failOnCoverageThreshold`
-  - `maxMutationsPerClass`
-  - `enableIncrementalAnalysis`
-  - `mutantTimeoutMs`
+- **@SuppressMutations per-operator**: Now correctly suppresses only listed operators (was suppressing ALL)
+- **SubsumptionAnalyzer**: Disabled until proper per-test kill tracking exists
+- **detectChanges**: Uses `git diff HEAD` instead of `HEAD~1` for initial commit safety
+- **String.format errors**: Fixed `IllegalFormatConversionException` in reporters
 
 ### Changed
-- Updated Gradle plugin to version 0.2.0
-- Improved mutation scanning performance
-- Enhanced report formatting
+- **MutationStatus**: Added `NO_COVERAGE` and `WEAK_KILLED` statuses
+- **README**: Updated with new features and configuration options
+- **AGENTS.md**: Updated architecture docs with new internal types
+
+### Performance
+- Class-level classloader batching: 90x speedup on JBoyEmu (85.9s → 1.2s)
+- Weak mutation analysis: Skips unreachable mutations
+- Test result caching: Instant re-runs for unchanged code
+
+## [0.1.1] - 2026-06-07
 
 ### Fixed
-- Timeout detection for infinite loops
-- Incremental analysis caching issues
-- Memory optimization for large codebases
+- Classloader now makes mutations visible to test code
+- Mutation test runner reliability improvements
+- Optimized mutation test execution time
 
-## [0.1.0] - 2024-XX-XX
+## [0.1.0] - 2026-06-06
 
 ### Added
 - Initial release
-- 7 MVP mutation operators:
-  - `CONDITIONALS_BOUNDARY`
-  - `NEGATE_CONDITIONALS`
-  - `ARITHMETIC`
-  - `RETURN_VALS`
-  - `NULL_RETURNS`
-  - `EMPTY_RETURNS`
-  - `INVERT_NEGS`
-- 4 Kotlin-specific operators:
-  - `DATA_CLASS_COPY`
-  - `SEALED_WHEN`
-  - `NULL_SAFETY`
-  - `COROUTINE`
-- Gradle plugin with auto-discovery
-- HTML report generation
-- JUnit 5 integration
-- Zero-config usage
-- Parallel mutant execution
-- Coverage-guided test selection
-
-### Changed
-- N/A (initial release)
-
-### Fixed
-- N/A (initial release)
-
-[Unreleased]: https://github.com/rodrigotimoteo/mutationKotlin/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/rodrigotimoteo/mutationKotlin/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/rodrigotimoteo/mutationKotlin/releases/tag/v0.1.0
+- 17 mutation operators (7 MVP + 4 Kotlin-specific + 6 Quick Win)
+- Gradle plugin with DSL configuration
+- JUnit 5 extension (@MutKtTest)
+- ASM-based bytecode mutation engine
+- Console and CSV report formats
+- Inlined finally block detection
