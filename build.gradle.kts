@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.nexus.publish)
     alias(libs.plugins.kover)
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
@@ -133,14 +134,6 @@ subprojects {
                             ?: ""
                 }
             }
-            maven {
-                name = "MavenCentral"
-                url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
-                credentials {
-                    username = System.getenv("SONATYPE_USERNAME") ?: project.findProperty("ossrh.username") as String? ?: ""
-                    password = System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("ossrh.password") as String? ?: ""
-                }
-            }
         }
     }
 
@@ -190,5 +183,17 @@ extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckE
         validForHours.set(24)
         datafeedUrl.set("https://nvd.nist.gov/static/feeds/json/cve/1.1/nvdcve-1.1-{year}.json.gz")
         datafeedStartYear.set(2002)
+    }
+}
+
+// Nexus publish plugin for automated Maven Central publishing.
+// Uses the Sonatype Central Portal OSSRH Staging API to auto-close
+// and release staging repositories after publish.
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
+        }
     }
 }

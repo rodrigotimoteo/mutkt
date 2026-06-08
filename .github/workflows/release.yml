@@ -58,15 +58,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to Maven Central (staging)
+      - name: Publish to Maven Central
         run: |
-          ./gradlew publishMavenPublicationToMavenCentralRepository
+          ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository
           echo ""
           echo "============================================================"
-          echo "Artifacts uploaded to Sonatype staging."
-          echo "To complete the release, visit:"
-          echo "  https://central.sonatype.com/publishing/deployments"
-          echo "Find the deployment and click 'Publish'."
+          echo "Published to Maven Central. Available in ~10-30 minutes at:"
+          echo "  https://repo1.maven.org/maven2/io/github/rodrigotimoteo/"
           echo "============================================================"
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
