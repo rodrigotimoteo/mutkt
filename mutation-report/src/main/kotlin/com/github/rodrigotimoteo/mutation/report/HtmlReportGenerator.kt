@@ -112,7 +112,7 @@ class HtmlReportGenerator {
                     appendLine("        <tbody>")
                     classScores.forEach { classScore ->
                         appendLine("          <tr>")
-                        appendLine("            <td class=\"class-name\">${classScore.className}</td>")
+                        appendLine("            <td class=\"class-name\">${escapeHtml(classScore.className)}</td>")
                         appendLine("            <td>${classScore.totalMutations}</td>")
                         appendLine("            <td class=\"killed\">${classScore.killedMutations}</td>")
                         appendLine("            <td class=\"survived\">${classScore.survivedMutations}</td>")
@@ -157,10 +157,10 @@ class HtmlReportGenerator {
                             MutationStatus.SUBSUMED -> "subsumed"
                         }
                     appendLine("          <tr>")
-                    appendLine("            <td class=\"class-name\">${result.mutation.className}</td>")
-                    appendLine("            <td>${result.mutation.methodName}</td>")
+                    appendLine("            <td class=\"class-name\">${escapeHtml(result.mutation.className)}</td>")
+                    appendLine("            <td>${escapeHtml(result.mutation.methodName)}</td>")
                     appendLine("            <td>${result.mutation.lineNumber}</td>")
-                    appendLine("            <td>${result.mutation.operator}</td>")
+                    appendLine("            <td>${escapeHtml(result.mutation.operator.operatorName)}</td>")
                     appendLine("            <td class=\"$statusClass\">${result.status}</td>")
                     appendLine("            <td>${result.executionTimeMs}</td>")
                     appendLine("          </tr>")
@@ -221,4 +221,10 @@ class HtmlReportGenerator {
             footer { text-align: center; color: #7f8c8d; margin-top: 2rem; }
             """.trimIndent()
     }
+
+    private fun escapeHtml(text: String): String =
+        text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
 }

@@ -45,7 +45,7 @@ dependencies {
 }
 
 subprojects {
-    if (name == "mutation-sample") return@subprojects
+    if (name == "mutation-sample" || name == "mutation-self-test") return@subprojects
 
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "maven-publish")

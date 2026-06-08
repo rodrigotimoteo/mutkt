@@ -109,7 +109,8 @@ class ReflectionTestRunner(
                 it.isAnnotationPresent(AfterAll::class.java)
             }
 
-        // Run @BeforeAll once before all tests
+        // Run @BeforeAll once before all tests — abort on failure
+        var beforeAllFailed = false
         for (setup in beforeAllMethods) {
             try {
                 setup.isAccessible = true
@@ -120,8 +121,14 @@ class ReflectionTestRunner(
                     setup.invoke(instance)
                 }
             } catch (e: Exception) {
-                failures.add("$className.@BeforeAll ${setup.name}: ${e.message}")
+                val cause = if (e is java.lang.reflect.InvocationTargetException) e.targetException?.message else e.message
+                failures.add("$className.@BeforeAll ${setup.name}: $cause")
+                beforeAllFailed = true
             }
+        }
+
+        if (beforeAllFailed) {
+            return TestClassResult(0, 0, 1, failures)
         }
 
         // Run each test method
@@ -416,7 +423,7 @@ class ReflectionTestRunner(
                         currentInstance,
                         "$className\$${nestedClass.simpleName}",
                         parentBeforeEach = beforeEachMethods,
-                        parentAfterEach = emptyList(),
+                        parentAfterEach = afterEachMethods,
                     )
                 testsFound += nestedResults.testsFound
                 testsSucceeded += nestedResults.testsSucceeded

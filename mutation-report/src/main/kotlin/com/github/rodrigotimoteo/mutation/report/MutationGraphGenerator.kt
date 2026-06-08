@@ -185,6 +185,7 @@ object MutationGraphGenerator {
     private fun escapeJson(text: String): String =
         text
             .replace("\\", "\\\\")
+            .replace("</", "<\\/")
             .replace("\"", "\\\"")
             .replace("\n", "\\n")
             .replace("\r", "\\r")
