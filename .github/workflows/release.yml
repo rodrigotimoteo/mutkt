@@ -68,37 +68,28 @@ jobs:
 
       - name: Close and release to Maven Central
         run: |
-          if [ -z "$CENTRAL_PORTAL_USERNAME" ] || [ -z "$CENTRAL_PORTAL_PASSWORD" ]; then
-            echo "::warning::CENTRAL_PORTAL_USERNAME/PASSWORD secrets not set."
-            echo "Generate User Tokens at: https://central.sonatype.com/account"
-            echo "Store as GitHub secrets: CENTRAL_PORTAL_USERNAME, CENTRAL_PORTAL_PASSWORD"
-            echo "Then manually publish at: https://central.sonatype.com/publishing/deployments"
-            exit 0
-          fi
-
           echo "Finding open staging repository..."
-          REPO_ID=$(curl -sS -u "$CENTRAL_PORTAL_USERNAME:$CENTRAL_PORTAL_PASSWORD" \
+          REPO_ID=$(curl -sS -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
             "https://ossrh-staging-api.central.sonatype.com/service/local/staging/repository" \
-            | jq -r '.data[] | select(.type == "open") | .repositoryId' | head -1)
+            | jq -r '.[].repositoryId' | head -1)
 
           if [ -z "$REPO_ID" ]; then
-            echo "No open repository found via API. Check Portal:"
-            echo "  https://central.sonatype.com/publishing/deployments"
+            echo "No open repository found via API."
+            echo "Deployment should appear at: https://central.sonatype.com/publishing/deployments"
             exit 0
           fi
 
           echo "Closing repository: $REPO_ID"
-          curl -sS -u "$CENTRAL_PORTAL_USERNAME:$CENTRAL_PORTAL_PASSWORD" \
+          curl -sS -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
             -X POST \
             -H "Content-Type: application/json" \
             -d "{\"data\":{\"stagedRepositoryIds\":[\"$REPO_ID\"],\"description\":\"MutKt ${{ github.ref_name }}\"}}" \
             "https://ossrh-staging-api.central.sonatype.com/service/local/staging/bulk/close"
 
-          echo "Release initiated. Check status at:"
-          echo "  https://central.sonatype.com/publishing/deployments"
+          echo "Release initiated. Check status at: https://central.sonatype.com/publishing/deployments"
         env:
-          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
-          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
 
   release:
     name: Create Release
