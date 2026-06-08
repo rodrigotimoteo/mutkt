@@ -69,9 +69,9 @@ class CoverageAnalyzer {
     /**
      * Analyzes coverage for mutations.
      *
-     * If coverage data is available, filters mutations to only those
-     * that are covered by tests. If no coverage data, treats all
-     * mutations as covered (conservative approach).
+     * NOTE: JaCoCo .exec parsing requires org.jacoco.core dependency.
+     * Without it, all mutations are treated as covered (conservative).
+     * Add org.jacoco:org.jacoco.core for proper coverage-based filtering.
      *
      * @param classBytes The class bytecode
      * @param className The fully qualified class name
@@ -86,13 +86,15 @@ class CoverageAnalyzer {
         mutations: List<MutationInfo>,
     ): List<MutationCoverage> {
         if (coverageData.empty) {
-            // No coverage data — treat all mutations as covered (conservative)
             return mutations.map { MutationCoverage(it, listOf("all")) }
         }
 
-        // With coverage data, we could implement more sophisticated filtering
-        // For now, treat all mutations as covered if the .exec file exists
-        // Real implementation would parse the .exec file and map probes to lines
+        // JaCoCo exec parsing requires org.jacoco.core dependency
+        // Without it, treat all mutations as covered (conservative)
+        logger.info(
+            "Coverage filtering: .exec file found but JaCoCo API not available — " +
+                "treating all mutations as covered. Add org.jacoco:org.jacoco.core for proper filtering.",
+        )
         return mutations.map { MutationCoverage(it, listOf("covered")) }
     }
 

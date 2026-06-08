@@ -45,8 +45,8 @@ class MutKtExtension : InvocationInterceptor {
     private val logger = LoggerFactory.getLogger(MutKtExtension::class.java)
 
     companion object {
-        private val triggerCount = AtomicInteger(0)
-        private val skipCount = AtomicInteger(0)
+        /** Reference count for enable/disable — prevents parallel classes from killing each other. */
+        private val enableCount = AtomicInteger(0)
     }
 
     override fun interceptBeforeAllMethod(
@@ -69,8 +69,10 @@ class MutKtExtension : InvocationInterceptor {
             return
         }
 
-        logger.info("Mutation testing: ENABLED (${config.mode})")
-        MutationRegistry.enable()
+        // Reference-counted enable: only enables if not already active
+        if (enableCount.incrementAndGet() == 1) {
+            MutationRegistry.enable()
+        }
         MutationRegistry.setTimeoutMs(config.timeoutMs)
 
         invocation.proceed()
@@ -96,8 +98,6 @@ class MutKtExtension : InvocationInterceptor {
             sb.appendLine("  MutKt Mutation Testing Report")
             sb.appendLine("=".repeat(60))
             sb.appendLine("  Triggered mutations: ${triggered.size}")
-            sb.appendLine("  Total triggers: ${triggerCount.get()}")
-            sb.appendLine("  Total skips: ${skipCount.get()}")
             sb.appendLine("=".repeat(60))
             logger.info(sb.toString())
 
@@ -105,15 +105,16 @@ class MutKtExtension : InvocationInterceptor {
                 logger.info("Mutation testing: PASSED (all triggered mutations caught)")
             }
         } finally {
-            // Use per-class cleanup instead of global reset to avoid
-            // destroying concurrent test class state in parallel JUnit execution
+            // Clean up this class's thread state
             val className = extensionContext.testClass.orElse(null)?.name
             if (className != null) {
                 MutationRegistry.resetClass(className)
             }
-            MutationRegistry.disable()
-            triggerCount.set(0)
-            skipCount.set(0)
+            // Reference-counted disable: only disables when last class finishes
+            if (enableCount.decrementAndGet() <= 0) {
+                enableCount.set(0)
+                MutationRegistry.disable()
+            }
         }
 
         invocation.proceed()
@@ -125,12 +126,10 @@ class MutKtExtension : InvocationInterceptor {
         extensionContext: ExtensionContext,
     ) {
         if (!MutationRegistry.isActive()) {
-            skipCount.incrementAndGet()
             invocation.proceed()
             return
         }
 
-        triggerCount.incrementAndGet()
         val state = MutationRegistry.current()
         state.startTimeMs.set(System.currentTimeMillis())
 

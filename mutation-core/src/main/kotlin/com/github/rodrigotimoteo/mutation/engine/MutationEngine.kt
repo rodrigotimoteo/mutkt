@@ -228,7 +228,7 @@ class MutationEngine(
 
         // Update test strength ordering
         if (enableTestOrdering && testStrengthOrdering != null) {
-            updateTestStrength(results, testClassNames)
+            updateTestStrength(results, testClassNames, killSets)
         }
 
         // Subsumption analysis
@@ -296,15 +296,21 @@ class MutationEngine(
 
     /**
      * Get covered lines from JaCoCo execution data.
+     *
+     * NOTE: JaCoCo .exec parsing requires org.jacoco.core dependency.
+     * Without it, weak mutation analysis cannot determine reachability.
+     * Returns empty set = all mutations treated as reachable (conservative).
      */
     private fun getCoveredLines(coverageExecFile: File): Set<Int> {
-        // Simple heuristic: if coverage file exists, assume all lines are covered
-        // Full JaCoCo parsing would require JaCoCo API dependency
-        return if (coverageExecFile.exists() && coverageExecFile.length() > 0) {
-            emptySet() // Empty = treat all as covered (conservative)
-        } else {
-            emptySet()
+        // JaCoCo exec parsing requires org.jacoco.core dependency
+        // Without it, we cannot determine which lines are covered
+        if (coverageExecFile.exists() && coverageExecFile.length() > 0) {
+            logger.info(
+                "Weak mutation: .exec file found but JaCoCo API not available — " +
+                    "treating all mutations as reachable. Add org.jacoco:org.jacoco.core for proper coverage.",
+            )
         }
+        return emptySet()
     }
 
     /**
@@ -364,20 +370,20 @@ class MutationEngine(
 
     /**
      * Update test strength ordering with results.
-     * Records per-mutant outcome: each test gets credit proportional to kill rate.
+     * Records per-mutant outcome: only test classes that actually killed
+     * the mutation get credit, not all test classes.
      */
     private fun updateTestStrength(
         results: List<MutationResult>,
         testClassNames: List<String>,
+        killSets: Map<String, Set<String>>,
     ) {
         if (testStrengthOrdering == null) return
 
-        // Per-mutant: record whether this mutation was killed
-        // Each test class is credited equally (no per-test breakdown yet)
-        // This gives a coarse signal: tests that run on killed mutations are stronger
-        for (mutation in results) {
-            val score = if (mutation.isKilled) 1 else 0
+        for (result in results) {
+            val killingTests = killSets[result.mutation.id] ?: emptySet()
             for (testClass in testClassNames) {
+                val score = if (testClass in killingTests) 1 else 0
                 testStrengthOrdering.recordResults(testClass, score, 1)
             }
         }
