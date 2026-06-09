@@ -49,35 +49,73 @@ class Mutator(
         classBytes: ByteArray,
         targetMutation: MutationInfo,
     ): ByteArray {
+        val classCache = mutableMapOf<String, Class<*>>()
+
+        fun loadClass(type: String): Class<*>? {
+            return classCache.getOrPut(type) {
+                val loader = Thread.currentThread().contextClassLoader ?: javaClass.classLoader
+                Class.forName(type.replace('/', '.'), false, loader)
+            }
+        }
+
         val writer =
             object : ClassWriter(ClassWriter.COMPUTE_MAXS or ClassWriter.COMPUTE_FRAMES) {
                 override fun getCommonSuperClass(
                     type1: String,
                     type2: String,
                 ): String {
-                    val loader = Thread.currentThread().contextClassLoader ?: javaClass.classLoader
                     if (type1 == type2) return type1
-                    if (type1 == "java/lang/Object" || type2 == "java/lang/Object") return "java/lang/Object"
+                    if (type1 == "java/lang/Object" || type2 == "java/lang/Object") {
+                        return "java/lang/Object"
+                    }
+
                     val c1 =
                         try {
-                            Class.forName(type1.replace('/', '.'), false, loader)
-                        } catch (e: ClassNotFoundException) {
+                            loadClass(type1)
+                        } catch (e: Exception) {
                             null
                         }
                     val c2 =
                         try {
-                            Class.forName(type2.replace('/', '.'), false, loader)
-                        } catch (e: ClassNotFoundException) {
+                            loadClass(type2)
+                        } catch (e: Exception) {
                             null
                         }
+
                     if (c1 == null && c2 == null) return "java/lang/Object"
                     if (c1 == null) return type2
                     if (c2 == null) return type1
+
+                    // Walk class hierarchy of c1
                     var t: Class<*>? = c1
                     while (t != null) {
                         if (t.isAssignableFrom(c2)) return t.name.replace('.', '/')
                         t = t.superclass
                     }
+
+                    // Walk class hierarchy of c2
+                    t = c2
+                    while (t != null) {
+                        if (t.isAssignableFrom(c1)) return t.name.replace('.', '/')
+                        t = t.superclass
+                    }
+
+                    // Walk interface hierarchy — find common interface
+                    val c1Interfaces = mutableSetOf<Class<*>>()
+                    t = c1
+                    while (t != null) {
+                        c1Interfaces.addAll(t.interfaces)
+                        t = t.superclass
+                    }
+
+                    t = c2
+                    while (t != null) {
+                        for (iface in t.interfaces) {
+                            if (iface in c1Interfaces) return iface.name.replace('.', '/')
+                        }
+                        t = t.superclass
+                    }
+
                     return "java/lang/Object"
                 }
             }

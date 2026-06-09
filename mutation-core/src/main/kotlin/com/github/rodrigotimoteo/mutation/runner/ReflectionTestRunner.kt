@@ -203,6 +203,22 @@ class ReflectionTestRunner(
             }
         }
 
+        // Run @AfterAll once after all tests
+        for (teardown in afterAllMethods) {
+            try {
+                teardown.isAccessible = true
+                if (java.lang.reflect.Modifier.isStatic(teardown.modifiers)) {
+                    teardown.invoke(null)
+                } else {
+                    val instance = createInstance(testClass, null)
+                    teardown.invoke(instance)
+                }
+            } catch (e: Exception) {
+                val cause = if (e is java.lang.reflect.InvocationTargetException) e.targetException?.message else e.message
+                failures.add("$className.@AfterAll ${teardown.name}: $cause")
+            }
+        }
+
         return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)
     }
 
