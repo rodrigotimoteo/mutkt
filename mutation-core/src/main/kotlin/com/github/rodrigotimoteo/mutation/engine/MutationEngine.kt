@@ -519,6 +519,8 @@ class MutationEngine(
 
         val results = mutableListOf<MutationResult>()
         val killSets = mutableMapOf<String, Set<String>>()
+        val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
+        val startTime = System.currentTimeMillis()
         val executor: ExecutorService =
             Executors.newFixedThreadPool(parallelism) { runnable ->
                 Thread(runnable, "mutation-worker").apply { isDaemon = true }
@@ -544,6 +546,14 @@ class MutationEngine(
                     if (failedTests.isNotEmpty()) {
                         killSets[result.mutation.id] = failedTests
                     }
+                    // Print progress
+                    val count = completedCount.incrementAndGet()
+                    val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
+                    val rate = count / elapsed
+                    val pct = count * 100 / mutations.size
+                    System.err.print(
+                        "\r[MutKt] Progress: $count/${mutations.size} ($pct%) ${elapsed}s ${rate.toInt()} mut/s",
+                    )
                 } catch (e: java.util.concurrent.TimeoutException) {
                     future.cancel(true)
                     logger.warn("Mutation timed out after ${timeoutMs}ms: ${mutations[index].first}")
