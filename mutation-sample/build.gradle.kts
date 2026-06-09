@@ -4,6 +4,8 @@ plugins {
 
 dependencies {
     implementation(project(":mutation-core"))
+    implementation(project(":mutation-report"))
+    implementation(project(":mutation-test-runner"))
     implementation(libs.kotlin.stdlib)
     implementation(libs.kotlin.reflect)
 
@@ -27,6 +29,8 @@ kotlin {
 
 dependencies {
     implementation(project(":mutation-core"))
+    implementation(project(":mutation-report"))
+    implementation(project(":mutation-test-runner"))
     implementation(libs.kotlin.stdlib)
     implementation(libs.kotlin.reflect)
 
