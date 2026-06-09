@@ -54,7 +54,11 @@ class HtmlReportGenerator {
                 appendLine("  <div class=\"container\">")
                 appendLine("    <header>")
                 appendLine("      <h1>MutKt Mutation Report</h1>")
-                appendLine("      <p class=\"subtitle\">Generated ${java.time.LocalDateTime.now()}</p>")
+                appendLine("      <p class=\"subtitle\">")
+                appendLine(
+                    "        <img src=\"${report.scoreBadgeUrl}\" alt=\"Mutation Score\">",
+                )
+                appendLine("      </p>")
                 appendLine("    </header>")
                 appendLine()
                 appendLine("    <section class=\"summary\">")
@@ -140,6 +144,7 @@ class HtmlReportGenerator {
                 appendLine("            <th>Method</th>")
                 appendLine("            <th>Line</th>")
                 appendLine("            <th>Operator</th>")
+                appendLine("            <th>Source</th>")
                 appendLine("            <th>Status</th>")
                 appendLine("            <th>Time (ms)</th>")
                 appendLine("          </tr>")
@@ -156,11 +161,18 @@ class HtmlReportGenerator {
                             MutationStatus.WEAK_KILLED -> "weak-killed"
                             MutationStatus.SUBSUMED -> "subsumed"
                         }
+                    val sourceCell =
+                        if (result.mutation.sourceCode != null) {
+                            "<pre class=\"source-snippet\">${escapeHtml(result.mutation.sourceCode!!)}</pre>"
+                        } else {
+                            "<span class=\"no-source\">—</span>"
+                        }
                     appendLine("          <tr>")
                     appendLine("            <td class=\"class-name\">${escapeHtml(result.mutation.className)}</td>")
                     appendLine("            <td>${escapeHtml(result.mutation.methodName)}</td>")
                     appendLine("            <td>${result.mutation.lineNumber}</td>")
                     appendLine("            <td>${escapeHtml(result.mutation.operator.operatorName)}</td>")
+                    appendLine("            <td>$sourceCell</td>")
                     appendLine("            <td class=\"$statusClass\">${result.status}</td>")
                     appendLine("            <td>${result.executionTimeMs}</td>")
                     appendLine("          </tr>")
@@ -218,6 +230,8 @@ class HtmlReportGenerator {
             .subsumed { color: #95a5a6; font-weight: 600; }
             .mini-bar { background: #ecf0f1; border-radius: 4px; height: 8px; width: 100px; display: inline-block; vertical-align: middle; margin-right: 0.5rem; }
             .mini-fill { background: #27ae60; height: 100%; border-radius: 4px; }
+            .source-snippet { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px; padding: 0.5rem; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; line-height: 1.4; margin: 0; white-space: pre-wrap; word-break: break-all; max-width: 300px; overflow-x: auto; }
+            .no-source { color: #bdc3c7; font-style: italic; }
             footer { text-align: center; color: #7f8c8d; margin-top: 2rem; }
             """.trimIndent()
     }

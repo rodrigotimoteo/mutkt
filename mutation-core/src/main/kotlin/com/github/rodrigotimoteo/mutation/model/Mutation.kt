@@ -15,6 +15,8 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
  * @property methodDescriptor JVM method descriptor
  * @property operator The mutation operator applied
  * @property lineNumber Source line number (0 if unknown)
+ * @property sourceFile Relative path to source file (null if unavailable)
+ * @property sourceCode Source code snippet at mutation point (null if unavailable)
  * @property originalBytecode Original class bytecode before mutation
  * @property mutatedBytecode Class bytecode after mutation
  * @property description Human-readable description of the mutation
@@ -26,8 +28,10 @@ data class Mutation(
     val methodDescriptor: String,
     val operator: MutationOperator,
     val lineNumber: Int,
-    val originalBytecode: ByteArray,
-    val mutatedBytecode: ByteArray,
+    val sourceFile: String? = null,
+    val sourceCode: String? = null,
+    val originalBytecode: ByteArray = ByteArray(0),
+    val mutatedBytecode: ByteArray = ByteArray(0),
     val description: String,
 ) {
     override fun equals(other: Any?): Boolean {

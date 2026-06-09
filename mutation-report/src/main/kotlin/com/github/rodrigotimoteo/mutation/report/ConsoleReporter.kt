@@ -118,6 +118,9 @@ class ConsoleReporter {
         }
 
         sb.appendLine("╚══════════════════════════════════════════════════════════════╝")
+        sb.appendLine()
+        sb.appendLine("Badge for README: ${report.scoreBadgeMarkdown}")
+        sb.appendLine("Badge URL:        ${report.scoreBadgeUrl}")
 
         return sb.toString()
     }

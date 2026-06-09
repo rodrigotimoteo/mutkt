@@ -666,6 +666,7 @@ class MutationEngine(
         originalBytes: ByteArray = ByteArray(0),
         mutatedBytes: ByteArray = ByteArray(0),
     ): Mutation {
+        val (sourceFile, sourceCode) = findSourceCode(info.className, info.lineNumber)
         return Mutation(
             id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}",
             className = info.className,
@@ -673,10 +674,40 @@ class MutationEngine(
             methodDescriptor = info.methodDescriptor,
             operator = info.operator,
             lineNumber = info.lineNumber,
+            sourceFile = sourceFile,
+            sourceCode = sourceCode,
             originalBytecode = originalBytes,
             mutatedBytecode = mutatedBytes,
             description = info.description,
         )
+    }
+
+    private fun findSourceCode(
+        className: String,
+        lineNumber: Int,
+    ): Pair<String?, String?> {
+        if (lineNumber <= 0) return null to null
+        val relativePath = className.replace('.', '/') + ".kt"
+        val javaPath = className.replace('.', '/') + ".java"
+        val srcDirs = listOf("src/main/kotlin", "src/main/java", "src/commonMain/kotlin")
+        for (srcDir in srcDirs) {
+            for (path in listOf(relativePath, javaPath)) {
+                val sourceFile = File(projectDir, "$srcDir/$path")
+                if (sourceFile.exists()) {
+                    val lines = sourceFile.readLines()
+                    if (lineNumber <= lines.size) {
+                        val snippet =
+                            lines.subList(
+                                maxOf(0, lineNumber - 2),
+                                minOf(lines.size, lineNumber + 1),
+                            ).joinToString("\n")
+                        return sourceFile.path to snippet
+                    }
+                    return sourceFile.path to null
+                }
+            }
+        }
+        return null to null
     }
 
     private fun buildReport(

@@ -57,6 +57,26 @@ data class MutationReport(
     val survivedPercentage: Int get() =
         if (totalMutations > 0) (survivedMutations * 100) / totalMutations else 0
 
+    /** Mutation score (percentage of mutations killed). */
+    val mutationScore: Int get() = killedPercentage
+
+    /** shields.io badge URL for mutation coverage. */
+    val scoreBadgeUrl: String
+        get() {
+            val color =
+                when {
+                    mutationScore >= 80 -> "brightgreen"
+                    mutationScore >= 60 -> "yellow"
+                    mutationScore >= 40 -> "orange"
+                    else -> "red"
+                }
+            return "https://img.shields.io/badge/mutation-$mutationScore%25-$color?style=flat"
+        }
+
+    /** shields.io badge markdown (for README). */
+    val scoreBadgeMarkdown: String
+        get() = "![Mutation Coverage]($scoreBadgeUrl)"
+
     /**
      * Get per-class mutation scores.
      */

@@ -16,7 +16,7 @@ MutKt is a mutation testing library for Kotlin and Java that runs your existing 
 // build.gradle.kts
 plugins {
     kotlin("jvm") version "2.1.10"
-    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.2.0"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.2.2"
 }
 ```
 
@@ -36,7 +36,7 @@ For explicit control over which code blocks are mutated:
 
 ```kotlin
 dependencies {
-    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.2.0")
+    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.2.2")
 }
 
 @ExtendWith(MutKtExtension::class)
@@ -75,7 +75,7 @@ Test:        assertEquals(4, add(2, 2))  → FAILS → Mutant KILLED ✓
 | `RETURN_VALS` | Return values | `true` → `false`, `1` → `0` |
 | `NULL_RETURNS` | Null returns | `return value` → `return null` |
 | `EMPTY_RETURNS` | Empty collections | `return list` → `return emptyList()` |
-| `INVERT_NEGS` | Negation | `!x` → `x` |
+| `INVERT_NEGS` | ⚠️ Deprecated no-op | Removed from defaults |
 
 ### Kotlin-Specific Operators
 
@@ -143,21 +143,107 @@ class MyTest { ... }
 @SuppressMutations(reason = "Generated code")
 class BuildConfig { }
 
-// Suppress specific operators
+// Suppress specific operators on a class
 @SuppressMutations(operators = ["ARITHMETIC", "RETURN_VALS"])
 class Utils { }
+
+// Suppress mutations on a specific method only
+class Service {
+    @SuppressMutations(reason = "Trivial getter")
+    fun getName(): String = name
+
+    @SuppressMutations(operators = ["ARITHMETIC"])
+    fun calculate(): Int = a + b  // Only ARITHMETIC suppressed, other operators still apply
+}
 ```
 
-## Reports
+### Full Configuration Reference
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `targetClasses` | `ConfigurableFileCollection` | auto-detected | Compiled class directories |
+| `testClasses` | `ConfigurableFileCollection` | auto-detected | Test class directories |
+| `reportFormats` | `Set<String>` | `["html", "console"]` | Report types: `html`, `console`, `csv`, `xml`, `json`, `graph` |
+| `reportDir` | `DirectoryProperty` | `build/reports/mutation` | Output directory for reports |
+| `enableSubsumption` | `Property<Boolean>` | `true` | Skip subsumed mutations |
+| `enableWeakMutation` | `Property<Boolean>` | `true` | Skip unreachable mutations |
+| `enableInlinedFinally` | `Property<Boolean>` | `true` | Detect inlined finally blocks |
+| `enableTestOrdering` | `Property<Boolean>` | `true` | Run strongest tests first |
+| `enableCache` | `Property<Boolean>` | `false` | Cache results for faster re-runs |
+| `enableIncrementalAnalysis` | `Property<Boolean>` | `false` | Only test changed classes |
+| `failOnScoreThreshold` | `Property<Int>` | `0` | Fail build if score below threshold |
+| `failOnCoverageThreshold` | `Property<Int>` | `0` | Fail build if coverage below threshold |
+| `targetClassPatterns` | `SetProperty<String>` | empty | Regex patterns to include classes |
+| `excludeClassPatterns` | `SetProperty<String>` | empty | Regex patterns to exclude classes |
+| `targetPackages` | `SetProperty<String>` | empty | Packages to include (e.g., `com.example.service`) |
+| `excludePackages` | `SetProperty<String>` | empty | Packages to exclude |
+| `includePatterns` | `SetProperty<String>` | empty | File patterns to include |
+| `excludePatterns` | `SetProperty<String>` | empty | File patterns to exclude |
+| `excludedMethods` | `SetProperty<String>` | empty | Method names or substrings to exclude |
+| `maxMutationsPerClass` | `Property<Int>` | `0` | Limit mutations per class (`0` = no limit) |
+| `targetTestPatterns` | `SetProperty<String>` | empty | Regex patterns for test classes |
+| `excludeTestPatterns` | `SetProperty<String>` | empty | Regex patterns to exclude test classes |
+| `maxWorkers` | `Property<Int>` | `0` | Parallelism (`0` = CPU count) |
+| `mutantTimeoutMs` | `Property<Long>` | `30000` | Per-mutant timeout in ms |
+| `ciMode` | `Property<Boolean>` | `false` | Console + XML reports for CI |
+| `verbose` | `Property<Boolean>` | `false` | Show all mutations tested |
+| `showClassScores` | `Property<Boolean>` | `true` | Per-class breakdown in reports |
+| `generateGraph` | `Property<Boolean>` | `false` | Generate D3.js graph report |
+| `autoRunJaCoCo` | `Property<Boolean>` | `false` | Auto-run JaCoCo for coverage |
+
+## Troubleshooting
+
+### No mutations found
+
+1. **Wrong class directories** — Set `targetClasses.setFrom("build/classes/kotlin/main")` explicitly
+2. **All @SuppressMutations** — Check for class-level suppression annotations
+3. **Kotlin not detected** — Verify source classes use `@kotlin.Metadata` (default for Kotlin compiler)
+4. **Excluded methods** — Check `excludedMethods` property
+
+### Tests not discovered
+
+1. **JUnit dependency missing** — JUnit Jupiter 5.x must be on the test runtime classpath
+2. **Non-public test classes** — Test classes must be public
+3. **Test patterns mismatch** — Check `targetTestPatterns` and `excludeTestPatterns`
+4. **Meta-annotations** — Only `@Test`, `@ParameterizedTest`, and `@RepeatedTest` are discovered. Custom composed annotations are not supported.
+
+### Plugin not found
+
+```kotlin
+// If using plugins { } block fails, use buildscript approach:
+buildscript {
+    repositories { mavenCentral() }
+    dependencies {
+        classpath("io.github.rodrigotimoteo:mutation-gradle-plugin:0.2.2")
+    }
+}
+apply(plugin = "io.github.rodrigotimoteo.mutation-kotlin")
+```
+
+### Timeout on large projects
+
+1. **Enable subsumption** — `enableSubsumption.set(true)` (default)
+2. **Enable weak mutation** — `enableWeakMutation.set(true)` (default)
+3. **Enable caching** — `enableCache.set(true)` for re-runs
+4. **Enable incremental** — `enableIncrementalAnalysis.set(true)` for PR branches
+5. **Limit scope** — Use `targetPackages`, `targetClassPatterns`, or `maxMutationsPerClass`
+6. **Increase timeout** — `mutantTimeoutMs.set(60000)` for integration tests
 
 ### HTML Report
 Generated at `build/reports/mutation/mutation-report.html`. Includes:
-- Summary statistics (killed/survived/errors)
-- Per-mutation details with operator, class, method, line number
-- Color-coded status
+- Summary statistics with mutation score badge (shields.io)
+- Per-mutation details with source code snippets at mutation point
+- Operator, class, method, line number
+- Real-time progress bar with mutations/sec throughput
+- Color-coded status (KILLED/SURVIVED/ERROR/TIMEOUT/NO_COVERAGE)
+- Per-class breakdown with mini kill-rate bars
 
 ### Console Report
-Always printed to stdout with mutation score and per-class breakdown.
+Always printed to stdout with mutation score and per-class breakdown. Includes:
+- ASCII kill-rate bar
+- Survived mutations list with location
+- Error mutation details
+- Mutation score badge URL for README integration
 
 ### Graph Report
 Interactive D3.js visualization of test-mutant relationships (when enabled).

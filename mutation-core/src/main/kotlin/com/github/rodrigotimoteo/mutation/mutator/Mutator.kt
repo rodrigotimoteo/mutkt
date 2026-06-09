@@ -296,13 +296,55 @@ private class MutationScannerMethodVisitor(
     private var instanceofCount = 0
     private var previousOpcode = -1
 
+    // Method-level @SuppressMutations state
+    private var methodSuppressed = false
+    private var methodSuppressedOperators: Set<String> = emptySet()
+
     /**
      * Check if mutation should be suppressed.
+     * Suppression priority: class-level > method-level (both checked independently).
      */
     private fun isSuppressed(operator: MutationOperator): Boolean {
         if (classSuppressed) return true
         if (suppressedOperators.contains(operator.operatorName)) return true
+        if (methodSuppressed) return true
+        if (methodSuppressedOperators.contains(operator.operatorName)) return true
         return false
+    }
+
+    override fun visitAnnotation(
+        desc: String,
+        visible: Boolean,
+    ): org.objectweb.asm.AnnotationVisitor? {
+        if (desc == "Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;") {
+            var hasExplicitOperators = false
+            return object : org.objectweb.asm.AnnotationVisitor(Opcodes.ASM9) {
+                override fun visitArray(name: String?): org.objectweb.asm.AnnotationVisitor? {
+                    if (name == "operators") {
+                        return object : org.objectweb.asm.AnnotationVisitor(Opcodes.ASM9) {
+                            override fun visit(
+                                name: String?,
+                                value: Any?,
+                            ) {
+                                if (value is String) {
+                                    methodSuppressedOperators = methodSuppressedOperators + value
+                                    hasExplicitOperators = true
+                                }
+                            }
+                        }
+                    }
+                    return super.visitArray(name)
+                }
+
+                override fun visitEnd() {
+                    super.visitEnd()
+                    if (!hasExplicitOperators) {
+                        methodSuppressed = true
+                    }
+                }
+            }
+        }
+        return super.visitAnnotation(desc, visible)
     }
 
     private fun tryAddMutation(mutation: MutationInfo) {

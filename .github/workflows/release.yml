@@ -81,7 +81,11 @@ jobs:
           fi
 
       - name: Publish to Sonatype staging
-        run: ./gradlew publishMavenPublicationToMavenCentralRepository --no-daemon
+        run: |
+          ./gradlew :mutation-gradle-plugin:publishAllPublicationsToMavenCentralRepository --no-daemon
+          ./gradlew :mutation-core:publishMavenPublicationToMavenCentralRepository --no-daemon
+          ./gradlew :mutation-report:publishMavenPublicationToMavenCentralRepository --no-daemon
+          ./gradlew :mutation-test-runner:publishMavenPublicationToMavenCentralRepository --no-daemon
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
