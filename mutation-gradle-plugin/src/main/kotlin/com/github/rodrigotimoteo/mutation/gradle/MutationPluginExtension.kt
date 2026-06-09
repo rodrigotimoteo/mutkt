@@ -76,7 +76,6 @@ open class MutationPluginExtension(project: Project) {
                 "RETURN_VALS",
                 "NULL_RETURNS",
                 "EMPTY_RETURNS",
-                "INVERT_NEGS",
             ),
         )
 
@@ -275,4 +274,30 @@ open class MutationPluginExtension(project: Project) {
      */
 
     val enableCache: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    // === Power Features ===
+
+    /**
+     * Target specific packages for mutation testing.
+     * If empty, all classes in targetClasses are mutated.
+     * Example: setOf("com.example.service", "com.example.model")
+     */
+    val targetPackages: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /**
+     * Exclude specific packages from mutation testing.
+     * Example: setOf("com.example.generated", "com.example.test")
+     */
+    val excludePackages: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /**
+     * CI mode: generate machine-readable reports and exit with proper codes.
+     * When true: enables console report, disables interactive features, uses exit codes.
+     */
+    val ciMode: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    /**
+     * Verbose output: show all mutations tested, not just summary.
+     */
+    val verbose: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 }

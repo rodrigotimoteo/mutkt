@@ -181,8 +181,37 @@ abstract class MutationTask : DefaultTask() {
     @Optional
     val enableCache: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 
+    /** Target specific packages for mutation testing. */
+    @Input
+    @Optional
+    val targetPackages: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /** Exclude specific packages from mutation testing. */
+    @Input
+    @Optional
+    val excludePackages: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
+
+    /** CI mode: generate machine-readable reports and exit with proper codes. */
+    @Input
+    @Optional
+    val ciMode: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    /** Verbose output: show all mutations tested. */
+    @Input
+    @Optional
+    val verbose: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
     @TaskAction
     fun runMutationTests() {
+        // CI mode: ensure console report is enabled
+        if (ciMode.get()) {
+            val currentFormats = reportFormats.getOrElse(emptySet()).toMutableSet()
+            currentFormats.add("console")
+            currentFormats.add("xml")
+            reportFormats.set(currentFormats)
+            logger.lifecycle("[MutKt] CI mode enabled — console + XML reports will be generated")
+        }
+
         logger.lifecycle("=".repeat(60))
         logger.lifecycle("  Kotlin Mutation Testing - PITest-style")
         logger.lifecycle("=".repeat(60))
@@ -217,15 +246,33 @@ abstract class MutationTask : DefaultTask() {
 
         // Validate directories exist
         if (!classesDir.exists()) {
-            logger.error("Classes directory not found: $classesDir")
-            logger.error("Run 'gradlew compileKotlin' first")
+            val msg =
+                buildString {
+                    appendLine("Classes directory not found: $classesDir")
+                    appendLine("Fix: Run 'gradlew compileKotlin' first, or set targetClasses manually:")
+                    appendLine("  mutationTest {")
+                    appendLine("    targetClasses.from(file(\"build/classes/kotlin/main\"))")
+                    appendLine("  }")
+                }
+            logger.error(msg)
             throw IllegalStateException("Classes directory not found: $classesDir")
         }
 
         if (!testClassesDir.exists()) {
-            logger.error("Test classes directory not found: $testClassesDir")
-            logger.error("Run 'gradlew compileTestKotlin' first")
+            val msg =
+                buildString {
+                    appendLine("Test classes directory not found: $testClassesDir")
+                    appendLine("Fix: Run 'gradlew compileTestKotlin' first, or set testClasses manually:")
+                    appendLine("  mutationTest {")
+                    appendLine("    testClasses.from(file(\"build/classes/kotlin/test\"))")
+                    appendLine("  }")
+                }
+            logger.error(msg)
             throw IllegalStateException("Test classes directory not found: $testClassesDir")
+        }
+
+        if (classpathFiles.isEmpty()) {
+            logger.warn("Classpath is empty. Tests may fail to load. Ensure test dependencies are configured.")
         }
 
         // Parse operators
@@ -233,15 +280,33 @@ abstract class MutationTask : DefaultTask() {
         logger.lifecycle("Enabled operators: ${operators.joinToString { it.operatorName }}")
         logger.lifecycle("Timeout: ${timeoutMs.get()}ms, Max parallel mutants: ${maxParallelMutants.get()}")
 
+        // Build include/exclude patterns from package targeting
+        val includePatterns = targetClassPatterns.getOrElse(emptySet()).toMutableSet()
+        val targetPkgs = targetPackages.getOrElse(emptySet())
+        if (targetPkgs.isNotEmpty()) {
+            targetPkgs.forEach { pkg ->
+                includePatterns.add("${pkg.replace(".", "\\.")}\\..*")
+            }
+            logger.lifecycle("Target packages: ${targetPkgs.joinToString()}")
+        }
+
+        val excludeRegexPatterns = excludeClassPatterns.getOrElse(emptySet()).toMutableSet()
+        val excludePkgs = excludePackages.getOrElse(emptySet())
+        if (excludePkgs.isNotEmpty()) {
+            excludePkgs.forEach { pkg ->
+                excludeRegexPatterns.add("${pkg.replace(".", "\\.")}\\..*")
+            }
+            logger.lifecycle("Exclude packages: ${excludePkgs.joinToString()}")
+        }
+
         // Create runner with all new features
         // Merge excludedClasses (extension defaults, glob patterns) with excludeClassPatterns (user regex)
-        val excludeRegexPatterns = excludeClassPatterns.getOrElse(emptySet()).toList()
         val excludeGlobPatterns =
             excludedClasses.getOrElse(emptySet()).toList().map { glob ->
                 // Convert glob patterns to regex: **/*.Test → .*.Test, *Test → .*Test
                 glob.replace("**/", ".*").replace("*", ".*").replace("?", ".")
             }
-        val allExcludePatterns = excludeRegexPatterns + excludeGlobPatterns
+        val allExcludePatterns = (excludeRegexPatterns + excludeGlobPatterns).toList()
 
         // Compute changed classes for incremental analysis
         val changedClasses =
@@ -275,7 +340,7 @@ abstract class MutationTask : DefaultTask() {
                 enabledOperators = operators.toSet(),
                 enableInlinedFinally = enableInlinedFinally.get(),
                 enableTestOrdering = enableTestOrdering.get(),
-                includePatterns = targetClassPatterns.getOrElse(emptySet()).toList(),
+                includePatterns = includePatterns.toList(),
                 excludePatterns = allExcludePatterns,
                 enableCache = enableCache.get(),
                 enableSubsumption = enableSubsumption.get(),

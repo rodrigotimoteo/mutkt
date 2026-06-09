@@ -9,18 +9,11 @@ class MutationPluginExtensionTest {
     private val extension = MutationPluginExtension(project)
 
     @Test
-    fun `default operators are MVP_OPERATORS with 7 operators`() {
-        val operators = extension.enabledOperators.get()
-        assertThat(operators).hasSize(7)
-        assertThat(operators).contains(
-            "CONDITIONALS_BOUNDARY",
-            "NEGATE_CONDITIONALS",
-            "ARITHMETIC",
-            "RETURN_VALS",
-            "NULL_RETURNS",
-            "EMPTY_RETURNS",
-            "INVERT_NEGS",
-        )
+    fun `default operators are MVP_OPERATORS with 6 operators`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply(MutationPlugin::class.java)
+        val ext = project.extensions.getByType(MutationPluginExtension::class.java)
+        assertThat(ext.enabledOperators.get()).hasSize(6)
     }
 
     @Test

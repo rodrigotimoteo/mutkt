@@ -45,6 +45,7 @@ class MutationPlugin : Plugin<Project> {
             ) { task ->
                 task.group = "verification"
                 task.description = "Runs mutation testing analysis"
+                task.dependsOn("compileKotlin", "compileTestKotlin")
 
                 // Wire extension properties lazily
                 task.targetClasses.from(extension.targetClasses)
@@ -81,12 +82,17 @@ class MutationPlugin : Plugin<Project> {
                 task.showClassScores.set(extension.showClassScores)
                 task.generateGraph.set(extension.generateGraph)
                 task.enableCache.set(extension.enableCache)
+                task.targetPackages.set(extension.targetPackages)
+                task.excludePackages.set(extension.excludePackages)
+                task.ciMode.set(extension.ciMode)
+                task.verbose.set(extension.verbose)
             }
 
         // Auto-detect sourceSets after project evaluation
         project.afterEvaluate {
             autoDetectSourceSets(project, extension)
             autoDetectClasspath(project, extension)
+            autoDetectJaCoCo(project, extension)
         }
 
         // Don't auto-depend on check - mutationTest is opt-in
@@ -131,6 +137,30 @@ class MutationPlugin : Plugin<Project> {
             }
         } catch (e: Exception) {
             project.logger.warn("Could not auto-detect classpath: ${e.message}")
+        }
+    }
+
+    private fun autoDetectJaCoCo(
+        project: Project,
+        extension: MutationPluginExtension,
+    ) {
+        try {
+            // Check if JaCoCo plugin is applied
+            val jacocoPlugin = project.plugins.findPlugin("jacoco")
+            if (jacocoPlugin != null) {
+                project.logger.info("JaCoCo plugin detected, auto-configuring coverage analysis")
+
+                // Auto-detect JaCoCo report task output
+                val jacocoReportTask = project.tasks.findByName("jacocoTestReport")
+                if (jacocoReportTask != null) {
+                    extension.coverageExecFile.set(
+                        project.layout.buildDirectory.file("jacoco/test.exec"),
+                    )
+                    project.logger.info("Auto-detected JaCoCo coverage file")
+                }
+            }
+        } catch (e: Exception) {
+            project.logger.warn("Could not auto-detect JaCoCo: ${e.message}")
         }
     }
 }
