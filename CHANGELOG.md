@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.2.2] - 2026-06-09
+
+### Added
+- **getCommonSuperClass rewrite**: Full class hierarchy + interface hierarchy walking, class caching
+- **@BeforeAll/@AfterAll verification**: Fixed afterAll invocation bug, 6 lifecycle tests
+- **Gradle Plugin Portal config**: maven-publish with metadata (displayName, tags, website, vcsUrl)
+- **Real-time progress reporting**: Atomic counter with count, percentage, elapsed time, mutations/sec
+- **Per-package targeting**: targetPackages, excludePackages DSL properties
+- **CI mode**: ciMode property enables console + XML reports for CI pipelines
+- **Verbose output**: verbose property shows all mutations tested
+- **JaCoCo auto-detection**: Plugin detects jacoco plugin and wires coverage file
+- **Task dependency**: mutationTest depends on compileKotlin + compileTestKotlin
+- **Better error messages**: Shows DSL fix suggestions when directories not found
+- **Smoke tests**: 6 end-to-end tests for cache, baseline, reports, test discovery
+
+### Changed
+- **Default operators**: Removed INVERT_NEGS from defaults (deprecated no-op, now 6 operators)
+- **Console report**: Shows survived mutations list and error details
+- **HTML report**: Per-class breakdown with mini kill-rate bars
+
+### Fixed
+- **@AfterAll never invoked**: afterAllMethods discovered but never called
+- **@BeforeAll failure didn't abort**: Tests ran even after setup failure
+- **Subsumption equal kill sets**: Both mutations were marked subsumed (now strict subset only)
+- **Weak mutation class-name format**: Dual lookup for dotted/slashed class names
+- **Baseline save overwrites**: Now merges on incremental runs
+- **TRUE_RETURNS/FALSE_RETURNS false positives**: Only matches ICONST immediately before IRETURN
+- **NULL_SAFETY NOP stack corruption**: Added POP before NOP for null-safe call mutations
+- **instanceofCount never resets**: Reset on line number change for SEALED_WHEN detection
+- **Test class load failure**: Now reports ERROR instead of NO_COVERAGE
+- **ConsoleReporter divide by zero**: Protected against empty results
+- **WEAK_KILLED/SUBSUMED excluded from class scores**: Now included in kill calculations
+- **Kill sets overwrite on incremental**: Added saveMerged for cross-run persistence
+
 ## [0.2.1] - 2026-06-08
 
 ### Fixed
