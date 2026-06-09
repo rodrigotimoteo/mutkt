@@ -243,6 +243,23 @@ abstract class MutationTask : DefaultTask() {
             }
         val allExcludePatterns = excludeRegexPatterns + excludeGlobPatterns
 
+        // Compute changed classes for incremental analysis
+        val changedClasses =
+            if (enableIncrementalAnalysis.get()) {
+                try {
+                    val incrementalAnalyzer = com.github.rodrigotimoteo.mutation.engine.IncrementalAnalyzer(project.projectDir)
+                    incrementalAnalyzer.getChangedClasses()
+                } catch (e: Exception) {
+                    logger.warn("Incremental analysis failed: ${e.message}")
+                    emptySet()
+                }
+            } else {
+                emptySet()
+            }
+        if (changedClasses.isNotEmpty()) {
+            logger.lifecycle("Incremental: ${changedClasses.size} changed classes detected")
+        }
+
         // Use mutantTimeoutMs if explicitly set (> 0), otherwise timeoutMs
         val effectiveTimeout =
             if (mutantTimeoutMs.getOrElse(0) > 0) {
@@ -264,6 +281,11 @@ abstract class MutationTask : DefaultTask() {
                 enableSubsumption = enableSubsumption.get(),
                 enableWeakMutation = enableWeakMutation.get(),
                 projectDir = project.projectDir,
+                excludedMethods = excludedMethods.getOrElse(emptySet()),
+                maxMutationsPerClass = maxMutationsPerClass.get(),
+                targetTestPatterns = targetTestPatterns.getOrElse(emptySet()).toList(),
+                excludeTestPatterns = excludeTestPatterns.getOrElse(emptySet()).toList(),
+                changedClasses = changedClasses,
             )
 
         // Run mutation testing
@@ -291,6 +313,19 @@ abstract class MutationTask : DefaultTask() {
             throw org.gradle.api.GradleException(
                 "Mutation score ${report.killedPercentage}% is below threshold $threshold%. Build failed.",
             )
+        }
+
+        // Check coverage threshold (uses same kill rate as score threshold for now)
+        val coverageThreshold = failOnCoverageThreshold.get()
+        if (coverageThreshold > 0 && report.killedPercentage < coverageThreshold) {
+            throw org.gradle.api.GradleException(
+                "Coverage score ${report.killedPercentage}% is below threshold $coverageThreshold%. Build failed.",
+            )
+        }
+
+        // Auto-add graph to report formats if generateGraph is set
+        if (generateGraph.get()) {
+            logger.lifecycle("[MutKt] Graph report enabled via generateGraph option")
         }
     }
 

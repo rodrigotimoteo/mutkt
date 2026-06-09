@@ -27,6 +27,7 @@ import org.objectweb.asm.Type
  */
 class Mutator(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
+    private val excludedMethods: Set<String> = emptySet(),
 ) {
     /**
      * Scans a class for mutation points without applying mutations.
@@ -35,7 +36,7 @@ class Mutator(
     fun scanMutations(classBytes: ByteArray): List<MutationInfo> {
         val mutations = mutableListOf<MutationInfo>()
         val reader = ClassReader(classBytes)
-        val visitor = MutationScannerVisitor(mutations, enabledOperators)
+        val visitor = MutationScannerVisitor(mutations, enabledOperators, excludedMethods)
         reader.accept(visitor, ClassReader.SKIP_FRAMES)
         return mutations
     }
@@ -110,11 +111,13 @@ class Mutator(
 private class MutationScannerVisitor(
     private val mutations: MutableList<MutationInfo>,
     private val enabledOperators: Set<MutationOperator>,
+    private val excludedMethods: Set<String> = emptySet(),
 ) : ClassVisitor(Opcodes.ASM9) {
     private var currentClassName = ""
     private var isKotlinClass = false
     private var classSuppressed = false
     private var suppressedOperators = emptySet<String>()
+    private var currentMethodName = ""
 
     /**
      * Check if mutation should be suppressed.
@@ -208,6 +211,11 @@ private class MutationScannerVisitor(
 
         // Skip Kotlin synthetic methods
         if (isKotlinClass && isKotlinSynthetic(name)) return null
+
+        // Skip excluded methods
+        if (excludedMethods.any { name.contains(it) }) return null
+
+        currentMethodName = name
 
         return MutationScannerMethodVisitor(
             className = currentClassName,

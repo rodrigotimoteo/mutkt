@@ -119,6 +119,10 @@ object MutationTestRunnerFactory {
         enableSubsumption: Boolean = false,
         enableWeakMutation: Boolean = false,
         projectDir: java.io.File? = null,
+        excludedMethods: Set<String> = emptySet(),
+        maxMutationsPerClass: Int = 0,
+        targetTestPatterns: List<String> = emptyList(),
+        excludeTestPatterns: List<String> = emptyList(),
     ): MutationTestRunner {
         val engine =
             MutationEngine(
@@ -134,6 +138,10 @@ object MutationTestRunnerFactory {
                 enableSubsumption = enableSubsumption,
                 enableWeakMutation = enableWeakMutation,
                 projectDir = projectDir,
+                excludedMethods = excludedMethods,
+                maxMutationsPerClass = maxMutationsPerClass,
+                targetTestPatterns = targetTestPatterns,
+                excludeTestPatterns = excludeTestPatterns,
             )
         return MutationTestRunner(engine)
     }

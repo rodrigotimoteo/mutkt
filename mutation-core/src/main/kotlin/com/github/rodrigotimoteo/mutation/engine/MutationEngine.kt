@@ -81,9 +81,13 @@ class MutationEngine(
     private val enableSubsumption: Boolean = true,
     private val enableWeakMutation: Boolean = true,
     private val projectDir: File? = null,
+    private val excludedMethods: Set<String> = emptySet(),
+    private val maxMutationsPerClass: Int = 0,
+    private val targetTestPatterns: List<String> = emptyList(),
+    private val excludeTestPatterns: List<String> = emptyList(),
 ) {
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
-    private val mutator = Mutator(enabledOperators)
+    private val mutator = Mutator(enabledOperators, excludedMethods)
     private val coverageAnalyzer = CoverageAnalyzer()
     private val subsumptionAnalyzer = SubsumptionAnalyzer()
     private val killSetStorage = projectDir?.let { KillSetStorage(it) }
@@ -136,12 +140,20 @@ class MutationEngine(
             )
         }
 
+        // Limit mutations per class if configured
+        val mutationsAfterLimit =
+            if (maxMutationsPerClass > 0) {
+                limitMutationsPerClass(mutationsAfterRegex)
+            } else {
+                mutationsAfterRegex
+            }
+
         // Filter mutations by coverage if available
         val mutationsAfterCoverage =
             if (coverageExecFile != null && coverageExecFile.exists()) {
-                filterByCoverage(mutationsAfterRegex, classFiles, coverageExecFile)
+                filterByCoverage(mutationsAfterLimit, classFiles, coverageExecFile)
             } else {
-                mutationsAfterRegex
+                mutationsAfterLimit
             }
         logger.info("Testing ${mutationsAfterCoverage.size} mutations after coverage filtering")
 
@@ -185,11 +197,12 @@ class MutationEngine(
         }
 
         // Order test classes by effectiveness (if history available)
+        val filteredTestNames = filterTestClassNames(testClassNames)
         val orderedTestNames =
             if (enableTestOrdering && testStrengthOrdering != null) {
-                testStrengthOrdering.orderTests(testClassNames)
+                testStrengthOrdering.orderTests(filteredTestNames)
             } else {
-                testClassNames
+                filteredTestNames
             }
 
         // Filter by changed classes for incremental analysis
@@ -676,5 +689,46 @@ class MutationEngine(
             noCoverageMutations = noCoverage,
             totalExecutionTimeMs = totalTime,
         )
+    }
+
+    /**
+     * Limit mutations per class to maxMutationsPerClass.
+     * Truncates to the first N mutations per class (deterministic).
+     */
+    private fun limitMutationsPerClass(mutations: List<Pair<MutationInfo, ByteArray>>): List<Pair<MutationInfo, ByteArray>> {
+        val grouped = mutations.groupBy { it.first.className }
+        val limited =
+            grouped.flatMap { (className, classMutations) ->
+                if (classMutations.size > maxMutationsPerClass) {
+                    logger.info("Limiting $className: ${classMutations.size} → $maxMutationsPerClass mutations")
+                    classMutations.take(maxMutationsPerClass)
+                } else {
+                    classMutations
+                }
+            }
+        val totalBefore = mutations.size
+        val totalAfter = limited.size
+        if (totalBefore != totalAfter) {
+            System.err.println("[MutKt] Max mutations per class: limited $totalBefore → $totalAfter mutations")
+        }
+        return limited
+    }
+
+    /**
+     * Filter test class names by targetTestPatterns and excludeTestPatterns.
+     */
+    private fun filterTestClassNames(testClassNames: List<String>): List<String> {
+        if (targetTestPatterns.isEmpty() && excludeTestPatterns.isEmpty()) {
+            return testClassNames
+        }
+
+        val compiledInclude = targetTestPatterns.map { Regex(it) }
+        val compiledExclude = excludeTestPatterns.map { Regex(it) }
+
+        return testClassNames.filter { name ->
+            val matchesInclude = compiledInclude.isEmpty() || compiledInclude.any { it.containsMatchIn(name) }
+            val matchesExclude = compiledExclude.any { it.containsMatchIn(name) }
+            matchesInclude && !matchesExclude
+        }
     }
 }
