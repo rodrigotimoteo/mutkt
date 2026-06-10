@@ -154,6 +154,12 @@ subprojects {
             useInMemoryPgpKeys(signingKey, signingPassword)
             val publishing = extensions.getByType<PublishingExtension>()
             sign(publishing.publications)
+
+            // Fix: ensure signing tasks run before publish tasks
+            tasks.withType<AbstractPublishToMaven>().configureEach {
+                val signingTasks = tasks.withType<Sign>()
+                mustRunAfter(signingTasks)
+            }
         } else {
             isRequired = false
         }
