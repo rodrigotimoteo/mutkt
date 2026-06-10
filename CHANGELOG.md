@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.3] - 2026-06-10
+
+### Fixed
+- **ClassLoader isolation**: Inner classes of test classes (`Test$Inner`) were loaded by `BaseProjectClassLoader` while parent test classes were in `MutationClassLoader` → `IllegalAccessError`. `MutationClassLoader` now intercepts inner classes of test classes and loads them from the same classloader.
+- **JUnit 4 test detection**: `ReflectionTestRunner` only detected JUnit 5 `@Test` annotations. Most Kotlin projects use `kotlin.test.Test` which compiles to JUnit 4's `org.junit.Test`. Added support for JUnit 4 annotations (`@Test`, `@Before`, `@After`, `@BeforeClass`, `@AfterClass`).
+- **KMP classpath auto-detection**: `autoDetectClasspath` only checked `testRuntimeClasspath` (JVM). KMP projects use `jvmTestRuntimeClasspath`. Added fallback detection.
+- **KMP sourceSets auto-detection**: `autoDetectSourceSets` called `getByType(SourceSetContainer)` which crashes on KMP projects. Changed to `findByType` with graceful fallback.
+- **KMP task dependency**: Task hardcoded `dependsOn("compileKotlin")` which doesn't exist in KMP projects. Now checks for `compileKotlinJvm`/`compileTestKotlinJvm`.
+- **CI mutation score check**: Was running mutation testing on `mutation-self-test` which has no main source code → always showed 0%. Removed broken score gate.
+
+### Validated
+- **Real-world testing**: Ran mutation testing on `michaelbull/kotlin-result` (KMP library)
+  - 772 mutations found
+  - 30 killed (3%), 742 survived (96%)
+  - 0 errors, 0 timeouts
+  - 2.1s total time (367 mutations/sec)
+
 ## [0.2.2] - 2026-06-09
 
 ### Added
