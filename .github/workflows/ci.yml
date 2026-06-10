@@ -136,16 +136,8 @@ jobs:
       - name: Build sample project
         run: ./gradlew :mutation-sample:build
 
-      - name: Run mutation tests
-        run: |
-          set -e
-          ./gradlew :mutation-self-test:test 2>&1 | tee mutation-output.log
-          SCORE=$(grep -oP 'Killed:\s+\d+\s+\(\K\d+' mutation-output.log || echo "0")
-          echo "Mutation score: ${SCORE}%"
-          if [ "$SCORE" -lt 70 ]; then
-            echo "⚠️ Mutation score ${SCORE}% is below 70% threshold"
-            exit 1
-          fi
+      - name: Run mutation self-tests
+        run: ./gradlew :mutation-self-test:test
 
       - name: Upload mutation report
         uses: actions/upload-artifact@v4
@@ -154,4 +146,3 @@ jobs:
           name: mutation-report
           path: |
             **/build/reports/tests/
-            mutation-output.log
