@@ -624,6 +624,7 @@ class MutationEngine(
                 targetClassKey,
                 mutatedBytes,
                 testClassByteMap,
+                classFiles,
             )
 
         val (status, failedTestClasses) = runTestsWithClassLoader(classLoader, testClassNames)

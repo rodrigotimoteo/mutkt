@@ -15,6 +15,7 @@ dependencies {
 
     // JUnit for test execution via reflection
     implementation(libs.junit.jupiter)
+    implementation(libs.junit4)
     implementation(libs.junit.jupiter.params)
 
     // JUnit Platform Launcher for native JUnit 5 support

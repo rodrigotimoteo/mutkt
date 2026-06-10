@@ -87,31 +87,39 @@ class ReflectionTestRunner(
         val failures = mutableListOf<String>()
 
         // Discover test methods (@Test, @ParameterizedTest, @RepeatedTest) — walk superclass hierarchy
+        // Support both JUnit 5 (org.junit.jupiter.api.Test) and JUnit 4 (org.junit.Test)
         val testMethods =
             testClass.allDeclaredMethods().filter { method ->
                 method.isAnnotationPresent(Test::class.java) ||
+                    method.isAnnotationPresent(org.junit.Test::class.java) ||
                     method.isAnnotationPresent(ParameterizedTest::class.java) ||
                     method.isAnnotationPresent(RepeatedTest::class.java)
             }
 
         // Discover lifecycle methods — walk superclass hierarchy
+        // Support both JUnit 5 (@BeforeEach/@AfterEach) and JUnit 4 (@Before/@After)
         val beforeEachMethods =
             testClass.allDeclaredMethods().filter {
-                it.isAnnotationPresent(BeforeEach::class.java)
+                it.isAnnotationPresent(BeforeEach::class.java) ||
+                    it.isAnnotationPresent(org.junit.Before::class.java)
             }
         val afterEachMethods =
             testClass.allDeclaredMethods().filter {
-                it.isAnnotationPresent(AfterEach::class.java)
+                it.isAnnotationPresent(AfterEach::class.java) ||
+                    it.isAnnotationPresent(org.junit.After::class.java)
             }
 
         // Discover @BeforeAll/@AfterAll (static or instance methods)
+        // Support both JUnit 5 (@BeforeAll/@AfterAll) and JUnit 4 (@BeforeClass/@AfterClass)
         val beforeAllMethods =
             testClass.allDeclaredMethods().filter {
-                it.isAnnotationPresent(BeforeAll::class.java)
+                it.isAnnotationPresent(BeforeAll::class.java) ||
+                    it.isAnnotationPresent(org.junit.BeforeClass::class.java)
             }
         val afterAllMethods =
             testClass.allDeclaredMethods().filter {
-                it.isAnnotationPresent(AfterAll::class.java)
+                it.isAnnotationPresent(AfterAll::class.java) ||
+                    it.isAnnotationPresent(org.junit.AfterClass::class.java)
             }
 
         // Run @BeforeAll once before all tests — abort on failure

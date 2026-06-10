@@ -64,6 +64,7 @@ class MutationClassLoader(
     private val targetClassName: String,
     private val targetBytes: ByteArray,
     private val testClassBytes: Map<String, ByteArray>,
+    private val allClassBytes: Map<String, ByteArray>,
     private val failedClassCache: MutableSet<String>,
 ) : ClassLoader(baseLoader) {
     override fun loadClass(
@@ -88,12 +89,30 @@ class MutationClassLoader(
             }
         }
 
-        // Test class → define from test bytes.
-        val testBytes = testClassBytes[slashedName]
-        if (testBytes != null) {
-            if (slashedName !in failedClassCache) {
+        // Test class (or inner class of test class) → intercept to keep in same classloader.
+        val isTestOrInner =
+            testClassBytes.keys.any { testName ->
+                slashedName == testName || slashedName.startsWith("$testName$")
+            }
+        if (isTestOrInner && slashedName !in failedClassCache) {
+            val testBytes = testClassBytes[slashedName]
+            if (testBytes != null) {
+                // Top-level test class → define from test bytes.
                 try {
                     val clazz = defineClass(binaryName, testBytes, 0, testBytes.size)
+                    if (resolve) resolveClass(clazz)
+                    return clazz
+                } catch (e: LinkageError) {
+                    failedClassCache.add(slashedName)
+                    return super.loadClass(binaryName, resolve)
+                }
+            }
+            // Inner class of test class → define from project bytes in THIS classloader
+            // to avoid cross-module IllegalAccessError.
+            val innerBytes = allClassBytes[slashedName]
+            if (innerBytes != null) {
+                try {
+                    val clazz = defineClass(binaryName, innerBytes, 0, innerBytes.size)
                     if (resolve) resolveClass(clazz)
                     return clazz
                 } catch (e: LinkageError) {
@@ -153,12 +172,14 @@ object MutantClassLoaderFactory {
         targetClassName: String,
         targetBytes: ByteArray,
         testClassBytes: Map<String, ByteArray>,
+        allClassBytes: Map<String, ByteArray>,
     ): MutationClassLoader {
         return MutationClassLoader(
             baseLoader,
             targetClassName,
             targetBytes,
             testClassBytes,
+            allClassBytes,
             sharedFailedClassCache,
         )
     }
