@@ -249,7 +249,7 @@ abstract class MutationTask : DefaultTask() {
             val msg =
                 buildString {
                     appendLine("Classes directory not found: $classesDir")
-                    appendLine("Fix: Run 'gradlew compileKotlin' first, or set targetClasses manually:")
+                    appendLine("Fix: Run 'gradlew compileKotlin' (or 'compileKotlinJvm' for KMP) first, or set targetClasses manually:")
                     appendLine("  mutationTest {")
                     appendLine("    targetClasses.from(file(\"build/classes/kotlin/main\"))")
                     appendLine("  }")

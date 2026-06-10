@@ -45,7 +45,21 @@ class MutationPlugin : Plugin<Project> {
             ) { task ->
                 task.group = "verification"
                 task.description = "Runs mutation testing analysis"
-                task.dependsOn("compileKotlin", "compileTestKotlin")
+
+                // Support both JVM-only and KMP projects
+                val compileKotlinTask =
+                    when {
+                        project.tasks.findByName("compileKotlin") != null -> "compileKotlin"
+                        project.tasks.findByName("compileKotlinJvm") != null -> "compileKotlinJvm"
+                        else -> "compileKotlin" // Fallback — will fail if neither exists
+                    }
+                val compileTestKotlinTask =
+                    when {
+                        project.tasks.findByName("compileTestKotlin") != null -> "compileTestKotlin"
+                        project.tasks.findByName("compileTestKotlinJvm") != null -> "compileTestKotlinJvm"
+                        else -> "compileTestKotlin" // Fallback
+                    }
+                task.dependsOn(compileKotlinTask, compileTestKotlinTask)
 
                 // Wire extension properties lazily
                 task.targetClasses.from(extension.targetClasses)
@@ -104,7 +118,11 @@ class MutationPlugin : Plugin<Project> {
         extension: MutationPluginExtension,
     ) {
         try {
-            val sourceSets = project.extensions.getByType(SourceSetContainer::class.java)
+            val sourceSets = project.extensions.findByType(SourceSetContainer::class.java)
+            if (sourceSets == null) {
+                project.logger.info("No SourceSetContainer found (KMP project), skipping auto-detect")
+                return
+            }
 
             // Auto-detect main source set output
             val mainSourceSet = sourceSets.findByName("main")
@@ -134,6 +152,12 @@ class MutationPlugin : Plugin<Project> {
             if (testRuntimeClasspath != null) {
                 extension.classpath.from(testRuntimeClasspath)
                 project.logger.info("Auto-detected classpath from testRuntimeClasspath")
+            } else {
+                // KMP projects use jvmTestRuntimeClasspath
+                project.configurations.findByName("jvmTestRuntimeClasspath")?.let {
+                    extension.classpath.from(it)
+                    project.logger.info("Auto-detected classpath from jvmTestRuntimeClasspath (KMP)")
+                }
             }
         } catch (e: Exception) {
             project.logger.warn("Could not auto-detect classpath: ${e.message}")
