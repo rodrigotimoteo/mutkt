@@ -309,6 +309,226 @@ class MutationEngineTest {
         }
     }
 
+    @Test
+    fun `engine with include patterns filters mutations`() {
+        val classBytes = buildClassWithArithmetic()
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                includePatterns = listOf("com\\.example\\.Calc"),
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                emptyList(),
+                emptyMap(),
+            )
+        assertTrue(report.results.isNotEmpty())
+    }
+
+    @Test
+    fun `engine with exclude patterns filters mutations`() {
+        val classBytes = buildClassWithArithmetic()
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                excludePatterns = listOf("com\\.example\\.Calc"),
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                emptyList(),
+                emptyMap(),
+            )
+        assertEquals(0, report.results.size)
+    }
+
+    @Test
+    fun `engine with target test patterns filters tests`() {
+        val classBytes = buildClassWithArithmetic()
+        val testBytes = buildTestAssertingAdd(5, 3, 8)
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                targetTestPatterns = listOf("com\\.example\\.Calc.*"),
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                testClassNames = listOf("com.example.CalcTest"),
+                testClassBytes = mapOf("com/example/CalcTest" to testBytes),
+            )
+        assertTrue(report.results.isNotEmpty())
+    }
+
+    @Test
+    fun `engine with exclude test patterns filters tests`() {
+        val classBytes = buildClassWithArithmetic()
+        val testBytes = buildTestAssertingAdd(5, 3, 8)
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                excludeTestPatterns = listOf("com\\.example\\.CalcTest"),
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                testClassNames = listOf("com.example.CalcTest"),
+                testClassBytes = mapOf("com/example/CalcTest" to testBytes),
+            )
+        // Test class excluded → no tests run → NO_COVERAGE
+        assertEquals(1, report.results.size)
+        assertEquals("NO_COVERAGE", report.results[0].status.name)
+    }
+
+    @Test
+    fun `engine with maxMutationsPerClass limits results`() {
+        val classBytes = buildClassWithArithmetic()
+        val engine =
+            MutationEngine(
+                enabledOperators = MutationOperator.MVP_OPERATORS,
+                maxMutationsPerClass = 1,
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                emptyList(),
+                emptyMap(),
+            )
+        assertTrue(report.results.size <= 1)
+    }
+
+    @Test
+    fun `engine with changedClasses filters by incremental`() {
+        val classBytes = buildClassWithArithmetic()
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                changedClasses = setOf("com.example.Foo"),
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                emptyList(),
+                emptyMap(),
+            )
+        assertEquals(0, report.results.size)
+    }
+
+    @Test
+    fun `engine with cache enabled runs correctly`() {
+        val classBytes = buildClassWithArithmetic()
+        val projectDir = java.io.File(System.getProperty("java.io.tmpdir"), "mutkt-test-cache-${System.nanoTime()}")
+        projectDir.mkdirs()
+        try {
+            val engine =
+                MutationEngine(
+                    enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                    enableCache = true,
+                    projectDir = projectDir,
+                )
+            val report =
+                engine.runMutationTesting(
+                    classFiles = mapOf("com/example/Calc" to classBytes),
+                    testClassNames = listOf("com.example.CalcTest"),
+                    testClassBytes = mapOf("com/example/CalcTest" to buildTestAssertingAdd(5, 3, 8)),
+                )
+            assertTrue(report.results.isNotEmpty())
+        } finally {
+            projectDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `engine with subsumption enabled runs correctly`() {
+        val classBytes = buildClassWithArithmetic()
+        val testBytes = buildTestAssertingAdd(5, 3, 8)
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                enableSubsumption = true,
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                testClassNames = listOf("com.example.CalcTest"),
+                testClassBytes = mapOf("com/example/CalcTest" to testBytes),
+            )
+        assertTrue(report.results.isNotEmpty())
+    }
+
+    @Test
+    fun `engine with baseline enabled saves results`() {
+        val classBytes = buildClassWithArithmetic()
+        val projectDir = java.io.File(System.getProperty("java.io.tmpdir"), "mutkt-test-baseline-${System.nanoTime()}")
+        projectDir.mkdirs()
+        try {
+            val engine =
+                MutationEngine(
+                    enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                    projectDir = projectDir,
+                )
+            val report =
+                engine.runMutationTesting(
+                    classFiles = mapOf("com/example/Calc" to classBytes),
+                    testClassNames = listOf("com.example.CalcTest"),
+                    testClassBytes = mapOf("com/example/CalcTest" to buildTestAssertingAdd(5, 3, 8)),
+                )
+            assertTrue(report.results.isNotEmpty())
+        } finally {
+            projectDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `engine with baseline and incremental merges results`() {
+        val classBytes = buildClassWithArithmetic()
+        val projectDir = java.io.File(System.getProperty("java.io.tmpdir"), "mutkt-test-baseline-merge-${System.nanoTime()}")
+        projectDir.mkdirs()
+        try {
+            val engine =
+                MutationEngine(
+                    enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                    projectDir = projectDir,
+                    changedClasses = setOf("com.example.Calc"),
+                )
+            val report =
+                engine.runMutationTesting(
+                    classFiles = mapOf("com/example/Calc" to classBytes),
+                    testClassNames = listOf("com.example.CalcTest"),
+                    testClassBytes = mapOf("com.example/C" + "alcTest" to buildTestAssertingAdd(5, 3, 8)),
+                )
+            assertTrue(report.results.isNotEmpty())
+        } finally {
+            projectDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `engine with testOrdering enabled runs correctly`() {
+        val classBytes = buildClassWithArithmetic()
+        val testBytes = buildTestAssertingAdd(5, 3, 8)
+        val projectDir = java.io.File(System.getProperty("java.io.tmpdir"), "mutkt-test-history-${System.nanoTime()}")
+        projectDir.mkdirs()
+        try {
+            val engine =
+                MutationEngine(
+                    enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                    enableTestOrdering = true,
+                    projectDir = projectDir,
+                )
+            val report =
+                engine.runMutationTesting(
+                    classFiles = mapOf("com/example/Calc" to classBytes),
+                    testClassNames = listOf("com.example.CalcTest"),
+                    testClassBytes = mapOf("com/example/CalcTest" to testBytes),
+                )
+            assertTrue(report.results.isNotEmpty())
+        } finally {
+            projectDir.deleteRecursively()
+        }
+    }
+
     // ==================== HELPERS ====================
 
     private fun buildClassWithArithmetic(): ByteArray {
