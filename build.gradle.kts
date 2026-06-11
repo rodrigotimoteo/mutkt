@@ -51,6 +51,14 @@ subprojects {
     apply(plugin = "maven-publish")
     apply(plugin = "signing")
     apply(plugin = "org.jetbrains.kotlinx.kover")
+
+    extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
+        // Exclude deprecated/dead code from coverage
+        excludeSourceSets {
+            names("generated")
+        }
+    }
+
     apply(plugin = "org.jetbrains.dokka")
     apply(plugin = "io.gitlab.arturbosch.detekt")
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
