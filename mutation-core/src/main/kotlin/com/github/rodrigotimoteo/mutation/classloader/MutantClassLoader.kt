@@ -17,6 +17,8 @@ class BaseProjectClassLoader(
     private val excludedClasses: Set<String>,
     private val failedClassCache: MutableSet<String>,
 ) : ClassLoader(parent) {
+    private val defineLocks: MutableMap<String, Any> = java.util.concurrent.ConcurrentHashMap()
+
     override fun loadClass(
         name: String,
         resolve: Boolean,
@@ -36,18 +38,25 @@ class BaseProjectClassLoader(
             return super.loadClass(binaryName, resolve)
         }
 
-        val bytes = classBytes[slashedName]
-        if (bytes != null) {
-            try {
-                val clazz = defineClass(binaryName, bytes, 0, bytes.size)
-                if (resolve) resolveClass(clazz)
-                return clazz
-            } catch (e: LinkageError) {
-                failedClassCache.add(slashedName)
-            }
-        }
+        // Serialize concurrent defineClass attempts for the same class name to avoid
+        // duplicate class definition LinkageError under concurrent loadClass calls.
+        synchronized(defineLocks.computeIfAbsent(binaryName) { Any() }) {
+            findLoadedClass(binaryName)?.let { return it }
 
-        return super.loadClass(binaryName, resolve)
+            val bytes = classBytes[slashedName]
+            if (bytes != null) {
+                try {
+                    val clazz = defineClass(binaryName, bytes, 0, bytes.size)
+                    if (resolve) resolveClass(clazz)
+                    return clazz
+                } catch (e: LinkageError) {
+                    failedClassCache.add(slashedName)
+                    throw e
+                }
+            }
+
+            return super.loadClass(binaryName, resolve)
+        }
     }
 }
 
@@ -67,6 +76,8 @@ class MutationClassLoader(
     private val allClassBytes: Map<String, ByteArray>,
     private val failedClassCache: MutableSet<String>,
 ) : ClassLoader(baseLoader) {
+    private val defineLocks: MutableMap<String, Any> = java.util.concurrent.ConcurrentHashMap()
+
     override fun loadClass(
         name: String,
         resolve: Boolean,
@@ -77,53 +88,60 @@ class MutationClassLoader(
         val loaded = findLoadedClass(binaryName)
         if (loaded != null) return loaded
 
-        // Target class → mutated bytes.
-        if (slashedName == targetClassName) {
-            try {
-                val clazz = defineClass(binaryName, targetBytes, 0, targetBytes.size)
-                if (resolve) resolveClass(clazz)
-                return clazz
-            } catch (e: LinkageError) {
-                failedClassCache.add(slashedName)
-                throw e
-            }
-        }
+        // Serialize concurrent defineClass attempts for the same class name to avoid
+        // duplicate class definition LinkageError under concurrent loadClass calls.
+        synchronized(defineLocks.computeIfAbsent(binaryName) { Any() }) {
+            // Re-check after acquiring lock — another thread may have defined it.
+            findLoadedClass(binaryName)?.let { return it }
 
-        // Test class (or inner class of test class) → intercept to keep in same classloader.
-        val isTestOrInner =
-            testClassBytes.keys.any { testName ->
-                slashedName == testName || slashedName.startsWith("$testName$")
-            }
-        if (isTestOrInner && slashedName !in failedClassCache) {
-            val testBytes = testClassBytes[slashedName]
-            if (testBytes != null) {
-                // Top-level test class → define from test bytes.
+            // Target class → mutated bytes.
+            if (slashedName == targetClassName) {
                 try {
-                    val clazz = defineClass(binaryName, testBytes, 0, testBytes.size)
+                    val clazz = defineClass(binaryName, targetBytes, 0, targetBytes.size)
                     if (resolve) resolveClass(clazz)
                     return clazz
                 } catch (e: LinkageError) {
                     failedClassCache.add(slashedName)
-                    return super.loadClass(binaryName, resolve)
+                    throw e
                 }
             }
-            // Inner class of test class → define from project bytes in THIS classloader
-            // to avoid cross-module IllegalAccessError.
-            val innerBytes = allClassBytes[slashedName]
-            if (innerBytes != null) {
-                try {
-                    val clazz = defineClass(binaryName, innerBytes, 0, innerBytes.size)
-                    if (resolve) resolveClass(clazz)
-                    return clazz
-                } catch (e: LinkageError) {
-                    failedClassCache.add(slashedName)
-                    return super.loadClass(binaryName, resolve)
-                }
-            }
-        }
 
-        // Everything else → BaseProjectClassLoader (non-target project classes + JDK).
-        return super.loadClass(binaryName, resolve)
+            // Test class (or inner class of test class) → intercept to keep in same classloader.
+            val isTestOrInner =
+                testClassBytes.keys.any { testName ->
+                    slashedName == testName || slashedName.startsWith("$testName$")
+                }
+            if (isTestOrInner && slashedName !in failedClassCache) {
+                val testBytes = testClassBytes[slashedName]
+                if (testBytes != null) {
+                    // Top-level test class → define from test bytes.
+                    try {
+                        val clazz = defineClass(binaryName, testBytes, 0, testBytes.size)
+                        if (resolve) resolveClass(clazz)
+                        return clazz
+                    } catch (e: LinkageError) {
+                        failedClassCache.add(slashedName)
+                        return super.loadClass(binaryName, resolve)
+                    }
+                }
+                // Inner class of test class → define from project bytes in THIS classloader
+                // to avoid cross-module IllegalAccessError.
+                val innerBytes = allClassBytes[slashedName]
+                if (innerBytes != null) {
+                    try {
+                        val clazz = defineClass(binaryName, innerBytes, 0, innerBytes.size)
+                        if (resolve) resolveClass(clazz)
+                        return clazz
+                    } catch (e: LinkageError) {
+                        failedClassCache.add(slashedName)
+                        return super.loadClass(binaryName, resolve)
+                    }
+                }
+            }
+
+            // Everything else → BaseProjectClassLoader (non-target project classes + JDK).
+            return super.loadClass(binaryName, resolve)
+        }
     }
 }
 
@@ -218,6 +236,7 @@ class MutantClassLoader(
     private val failedClassCache: MutableSet<String> = ConcurrentHashMap.newKeySet(),
 ) : ClassLoader(parent) {
     private val targetClassName: String = targetMutation.className.replace('.', '/')
+    private val defineLocks: MutableMap<String, Any> = java.util.concurrent.ConcurrentHashMap()
 
     override fun loadClass(
         name: String,
@@ -229,28 +248,34 @@ class MutantClassLoader(
         val loaded = findLoadedClass(binaryName)
         if (loaded != null) return loaded
 
-        val classBytes = originalClassBytes[slashedName]
-        if (classBytes != null) {
-            if (slashedName in failedClassCache) {
-                return super.loadClass(binaryName, resolve)
+        // Serialize concurrent defineClass attempts for the same class name to avoid
+        // duplicate class definition LinkageError under concurrent loadClass calls.
+        synchronized(defineLocks.computeIfAbsent(binaryName) { Any() }) {
+            findLoadedClass(binaryName)?.let { return it }
+
+            val classBytes = originalClassBytes[slashedName]
+            if (classBytes != null) {
+                if (slashedName in failedClassCache) {
+                    return super.loadClass(binaryName, resolve)
+                }
+
+                try {
+                    val mutatedBytes =
+                        if (slashedName == targetClassName) {
+                            preMutatedBytes ?: mutator.applyMutation(classBytes, targetMutation)
+                        } else {
+                            classBytes
+                        }
+                    val clazz = defineClass(binaryName, mutatedBytes, 0, mutatedBytes.size)
+                    if (resolve) resolveClass(clazz)
+                    return clazz
+                } catch (e: LinkageError) {
+                    failedClassCache.add(slashedName)
+                    if (slashedName == targetClassName) throw e
+                }
             }
 
-            try {
-                val mutatedBytes =
-                    if (slashedName == targetClassName) {
-                        preMutatedBytes ?: mutator.applyMutation(classBytes, targetMutation)
-                    } else {
-                        classBytes
-                    }
-                val clazz = defineClass(binaryName, mutatedBytes, 0, mutatedBytes.size)
-                if (resolve) resolveClass(clazz)
-                return clazz
-            } catch (e: LinkageError) {
-                failedClassCache.add(slashedName)
-                if (slashedName == targetClassName) throw e
-            }
+            return super.loadClass(binaryName, resolve)
         }
-
-        return super.loadClass(binaryName, resolve)
     }
 }

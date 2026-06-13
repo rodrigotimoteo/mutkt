@@ -738,3 +738,1723 @@ class CompanionFactoryTest {
         org.junit.jupiter.api.Assertions.assertTrue(value > 0)
     }
 }
+
+class ReflectionTestRunnerExtendedTest {
+    private val classLoader = DynamicClassLoader(ReflectionTestRunnerFullTest::class.java.classLoader)
+    private val runner = ReflectionTestRunner(classLoader)
+
+    @BeforeEach
+    fun resetTracker() {
+        AsmTestTracker.reset()
+    }
+
+    @Test
+    fun `runTests with missing class name reports load failure`() {
+        val results = runner.runTests(listOf("missing.Foo"))
+        assertEquals(0, results.testsFound)
+        assertEquals(1, results.testsFailed)
+        assertTrue(results.failureMessages.any { it.contains("missing.Foo") })
+    }
+
+    @Test
+    fun `InvocationTargetException during load extracts target message`() {
+        val throwingLoader =
+            object : ClassLoader() {
+                override fun loadClass(name: String): Class<*> {
+                    val ex = RuntimeException("Inner cause")
+                    throw java.lang.reflect.InvocationTargetException(ex)
+                }
+            }
+        val customRunner = ReflectionTestRunner(throwingLoader)
+        val results = customRunner.runTests(listOf("anything.Foo"))
+        assertEquals(1, results.testsFailed)
+        assertTrue(results.failureMessages.any { it.contains("Inner cause") })
+    }
+
+    @Test
+    fun `TestResults hasTests and hasFailures reflect outcomes`() {
+        val empty = ReflectionTestRunner.TestResults(0, 0, 0, 0, emptyList())
+        val passing = ReflectionTestRunner.TestResults(1, 1, 0, 0, emptyList())
+        val failing = ReflectionTestRunner.TestResults(1, 0, 1, 0, listOf("boom"))
+
+        assertTrue(!empty.hasTests && !empty.hasFailures)
+        assertTrue(passing.hasTests && !passing.hasFailures)
+        assertTrue(failing.hasTests && failing.hasFailures)
+    }
+
+    @Test
+    fun `instance JUnit5 BeforeAll runs once before tests`() {
+        val cw = buildClassWriterExt("test/InstanceBeforeAllTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "setup", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/BeforeAll;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "com/github/rodrigotimoteo/mutation/runner/AsmTestTracker",
+            "incBeforeAll",
+            "()I",
+            false,
+        )
+        mv.visitInsn(Opcodes.POP)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        addTestMethodExt(cw, "t1") { visitInsn(Opcodes.RETURN) }
+        addTestMethodExt(cw, "t2") { visitInsn(Opcodes.RETURN) }
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.InstanceBeforeAllTest", cw.toByteArray())
+        runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, AsmTestTracker.beforeAllCount.get())
+    }
+
+    @Test
+    fun `static JUnit4 BeforeClass and AfterClass run once`() {
+        val cw = buildClassWriterExt("test/JUnit4StaticLifecycleTest")
+        val before = cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "beforeAll", "()V", null, null)
+        val beforeAnn = before.visitAnnotation("Lorg/junit/BeforeClass;", true)
+        beforeAnn.visitEnd()
+        before.visitCode()
+        before.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "com/github/rodrigotimoteo/mutation/runner/AsmTestTracker",
+            "incBeforeAll",
+            "()I",
+            false,
+        )
+        before.visitInsn(Opcodes.POP)
+        before.visitInsn(Opcodes.RETURN)
+        before.visitMaxs(0, 0)
+        before.visitEnd()
+
+        val after = cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "afterAll", "()V", null, null)
+        val afterAnn = after.visitAnnotation("Lorg/junit/AfterClass;", true)
+        afterAnn.visitEnd()
+        after.visitCode()
+        after.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "com/github/rodrigotimoteo/mutation/runner/AsmTestTracker",
+            "incAfterAll",
+            "()I",
+            false,
+        )
+        after.visitInsn(Opcodes.POP)
+        after.visitInsn(Opcodes.RETURN)
+        after.visitMaxs(0, 0)
+        after.visitEnd()
+
+        addTestMethodExt(cw, "t1") { visitInsn(Opcodes.RETURN) }
+        addTestMethodExt(cw, "t2") { visitInsn(Opcodes.RETURN) }
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.JUnit4StaticLifecycleTest", cw.toByteArray())
+        runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, AsmTestTracker.beforeAllCount.get())
+        assertEquals(1, AsmTestTracker.afterAllCount.get())
+    }
+
+    @Test
+    fun `instance JUnit5 AfterAll runs once after tests`() {
+        val cw = buildClassWriterExt("test/InstanceAfterAllTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "teardownAll", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/AfterAll;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "com/github/rodrigotimoteo/mutation/runner/AsmTestTracker",
+            "incAfterAll",
+            "()I",
+            false,
+        )
+        mv.visitInsn(Opcodes.POP)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        addTestMethodExt(cw, "t1") { visitInsn(Opcodes.RETURN) }
+        addTestMethodExt(cw, "t2") { visitInsn(Opcodes.RETURN) }
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.InstanceAfterAllTest", cw.toByteArray())
+        runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, AsmTestTracker.afterAllCount.get())
+    }
+
+    @Test
+    fun `AfterClass exception is recorded but does not abort tests`() {
+        val cw = buildClassWriterExt("test/AfterClassThrowsTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "teardown", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/AfterClass;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        mv.visitInsn(Opcodes.DUP)
+        mv.visitLdcInsn("teardown boom")
+        mv.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        mv.visitInsn(Opcodes.ATHROW)
+        mv.visitMaxs(3, 0)
+        mv.visitEnd()
+        addTestMethodExt(cw, "t1") { visitInsn(Opcodes.RETURN) }
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.AfterClassThrowsTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+        assertTrue(results.failureMessages.any { it.contains("@AfterAll") && it.contains("teardown boom") })
+    }
+
+    @Test
+    fun `BeforeAll failure records non-InvocationTargetException cause`() {
+        val cw = buildClassWriterExt("test/BeforeAllIntParamTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC, "badSetup", "(I)V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/BeforeAll;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        addTestMethodExt(cw, "t1") { visitInsn(Opcodes.RETURN) }
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.BeforeAllIntParamTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, results.testsFailed)
+        assertTrue(results.failureMessages.any { it.contains("@BeforeAll") })
+    }
+
+    @Test
+    fun `failing test with null message records empty cause`() {
+        val cw = buildClassWriterExt("test/NullMessageFailTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/Test;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        mv.visitInsn(Opcodes.DUP)
+        mv.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "()V",
+            false,
+        )
+        mv.visitInsn(Opcodes.ATHROW)
+        mv.visitMaxs(2, 1)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.NullMessageFailTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, results.testsFailed)
+        assertTrue(results.failureMessages.any { it.contains("t1: ") })
+    }
+
+    @Test
+    fun `BeforeEach parameter mismatch hits Exception catch`() {
+        val cw = buildClassWriterExt("test/BadBeforeEachTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "setup", "(I)V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/BeforeEach;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        addTestMethodExt(cw, "t1") { visitInsn(Opcodes.RETURN) }
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.BadBeforeEachTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertTrue(results.testsFailed >= 1)
+    }
+
+    @Test
+    fun `AfterEach exception is swallowed`() {
+        val cw = buildClassWriterExt("test/AfterEachThrowsTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "teardown", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/AfterEach;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        mv.visitInsn(Opcodes.DUP)
+        mv.visitLdcInsn("teardown error")
+        mv.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        mv.visitInsn(Opcodes.ATHROW)
+        mv.visitMaxs(3, 1)
+        mv.visitEnd()
+        addTestMethodExt(cw, "t1") { visitInsn(Opcodes.RETURN) }
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.AfterEachThrowsTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+        assertEquals(0, results.testsFailed)
+    }
+
+    @Test
+    fun `RepeatedTest failure on later repetition counts failure`() {
+        val cw = buildClassWriterExt("test/RepeatedFailTest")
+        val counterField =
+            cw.visitField(
+                Opcodes.ACC_PRIVATE or Opcodes.ACC_STATIC,
+                "callCount",
+                "I",
+                null,
+                0,
+            )
+        counterField.visitEnd()
+
+        val factory =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                "shouldThrow",
+                "()Z",
+                null,
+                null,
+            )
+        factory.visitCode()
+        factory.visitFieldInsn(
+            Opcodes.GETSTATIC,
+            "test/RepeatedFailTest",
+            "callCount",
+            "I",
+        )
+        factory.visitInsn(Opcodes.ICONST_1)
+        val secondLbl = org.objectweb.asm.Label()
+        factory.visitJumpInsn(Opcodes.IF_ICMPEQ, secondLbl)
+        factory.visitInsn(Opcodes.ICONST_0)
+        factory.visitInsn(Opcodes.IRETURN)
+        factory.visitLabel(secondLbl)
+        factory.visitInsn(Opcodes.ICONST_1)
+        factory.visitInsn(Opcodes.IRETURN)
+        factory.visitMaxs(2, 0)
+        factory.visitEnd()
+
+        val incrementer =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                "incrementCount",
+                "()V",
+                null,
+                null,
+            )
+        incrementer.visitCode()
+        incrementer.visitFieldInsn(
+            Opcodes.GETSTATIC,
+            "test/RepeatedFailTest",
+            "callCount",
+            "I",
+        )
+        incrementer.visitInsn(Opcodes.ICONST_1)
+        incrementer.visitInsn(Opcodes.IADD)
+        incrementer.visitFieldInsn(
+            Opcodes.PUTSTATIC,
+            "test/RepeatedFailTest",
+            "callCount",
+            "I",
+        )
+        incrementer.visitInsn(Opcodes.RETURN)
+        incrementer.visitMaxs(2, 0)
+        incrementer.visitEnd()
+
+        val testMv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "()V", null, null)
+        val rt = testMv.visitAnnotation("Lorg/junit/jupiter/api/RepeatedTest;", true)
+        rt.visit("value", 3)
+        rt.visitEnd()
+        testMv.visitCode()
+        testMv.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "test/RepeatedFailTest",
+            "incrementCount",
+            "()V",
+            false,
+        )
+        testMv.visitMethodInsn(Opcodes.INVOKESTATIC, "test/RepeatedFailTest", "shouldThrow", "()Z", false)
+        val skipLbl = org.objectweb.asm.Label()
+        testMv.visitJumpInsn(Opcodes.IFEQ, skipLbl)
+        testMv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        testMv.visitInsn(Opcodes.DUP)
+        testMv.visitLdcInsn("boom")
+        testMv.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        testMv.visitInsn(Opcodes.ATHROW)
+        testMv.visitLabel(skipLbl)
+        testMv.visitInsn(Opcodes.RETURN)
+        testMv.visitMaxs(3, 1)
+        testMv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.RepeatedFailTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(3, results.testsFound)
+        assertEquals(1, results.testsFailed)
+    }
+
+    @Test
+    fun `zero-parameter ParameterizedTest runs once`() {
+        val cw = buildClassWriterExt("test/ZeroParamParameterizedTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ZeroParamParameterizedTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+        assertEquals(0, results.testsFailed)
+    }
+
+    @Test
+    fun `MethodSource with empty value falls through to unresolved`() {
+        val cw = buildClassWriterExt("test/EmptyMethodSourceTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.EmptyMethodSourceTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(0, results.testsFound)
+        assertTrue(results.failureMessages.any { it.contains("Could not resolve") })
+    }
+
+    @Test
+    fun `missing factory method yields unresolved parameters message`() {
+        val cw = buildClassWriterExt("test/MissingFactoryTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "doesNotExist")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.MissingFactoryTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(0, results.testsFound)
+        assertTrue(results.failureMessages.any { it.contains("Could not resolve") })
+    }
+
+    @Test
+    fun `factory method with parameters is ignored`() {
+        val cw = buildClassWriterExt("test/FactoryWithParamsTest")
+        val factory =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                "provideData",
+                "(I)Ljava/util/List;",
+                null,
+                null,
+            )
+        factory.visitCode()
+        factory.visitInsn(Opcodes.ACONST_NULL)
+        factory.visitInsn(Opcodes.ARETURN)
+        factory.visitMaxs(1, 1)
+        factory.visitEnd()
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.FactoryWithParamsTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(0, results.testsFound)
+        assertTrue(results.failureMessages.any { it.contains("Could not resolve") })
+    }
+
+    @Test
+    fun `factory returning non-Iterable is ignored`() {
+        val cw = buildClassWriterExt("test/NonIterableFactoryTest")
+        val factory =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                "provideData",
+                "()Ljava/lang/String;",
+                null,
+                null,
+            )
+        factory.visitCode()
+        factory.visitLdcInsn("not a list")
+        factory.visitInsn(Opcodes.ARETURN)
+        factory.visitMaxs(1, 0)
+        factory.visitEnd()
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.NonIterableFactoryTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(0, results.testsFound)
+        assertTrue(results.failureMessages.any { it.contains("Could not resolve") })
+    }
+
+    @Test
+    fun `factory returning arrays spreads multi-arg params`() {
+        val cw = buildClassWriterExt("test/ArraySpreadFactoryTest")
+        val factory =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                "provideData",
+                "()Ljava/util/List;",
+                null,
+                null,
+            )
+        factory.visitCode()
+        factory.visitInsn(Opcodes.ICONST_2)
+        factory.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/Object")
+        factory.visitInsn(Opcodes.DUP)
+        factory.visitInsn(Opcodes.ICONST_0)
+        factory.visitInsn(Opcodes.ICONST_1)
+        factory.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "java/lang/Integer",
+            "valueOf",
+            "(I)Ljava/lang/Integer;",
+            false,
+        )
+        factory.visitInsn(Opcodes.AASTORE)
+        factory.visitInsn(Opcodes.DUP)
+        factory.visitInsn(Opcodes.ICONST_1)
+        factory.visitInsn(Opcodes.ICONST_2)
+        factory.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "java/lang/Integer",
+            "valueOf",
+            "(I)Ljava/lang/Integer;",
+            false,
+        )
+        factory.visitInsn(Opcodes.AASTORE)
+        factory.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "java/util/List",
+            "of",
+            "(Ljava/lang/Object;)Ljava/util/List;",
+            true,
+        )
+        factory.visitInsn(Opcodes.ARETURN)
+        factory.visitMaxs(6, 0)
+        factory.visitEnd()
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(II)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 3)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ArraySpreadFactoryTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+    }
+
+    @Test
+    fun `parameterized test with BeforeEach and array args`() {
+        val cw = buildClassWriterExt("test/ParamWithBeforeEachTest")
+        val be = cw.visitMethod(Opcodes.ACC_PUBLIC, "setup", "()V", null, null)
+        val beAnn = be.visitAnnotation("Lorg/junit/jupiter/api/BeforeEach;", true)
+        beAnn.visitEnd()
+        be.visitCode()
+        be.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "com/github/rodrigotimoteo/mutation/runner/AsmTestTracker",
+            "incBeforeEach",
+            "()I",
+            false,
+        )
+        be.visitInsn(Opcodes.POP)
+        be.visitInsn(Opcodes.RETURN)
+        be.visitMaxs(0, 1)
+        be.visitEnd()
+
+        val factory =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                "provideData",
+                "()Ljava/util/List;",
+                null,
+                null,
+            )
+        factory.visitCode()
+        factory.visitInsn(Opcodes.ICONST_2)
+        factory.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/Object")
+        factory.visitInsn(Opcodes.DUP)
+        factory.visitInsn(Opcodes.ICONST_0)
+        factory.visitInsn(Opcodes.ICONST_1)
+        factory.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "java/lang/Integer",
+            "valueOf",
+            "(I)Ljava/lang/Integer;",
+            false,
+        )
+        factory.visitInsn(Opcodes.AASTORE)
+        factory.visitInsn(Opcodes.DUP)
+        factory.visitInsn(Opcodes.ICONST_1)
+        factory.visitInsn(Opcodes.ICONST_2)
+        factory.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "java/lang/Integer",
+            "valueOf",
+            "(I)Ljava/lang/Integer;",
+            false,
+        )
+        factory.visitInsn(Opcodes.AASTORE)
+        factory.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "java/util/List",
+            "of",
+            "(Ljava/lang/Object;)Ljava/util/List;",
+            true,
+        )
+        factory.visitInsn(Opcodes.ARETURN)
+        factory.visitMaxs(6, 0)
+        factory.visitEnd()
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val msArr = ms.visitArray("value")
+        msArr.visit(null, "provideData")
+        msArr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ParamWithBeforeEachTest", cw.toByteArray())
+        runner.runTests(listOf(clazz.name))
+
+        assertEquals(1, AsmTestTracker.beforeEachCount.get())
+    }
+
+    @Test
+    fun `parameterized method throwing hits InvocationTargetException catch`() {
+        val cw = buildClassWriterExt("test/ParamThrowTest")
+        addIntListFactoryExt(cw, "provideData", listOf(1, 2))
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitVarInsn(Opcodes.ILOAD, 1)
+        mv.visitInsn(Opcodes.ICONST_2)
+        val lblReturn = org.objectweb.asm.Label()
+        mv.visitJumpInsn(Opcodes.IF_ICMPNE, lblReturn)
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        mv.visitInsn(Opcodes.DUP)
+        mv.visitLdcInsn("two caused it")
+        mv.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        mv.visitInsn(Opcodes.ATHROW)
+        mv.visitLabel(lblReturn)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(3, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ParamThrowTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(1, results.testsFailed)
+        assertTrue(results.failureMessages.any { it.contains("two caused it") })
+    }
+
+    @Test
+    fun `parameterized method with wrong arg type hits Exception catch`() {
+        val cw = buildClassWriterExt("test/ParamTypeMismatchTest")
+        val factory =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                "provideData",
+                "()Ljava/util/List;",
+                null,
+                null,
+            )
+        factory.visitCode()
+        factory.visitLdcInsn("notAnInt")
+        factory.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "java/util/List",
+            "of",
+            "(Ljava/lang/Object;)Ljava/util/List;",
+            true,
+        )
+        factory.visitInsn(Opcodes.ARETURN)
+        factory.visitMaxs(1, 0)
+        factory.visitEnd()
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ParamTypeMismatchTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertTrue(results.testsFailed >= 1)
+        assertTrue(results.failureMessages.isNotEmpty())
+    }
+
+    @Test
+    fun `parameterized test swallows AfterEach exception`() {
+        val cw = buildClassWriterExt("test/ParamAfterEachThrowsTest")
+        val ae = cw.visitMethod(Opcodes.ACC_PUBLIC, "teardown", "()V", null, null)
+        val aeAnn = ae.visitAnnotation("Lorg/junit/jupiter/api/AfterEach;", true)
+        aeAnn.visitEnd()
+        ae.visitCode()
+        ae.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        ae.visitInsn(Opcodes.DUP)
+        ae.visitLdcInsn("teardown boom")
+        ae.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        ae.visitInsn(Opcodes.ATHROW)
+        ae.visitMaxs(3, 1)
+        ae.visitEnd()
+
+        addIntListFactoryExt(cw, "provideData", listOf(1, 2))
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ParamAfterEachThrowsTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `ValueSource strings runs`() {
+        val cw = buildClassWriterExt("test/ValueSourceStringsTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(Ljava/lang/String;)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        val arr = vs.visitArray("strings")
+        arr.visit(null, "a")
+        arr.visit(null, "b")
+        arr.visitEnd()
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ValueSourceStringsTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `ValueSource longs runs`() {
+        val cw = buildClassWriterExt("test/ValueSourceLongsTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(J)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        val arr = vs.visitArray("longs")
+        arr.visit(null, 10L)
+        arr.visit(null, 20L)
+        arr.visitEnd()
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 3)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ValueSourceLongsTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `ValueSource floats runs`() {
+        val cw = buildClassWriterExt("test/ValueSourceFloatsTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(F)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        val arr = vs.visitArray("floats")
+        arr.visit(null, 1.5f)
+        arr.visit(null, 2.5f)
+        arr.visitEnd()
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ValueSourceFloatsTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `ValueSource doubles runs`() {
+        val cw = buildClassWriterExt("test/ValueSourceDoublesTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(D)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        val arr = vs.visitArray("doubles")
+        arr.visit(null, 1.25)
+        arr.visit(null, 2.5)
+        arr.visitEnd()
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 3)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ValueSourceDoublesTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `empty ValueSource yields unresolved message`() {
+        val cw = buildClassWriterExt("test/EmptyValueSourceTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.EmptyValueSourceTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(0, results.testsFound)
+        assertTrue(results.failureMessages.any { it.contains("Could not resolve") })
+    }
+
+    @Test
+    fun `ValueSource test with BeforeEach runs`() {
+        val cw = buildClassWriterExt("test/ValueSourceWithBeforeEachTest")
+        val be = cw.visitMethod(Opcodes.ACC_PUBLIC, "setup", "()V", null, null)
+        val beAnn = be.visitAnnotation("Lorg/junit/jupiter/api/BeforeEach;", true)
+        beAnn.visitEnd()
+        be.visitCode()
+        be.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "com/github/rodrigotimoteo/mutation/runner/AsmTestTracker",
+            "incBeforeEach",
+            "()I",
+            false,
+        )
+        be.visitInsn(Opcodes.POP)
+        be.visitInsn(Opcodes.RETURN)
+        be.visitMaxs(0, 1)
+        be.visitEnd()
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        val arr = vs.visitArray("ints")
+        arr.visit(null, 1)
+        arr.visit(null, 2)
+        arr.visitEnd()
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ValueSourceWithBeforeEachTest", cw.toByteArray())
+        runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, AsmTestTracker.beforeEachCount.get())
+    }
+
+    @Test
+    fun `ValueSource invocation failure records InvocationTargetException`() {
+        val cw = buildClassWriterExt("test/ValueSourceFailTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        val arr = vs.visitArray("ints")
+        arr.visit(null, 1)
+        arr.visit(null, 2)
+        arr.visitEnd()
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitVarInsn(Opcodes.ILOAD, 1)
+        mv.visitInsn(Opcodes.ICONST_2)
+        val lblReturn = org.objectweb.asm.Label()
+        mv.visitJumpInsn(Opcodes.IF_ICMPNE, lblReturn)
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        mv.visitInsn(Opcodes.DUP)
+        mv.visitLdcInsn("value 2 exploded")
+        mv.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        mv.visitInsn(Opcodes.ATHROW)
+        mv.visitLabel(lblReturn)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(3, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ValueSourceFailTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(1, results.testsFailed)
+        assertTrue(results.failureMessages.any { it.contains("value 2 exploded") })
+    }
+
+    @Test
+    fun `ValueSource type mismatch records Exception`() {
+        val cw = buildClassWriterExt("test/ValueSourceTypeMismatchTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(Ljava/lang/String;)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        val arr = vs.visitArray("ints")
+        arr.visit(null, 1)
+        arr.visitEnd()
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ValueSourceTypeMismatchTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertTrue(results.testsFailed >= 1)
+    }
+
+    @Test
+    fun `ValueSource swallows AfterEach exception`() {
+        val cw = buildClassWriterExt("test/ValueSourceAfterEachThrowsTest")
+        val ae = cw.visitMethod(Opcodes.ACC_PUBLIC, "teardown", "()V", null, null)
+        val aeAnn = ae.visitAnnotation("Lorg/junit/jupiter/api/AfterEach;", true)
+        aeAnn.visitEnd()
+        ae.visitCode()
+        ae.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        ae.visitInsn(Opcodes.DUP)
+        ae.visitLdcInsn("teardown boom")
+        ae.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        ae.visitInsn(Opcodes.ATHROW)
+        ae.visitMaxs(3, 1)
+        ae.visitEnd()
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val vs = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/ValueSource;", true)
+        val arr = vs.visitArray("ints")
+        arr.visit(null, 1)
+        arr.visit(null, 2)
+        arr.visitEnd()
+        vs.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ValueSourceAfterEachThrowsTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `nested class runs parent and own lifecycle methods`() {
+        val outerName = "test/LifecycleOuter"
+        val innerName = "test/LifecycleOuter\$InnerLifecycle"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "InnerLifecycle", Opcodes.ACC_PUBLIC)
+        addLifecycleMethodExt(outerCw, "parentAfter", "Lorg/junit/jupiter/api/AfterEach;", false) {
+            visitMethodInsn(
+                Opcodes.INVOKESTATIC,
+                "com/github/rodrigotimoteo/mutation/runner/AsmTestTracker",
+                "incAfterEach",
+                "()I",
+                false,
+            )
+            visitInsn(Opcodes.POP)
+        }
+        outerCw.visitEnd()
+
+        val innerCw = buildInnerClassWriterExt(outerName, innerName)
+        innerCw.visitInnerClass(innerName, outerName, "InnerLifecycle", Opcodes.ACC_PUBLIC)
+        val nested = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Nested;", true)
+        nested.visitEnd()
+        addLifecycleMethodExt(innerCw, "ownBefore", "Lorg/junit/jupiter/api/BeforeEach;", false) {
+            visitMethodInsn(
+                Opcodes.INVOKESTATIC,
+                "com/github/rodrigotimoteo/mutation/runner/AsmTestTracker",
+                "incBeforeEach",
+                "()I",
+                false,
+            )
+            visitInsn(Opcodes.POP)
+        }
+        addTestMethodExt(innerCw, "innerT") { visitInsn(Opcodes.RETURN) }
+        innerCw.visitEnd()
+
+        classLoader.define("test.LifecycleOuter", outerCw.toByteArray())
+        classLoader.define("test.LifecycleOuter\$InnerLifecycle", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.LifecycleOuter"))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+        assertEquals(1, AsmTestTracker.beforeEachCount.get())
+    }
+
+    @Test
+    fun `disabled nested class is skipped`() {
+        val outerName = "test/DisabledNestedOuter"
+        val innerName = "test/DisabledNestedOuter\$DisabledInner"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "DisabledInner", Opcodes.ACC_PUBLIC)
+        addTestMethodExt(outerCw, "outerT") { visitInsn(Opcodes.RETURN) }
+        outerCw.visitEnd()
+
+        val innerCw = buildInnerClassWriterExt(outerName, innerName)
+        innerCw.visitInnerClass(innerName, outerName, "DisabledInner", Opcodes.ACC_PUBLIC)
+        val nested = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Nested;", true)
+        nested.visitEnd()
+        val disabled = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Disabled;", true)
+        disabled.visitEnd()
+        addTestMethodExt(innerCw, "innerT") { visitInsn(Opcodes.RETURN) }
+        innerCw.visitEnd()
+
+        classLoader.define("test.DisabledNestedOuter", outerCw.toByteArray())
+        classLoader.define("test.DisabledNestedOuter\$DisabledInner", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.DisabledNestedOuter"))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+        assertEquals(0, results.testsFailed)
+    }
+
+    @Test
+    fun `disabled method in nested class is ignored`() {
+        val outerName = "test/DisabledMethodOuter"
+        val innerName = "test/DisabledMethodOuter\$DisabledMethodInner"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "DisabledMethodInner", Opcodes.ACC_PUBLIC)
+        outerCw.visitEnd()
+
+        val innerCw = buildInnerClassWriterExt(outerName, innerName)
+        innerCw.visitInnerClass(innerName, outerName, "DisabledMethodInner", Opcodes.ACC_PUBLIC)
+        val nested = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Nested;", true)
+        nested.visitEnd()
+        addTestMethodExt(innerCw, "enabledT") { visitInsn(Opcodes.RETURN) }
+
+        val disabledMv = innerCw.visitMethod(Opcodes.ACC_PUBLIC, "skippedT", "()V", null, null)
+        val disabled = disabledMv.visitAnnotation("Lorg/junit/jupiter/api/Disabled;", true)
+        disabled.visitEnd()
+        val testAnn = disabledMv.visitAnnotation("Lorg/junit/jupiter/api/Test;", true)
+        testAnn.visitEnd()
+        disabledMv.visitCode()
+        disabledMv.visitInsn(Opcodes.RETURN)
+        disabledMv.visitMaxs(0, 1)
+        disabledMv.visitEnd()
+        innerCw.visitEnd()
+
+        classLoader.define("test.DisabledMethodOuter", outerCw.toByteArray())
+        classLoader.define("test.DisabledMethodOuter\$DisabledMethodInner", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.DisabledMethodOuter"))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+    }
+
+    @Test
+    fun `nested RepeatedTest runs`() {
+        val outerName = "test/NestedRepeatedOuter"
+        val innerName = "test/NestedRepeatedOuter\$NestedRepeatedInner"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "NestedRepeatedInner", Opcodes.ACC_PUBLIC)
+        outerCw.visitEnd()
+
+        val innerCw = buildInnerClassWriterExt(outerName, innerName)
+        innerCw.visitInnerClass(innerName, outerName, "NestedRepeatedInner", Opcodes.ACC_PUBLIC)
+        val nested = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Nested;", true)
+        nested.visitEnd()
+        val mv = innerCw.visitMethod(Opcodes.ACC_PUBLIC, "repeatedT", "()V", null, null)
+        val rt = mv.visitAnnotation("Lorg/junit/jupiter/api/RepeatedTest;", true)
+        rt.visit("value", 2)
+        rt.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        innerCw.visitEnd()
+
+        classLoader.define("test.NestedRepeatedOuter", outerCw.toByteArray())
+        classLoader.define("test.NestedRepeatedOuter\$NestedRepeatedInner", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.NestedRepeatedOuter"))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `nested ParameterizedTest with MethodSource runs`() {
+        val outerName = "test/NestedParamOuter"
+        val innerName = "test/NestedParamOuter\$NestedParamInner"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "NestedParamInner", Opcodes.ACC_PUBLIC)
+        outerCw.visitEnd()
+
+        val innerCw = buildInnerClassWriterExt(outerName, innerName)
+        innerCw.visitInnerClass(innerName, outerName, "NestedParamInner", Opcodes.ACC_PUBLIC)
+        val nested = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Nested;", true)
+        nested.visitEnd()
+
+        addIntListFactoryExt(innerCw, "provideData", listOf(1, 2))
+
+        val mv = innerCw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        innerCw.visitEnd()
+
+        classLoader.define("test.NestedParamOuter", outerCw.toByteArray())
+        classLoader.define("test.NestedParamOuter\$NestedParamInner", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.NestedParamOuter"))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `failing nested standard test records failure`() {
+        val outerName = "test/FailingNestedOuter"
+        val innerName = "test/FailingNestedOuter\$FailingNestedInner"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "FailingNestedInner", Opcodes.ACC_PUBLIC)
+        outerCw.visitEnd()
+
+        val innerCw = buildInnerClassWriterExt(outerName, innerName)
+        innerCw.visitInnerClass(innerName, outerName, "FailingNestedInner", Opcodes.ACC_PUBLIC)
+        val nested = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Nested;", true)
+        nested.visitEnd()
+        addFailingTestMethodExt(innerCw, "failingT")
+        innerCw.visitEnd()
+
+        classLoader.define("test.FailingNestedOuter", outerCw.toByteArray())
+        classLoader.define("test.FailingNestedOuter\$FailingNestedInner", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.FailingNestedOuter"))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsFailed)
+    }
+
+    @Test
+    fun `nested AfterEach exception is swallowed`() {
+        val outerName = "test/NestedAfterEachThrowsOuter"
+        val innerName = "test/NestedAfterEachThrowsOuter\$NestedAfterEachThrowsInner"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "NestedAfterEachThrowsInner", Opcodes.ACC_PUBLIC)
+        outerCw.visitEnd()
+
+        val innerCw = buildInnerClassWriterExt(outerName, innerName)
+        innerCw.visitInnerClass(innerName, outerName, "NestedAfterEachThrowsInner", Opcodes.ACC_PUBLIC)
+        val nested = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Nested;", true)
+        nested.visitEnd()
+
+        val ae = innerCw.visitMethod(Opcodes.ACC_PUBLIC, "teardown", "()V", null, null)
+        val aeAnn = ae.visitAnnotation("Lorg/junit/jupiter/api/AfterEach;", true)
+        aeAnn.visitEnd()
+        ae.visitCode()
+        ae.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        ae.visitInsn(Opcodes.DUP)
+        ae.visitLdcInsn("teardown boom")
+        ae.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        ae.visitInsn(Opcodes.ATHROW)
+        ae.visitMaxs(3, 1)
+        ae.visitEnd()
+
+        addTestMethodExt(innerCw, "t1") { visitInsn(Opcodes.RETURN) }
+        innerCw.visitEnd()
+
+        classLoader.define("test.NestedAfterEachThrowsOuter", outerCw.toByteArray())
+        classLoader.define("test.NestedAfterEachThrowsOuter\$NestedAfterEachThrowsInner", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.NestedAfterEachThrowsOuter"))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+    }
+
+    @Test
+    fun `superclass test method is discovered`() {
+        val baseName = "test/SuperBase"
+        val subName = "test/SuperSub"
+
+        val baseCw = buildClassWriterExt(baseName)
+        addTestMethodExt(baseCw, "inheritedT") { visitInsn(Opcodes.RETURN) }
+        baseCw.visitEnd()
+
+        val subCw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        subCw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, subName, null, baseName, null)
+        val init = subCw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        init.visitCode()
+        init.visitVarInsn(Opcodes.ALOAD, 0)
+        init.visitMethodInsn(Opcodes.INVOKESPECIAL, baseName, "<init>", "()V", false)
+        init.visitInsn(Opcodes.RETURN)
+        init.visitMaxs(1, 1)
+        init.visitEnd()
+        subCw.visitEnd()
+
+        classLoader.define("test.SuperBase", baseCw.toByteArray())
+        val subClazz = classLoader.define("test.SuperSub", subCw.toByteArray())
+
+        val results = runner.runTests(listOf(subClazz.name))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+    }
+
+    @Test
+    fun `nested class falls back to no-arg constructor`() {
+        val outerName = "test/FallbackCtorOuter"
+        val innerName = "test/FallbackCtorOuter\$FallbackCtorInner"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "FallbackCtorInner", Opcodes.ACC_PUBLIC)
+        outerCw.visitEnd()
+
+        val innerCw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        innerCw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, innerName, null, "java/lang/Object", null)
+        val ctor = innerCw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        ctor.visitCode()
+        ctor.visitVarInsn(Opcodes.ALOAD, 0)
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        ctor.visitInsn(Opcodes.RETURN)
+        ctor.visitMaxs(1, 1)
+        ctor.visitEnd()
+        innerCw.visitInnerClass(innerName, outerName, "FallbackCtorInner", Opcodes.ACC_PUBLIC)
+        val nested = innerCw.visitAnnotation("Lorg/junit/jupiter/api/Nested;", true)
+        nested.visitEnd()
+        addTestMethodExt(innerCw, "t1") { visitInsn(Opcodes.RETURN) }
+        innerCw.visitEnd()
+
+        classLoader.define("test.FallbackCtorOuter", outerCw.toByteArray())
+        classLoader.define("test.FallbackCtorOuter\$FallbackCtorInner", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.FallbackCtorOuter"))
+
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+    }
+
+    @Test
+    fun `class with no usable constructor propagates to runTests catch`() {
+        val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "test/NoCtorTest", null, "java/lang/Object", null)
+        val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "(I)V", null, null)
+        ctor.visitCode()
+        ctor.visitVarInsn(Opcodes.ALOAD, 0)
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        ctor.visitInsn(Opcodes.RETURN)
+        ctor.visitMaxs(1, 2)
+        ctor.visitEnd()
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/Test;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.NoCtorTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertTrue(results.testsFailed >= 1)
+    }
+
+    @Test
+    fun `findFactoryMethod uses companion object without JvmStatic`() {
+        val cw = buildClassWriterExt("test/CompanionNoJvmStatic")
+        val companionCw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        companionCw.visit(
+            Opcodes.V17,
+            Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+            "test/CompanionNoJvmStatic\$Companion",
+            null,
+            "java/lang/Object",
+            null,
+        )
+        val ctor = companionCw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        ctor.visitCode()
+        ctor.visitVarInsn(Opcodes.ALOAD, 0)
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        ctor.visitInsn(Opcodes.RETURN)
+        ctor.visitMaxs(1, 1)
+        ctor.visitEnd()
+        addIntListFactoryExt(companionCw, "provideData", listOf(1, 2))
+
+        companionCw.visitInnerClass(
+            "test/CompanionNoJvmStatic\$Companion",
+            "test/CompanionNoJvmStatic",
+            "Companion",
+            Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+        )
+        companionCw.visitEnd()
+
+        val companionField =
+            cw.visitField(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC or Opcodes.ACC_FINAL,
+                "Companion",
+                "Ltest/CompanionNoJvmStatic\$Companion;",
+                null,
+                null,
+            )
+        companionField.visitEnd()
+
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitInnerClass(
+            "test/CompanionNoJvmStatic\$Companion",
+            "test/CompanionNoJvmStatic",
+            "Companion",
+            Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+        )
+        cw.visitEnd()
+
+        classLoader.define("test.CompanionNoJvmStatic\$Companion", companionCw.toByteArray())
+        val clazz = classLoader.define("test.CompanionNoJvmStatic", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `findFactoryMethod finds inherited public static factory`() {
+        val baseName = "test/BaseFactory"
+        val subName = "test/SubWithInheritedFactory"
+
+        val baseCw = buildClassWriterExt(baseName)
+        addIntListFactoryExt(baseCw, "provideData", listOf(1, 2))
+        baseCw.visitEnd()
+
+        val subCw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        subCw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, subName, null, baseName, null)
+        val ctor = subCw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        ctor.visitCode()
+        ctor.visitVarInsn(Opcodes.ALOAD, 0)
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, baseName, "<init>", "()V", false)
+        ctor.visitInsn(Opcodes.RETURN)
+        ctor.visitMaxs(1, 1)
+        ctor.visitEnd()
+
+        val mv = subCw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "provideData")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        subCw.visitEnd()
+
+        classLoader.define("test.BaseFactory", baseCw.toByteArray())
+        val subClazz = classLoader.define("test.SubWithInheritedFactory", subCw.toByteArray())
+        val results = runner.runTests(listOf(subClazz.name))
+
+        assertEquals(2, results.testsFound)
+        assertEquals(2, results.testsSucceeded)
+    }
+
+    @Test
+    fun `missing factory returns null and reports unresolved`() {
+        val cw = buildClassWriterExt("test/AbsentFactoryTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "t1", "(I)V", null, null)
+        val pt = mv.visitAnnotation("Lorg/junit/jupiter/params/ParameterizedTest;", true)
+        pt.visitEnd()
+        val ms = mv.visitAnnotation("Lorg/junit/jupiter/params/provider/MethodSource;", true)
+        val arr = ms.visitArray("value")
+        arr.visit(null, "absent")
+        arr.visitEnd()
+        ms.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 2)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.AbsentFactoryTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(0, results.testsFound)
+        assertTrue(results.failureMessages.any { it.contains("Could not resolve") })
+    }
+
+    @Test
+    fun `TestFactory method is not discovered`() {
+        val cw = buildClassWriterExt("test/TestFactoryTest")
+        val factory =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                "dynamicTests",
+                "()Ljava/util/List;",
+                null,
+                null,
+            )
+        val tfAnn = factory.visitAnnotation("Lorg/junit/jupiter/api/TestFactory;", true)
+        tfAnn.visitEnd()
+        factory.visitCode()
+        factory.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            "java/util/Collections",
+            "emptyList",
+            "()Ljava/util/List;",
+            true,
+        )
+        factory.visitInsn(Opcodes.ARETURN)
+        factory.visitMaxs(0, 0)
+        factory.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.TestFactoryTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+
+        assertEquals(0, results.testsFound)
+    }
+
+    private fun buildClassWriterExt(name: String): ClassWriter {
+        val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, name, null, "java/lang/Object", null)
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        mv.visitCode()
+        mv.visitVarInsn(Opcodes.ALOAD, 0)
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(1, 1)
+        mv.visitEnd()
+        return cw
+    }
+
+    private fun buildInnerClassWriterExt(
+        outerName: String,
+        innerName: String,
+    ): ClassWriter {
+        val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, innerName, null, "java/lang/Object", null)
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "(L$outerName;)V", null, null)
+        mv.visitCode()
+        mv.visitVarInsn(Opcodes.ALOAD, 0)
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(1, 2)
+        mv.visitEnd()
+        return cw
+    }
+
+    private fun addTestMethodExt(
+        cw: ClassWriter,
+        name: String,
+        body: MethodVisitor.() -> Unit,
+    ) {
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, name, "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/Test;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        body(mv)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+    }
+
+    private fun addFailingTestMethodExt(
+        cw: ClassWriter,
+        name: String,
+    ) {
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, name, "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/jupiter/api/Test;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitTypeInsn(Opcodes.NEW, "java/lang/RuntimeException")
+        mv.visitInsn(Opcodes.DUP)
+        mv.visitLdcInsn("fail")
+        mv.visitMethodInsn(
+            Opcodes.INVOKESPECIAL,
+            "java/lang/RuntimeException",
+            "<init>",
+            "(Ljava/lang/String;)V",
+            false,
+        )
+        mv.visitInsn(Opcodes.ATHROW)
+        mv.visitMaxs(3, 1)
+        mv.visitEnd()
+    }
+
+    private fun addLifecycleMethodExt(
+        cw: ClassWriter,
+        name: String,
+        annotationDesc: String,
+        static: Boolean,
+        body: MethodVisitor.() -> Unit,
+    ) {
+        val access = if (static) Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC else Opcodes.ACC_PUBLIC
+        val mv = cw.visitMethod(access, name, "()V", null, null)
+        val ann = mv.visitAnnotation(annotationDesc, true)
+        ann.visitEnd()
+        mv.visitCode()
+        body(mv)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+    }
+
+    private fun addIntListFactoryExt(
+        cw: ClassWriter,
+        name: String,
+        values: List<Int>,
+    ) {
+        val mv =
+            cw.visitMethod(
+                Opcodes.ACC_PUBLIC or Opcodes.ACC_STATIC,
+                name,
+                "()Ljava/util/List;",
+                null,
+                null,
+            )
+        mv.visitCode()
+        for (v in values) {
+            if (v == 1) {
+                mv.visitInsn(Opcodes.ICONST_1)
+            } else if (v == 2) {
+                mv.visitInsn(Opcodes.ICONST_2)
+            } else if (v == 3) {
+                mv.visitInsn(Opcodes.ICONST_3)
+            } else if (v == 4) {
+                mv.visitInsn(Opcodes.ICONST_4)
+            } else if (v == 5) {
+                mv.visitInsn(Opcodes.ICONST_5)
+            } else {
+                mv.visitLdcInsn(v)
+            }
+            mv.visitMethodInsn(
+                Opcodes.INVOKESTATIC,
+                "java/lang/Integer",
+                "valueOf",
+                "(I)Ljava/lang/Integer;",
+                false,
+            )
+        }
+        val sig =
+            buildString {
+                append("(Ljava/lang/Object;")
+                for (i in 1 until values.size) append("Ljava/lang/Object;")
+                append(")Ljava/util/List;")
+            }
+        val className =
+            if (values.size == 1) {
+                "java/util/List"
+            } else {
+                "java/util/List"
+            }
+        mv.visitMethodInsn(
+            Opcodes.INVOKESTATIC,
+            className,
+            "of",
+            sig,
+            true,
+        )
+        mv.visitInsn(Opcodes.ARETURN)
+        mv.visitMaxs(values.size, 0)
+        mv.visitEnd()
+    }
+}
