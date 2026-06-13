@@ -51,7 +51,7 @@ class ReflectionTestRunnerLifecycleTest {
 
     @Test
     fun `BeforeAll failure aborts all tests`() {
-        val results = runner.runTests(listOf(BeforeAllFailTest::class.java.name))
+        val results = runner.runTests(listOf(BeforeAllFailureTest::class.java.name))
 
         assertEquals(0, results.testsFound)
         assertEquals(1, results.testsFailed)
@@ -130,6 +130,25 @@ class BeforeAllFailTest {
     }
 
     @org.junit.jupiter.api.Test
+    fun shouldNotRun() {
+        assertEquals(1, 1)
+    }
+}
+
+/**
+ * Test class where @BeforeClass fails.
+ * Uses JUnit 4 annotations so JUnit 5 does not discover it (no vintage engine).
+ */
+class BeforeAllFailureTest {
+    companion object {
+        @JvmStatic
+        @org.junit.BeforeClass
+        fun failingSetup() {
+            throw RuntimeException("Setup failed intentionally")
+        }
+    }
+
+    @org.junit.Test
     fun shouldNotRun() {
         assertEquals(1, 1)
     }

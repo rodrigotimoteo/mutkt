@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutation.engine
 import com.github.rodrigotimoteo.mutation.analysis.KillSetStorage
 import com.github.rodrigotimoteo.mutation.analysis.SubsumptionAnalyzer
 import com.github.rodrigotimoteo.mutation.analysis.TestStrengthOrdering
+import com.github.rodrigotimoteo.mutation.analysis.WeakMutationAnalyzer
 import com.github.rodrigotimoteo.mutation.baseline.BaselineStorage
 import com.github.rodrigotimoteo.mutation.cache.MutKtCache
 import com.github.rodrigotimoteo.mutation.classloader.MutantClassLoaderFactory
@@ -89,6 +90,7 @@ class MutationEngine(
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators, excludedMethods)
     private val coverageAnalyzer = CoverageAnalyzer()
+    private val weakMutationAnalyzer = WeakMutationAnalyzer()
     private val subsumptionAnalyzer = SubsumptionAnalyzer()
     private val killSetStorage = projectDir?.let { KillSetStorage(it) }
     private val testStrengthOrdering = projectDir?.let { TestStrengthOrdering(it) }
@@ -161,10 +163,15 @@ class MutationEngine(
         val mutationsAfterWeak =
             if (enableWeakMutation && coverageExecFile != null && coverageExecFile.exists()) {
                 val coveredLinesMap = getCoveredLines(coverageExecFile)
+                val reachableMutations =
+                    weakMutationAnalyzer.filterUnreachable(
+                        mutationsAfterCoverage.map { it.first },
+                        coveredLinesMap,
+                    )
+                val reachableSet = reachableMutations.toSet()
                 val (reachable, unreachable) =
                     mutationsAfterCoverage.partition { (mutation, _) ->
-                        val classLines = coveredLinesMap[mutation.className] ?: coveredLinesMap[mutation.className.replace('.', '/')]
-                        classLines != null && mutation.lineNumber in classLines
+                        mutation in reachableSet
                     }
                 if (unreachable.isNotEmpty()) {
                     System.err.println("[MutKt] Weak mutation: skipped ${unreachable.size} unreachable mutations")

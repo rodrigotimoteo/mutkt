@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.RepeatedTest
 import org.junit.jupiter.api.Test
@@ -86,14 +87,22 @@ class ReflectionTestRunner(
         var testsFailed = 0
         val failures = mutableListOf<String>()
 
+        // Skip disabled classes
+        if (testClass.isAnnotationPresent(Disabled::class.java)) {
+            return TestClassResult(0, 0, 0, failures)
+        }
+
         // Discover test methods (@Test, @ParameterizedTest, @RepeatedTest) — walk superclass hierarchy
         // Support both JUnit 5 (org.junit.jupiter.api.Test) and JUnit 4 (org.junit.Test)
         val testMethods =
             testClass.allDeclaredMethods().filter { method ->
-                method.isAnnotationPresent(Test::class.java) ||
-                    method.isAnnotationPresent(org.junit.Test::class.java) ||
-                    method.isAnnotationPresent(ParameterizedTest::class.java) ||
-                    method.isAnnotationPresent(RepeatedTest::class.java)
+                !method.isAnnotationPresent(Disabled::class.java) &&
+                    (
+                        method.isAnnotationPresent(Test::class.java) ||
+                            method.isAnnotationPresent(org.junit.Test::class.java) ||
+                            method.isAnnotationPresent(ParameterizedTest::class.java) ||
+                            method.isAnnotationPresent(RepeatedTest::class.java)
+                    )
             }
 
         // Discover lifecycle methods — walk superclass hierarchy
@@ -387,11 +396,18 @@ class ReflectionTestRunner(
         var testsFailed = 0
         val failures = mutableListOf<String>()
 
+        if (testClass.isAnnotationPresent(Disabled::class.java)) {
+            return TestClassResult(0, 0, 0, failures)
+        }
+
         val testMethods =
             testClass.allDeclaredMethods().filter { method ->
-                method.isAnnotationPresent(org.junit.jupiter.api.Test::class.java) ||
-                    method.isAnnotationPresent(RepeatedTest::class.java) ||
-                    method.isAnnotationPresent(ParameterizedTest::class.java)
+                !method.isAnnotationPresent(Disabled::class.java) &&
+                    (
+                        method.isAnnotationPresent(org.junit.jupiter.api.Test::class.java) ||
+                            method.isAnnotationPresent(RepeatedTest::class.java) ||
+                            method.isAnnotationPresent(ParameterizedTest::class.java)
+                    )
             }
 
         // JUnit 5: @Nested runs parent lifecycle methods too
