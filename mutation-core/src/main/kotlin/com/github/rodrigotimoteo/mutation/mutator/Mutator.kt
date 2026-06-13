@@ -157,24 +157,6 @@ private class MutationScannerVisitor(
     private var suppressedOperators = emptySet<String>()
     private var currentMethodName = ""
 
-    /**
-     * Check if mutation should be suppressed.
-     */
-    private fun isSuppressed(operator: MutationOperator): Boolean {
-        if (classSuppressed) return true
-        if (suppressedOperators.contains(operator.operatorName)) return true
-        return false
-    }
-
-    /**
-     * Add mutation if not suppressed.
-     */
-    private fun addMutation(mutation: MutationInfo) {
-        if (!isSuppressed(mutation.operator)) {
-            mutations.add(mutation)
-        }
-    }
-
     override fun visit(
         version: Int,
         access: Int,
