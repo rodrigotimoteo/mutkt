@@ -26,7 +26,7 @@ class KillSetStorageTest {
     fun `load returns empty map when no file exists`() {
         val storage = createStorage()
         val result = storage.load()
-        assertTrue(result.isEmpty())
+        assertTrue(result.isEmpty(), "expected empty map when no file exists, got: $result")
     }
 
     @Test
@@ -51,8 +51,8 @@ class KillSetStorageTest {
         storage.save(killSets)
 
         val mutktDir = File(tempDir, ".mutkt")
-        assertTrue(mutktDir.exists())
-        assertTrue(File(mutktDir, "kill-sets.txt").exists())
+        assertTrue(mutktDir.exists(), "expected .mutkt directory to be created at ${mutktDir.absolutePath}")
+        assertTrue(File(mutktDir, "kill-sets.txt").exists(), "expected kill-sets.txt to be created")
     }
 
     @Test
@@ -63,7 +63,7 @@ class KillSetStorageTest {
         killSetsFile.writeText("not valid data without equals sign\n")
 
         val result = storage.load()
-        assertTrue(result.isEmpty())
+        assertTrue(result.isEmpty(), "expected empty map for corrupted file, got: $result")
     }
 
     @Test
@@ -82,9 +82,9 @@ class KillSetStorageTest {
 
         val merged = storage.merge(historical, newKillSets)
 
-        assertEquals(setOf("Test1", "Test3"), merged["M1"])
-        assertEquals(setOf("Test2"), merged["M2"])
-        assertEquals(setOf("Test4"), merged["M3"])
+        assertEquals(setOf("Test1", "Test3"), merged["M1"], "M1 should be unioned from historical and new")
+        assertEquals(setOf("Test2"), merged["M2"], "M2 should come from historical")
+        assertEquals(setOf("Test4"), merged["M3"], "M3 should come from new")
     }
 
     @Test
@@ -95,7 +95,7 @@ class KillSetStorageTest {
         killSetsFile.writeText("")
 
         val result = storage.load()
-        assertTrue(result.isEmpty())
+        assertTrue(result.isEmpty(), "expected empty map for empty file, got: $result")
     }
 
     @Test
@@ -106,7 +106,7 @@ class KillSetStorageTest {
         killSetsFile.writeText("M1=\nM2=Test1,Test2\n")
 
         val result = storage.load()
-        assertEquals(emptySet<String>(), result["M1"])
-        assertEquals(setOf("Test1", "Test2"), result["M2"])
+        assertEquals(emptySet<String>(), result["M1"], "M1 should have empty kill set")
+        assertEquals(setOf("Test1", "Test2"), result["M2"], "M2 should have two killing tests")
     }
 }

@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutation.report
 
+import com.github.rodrigotimoteo.mutation.LOG_PREFIX
 import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
 
@@ -42,7 +43,7 @@ class ConsoleReporter {
         val bar = "█".repeat(filled) + "░".repeat(empty)
         val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
 
-        return "\r[MutKt] [$bar] $current/$total ($percentage%) ${elapsed}s $mutationInfo"
+        return "\r$LOG_PREFIX [$bar] $current/$total ($percentage%) ${elapsed}s $mutationInfo"
     }
 
     /**
@@ -140,7 +141,7 @@ class ConsoleReporter {
     ): String {
         val total = killed + survived
         val killRate = if (total > 0) killed.toDouble() / total * 100 else 0.0
-        return "\r[MutKt] Killed: $killed Survived: $survived Kill Rate: ${String.format("%.1f", killRate)}% | $current"
+        return "\r$LOG_PREFIX Killed: $killed Survived: $survived Kill Rate: ${String.format("%.1f", killRate)}% | $current"
     }
 
     /**

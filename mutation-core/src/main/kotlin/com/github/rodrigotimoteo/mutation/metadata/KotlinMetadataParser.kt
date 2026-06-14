@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutation.metadata
 
+import com.github.rodrigotimoteo.mutation.mutator.isKotlinSyntheticMethod
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.Opcodes
@@ -22,15 +23,15 @@ object KotlinMetadataParser {
         return visitor.classInfo
     }
 
-    fun isKotlinSyntheticMethod(name: String): Boolean {
-        return name == "copy\$default" ||
-            name.startsWith("component") && name.endsWith("\$default") ||
-            name.endsWith("\$serializer") ||
-            name == "<init>\$default" ||
-            name == "toString\$default" ||
-            name == "hashCode\$default" ||
-            name == "equals\$default"
-    }
+    @Deprecated(
+        message = "Moved to com.github.rodrigotimoteo.mutation.mutator.isKotlinSyntheticMethod",
+        replaceWith =
+            ReplaceWith(
+                expression = "isKotlinSyntheticMethod(name)",
+                imports = ["com.github.rodrigotimoteo.mutation.mutator.isKotlinSyntheticMethod"],
+            ),
+    )
+    fun isKotlinSyntheticMethod(name: String): Boolean = com.github.rodrigotimoteo.mutation.mutator.isKotlinSyntheticMethod(name)
 
     private class MetadataVisitor : ClassVisitor(Opcodes.ASM9) {
         var classInfo = KotlinClassInfo(className = "", isKotlinClass = false)

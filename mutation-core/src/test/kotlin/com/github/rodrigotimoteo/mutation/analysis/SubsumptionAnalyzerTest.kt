@@ -31,7 +31,7 @@ class SubsumptionAnalyzerTest {
         val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
         assertEquals(2, essential.size)
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "no subsumption expected when kill sets disjoint, got: $subsumed")
     }
 
     @Test
@@ -54,7 +54,7 @@ class SubsumptionAnalyzerTest {
         assertEquals(1, essential.size)
         assertEquals(mutationA.id, essential[0].id)
         assertEquals(1, subsumed.size)
-        assertTrue(subsumed.contains(mutationB.id))
+        assertTrue(subsumed.contains(mutationB.id), "B should be subsumed by A, got: $subsumed")
     }
 
     @Test
@@ -72,7 +72,7 @@ class SubsumptionAnalyzerTest {
         val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
         assertEquals(2, essential.size)
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "no subsumption across different classes expected, got: $subsumed")
     }
 
     @Test
@@ -91,7 +91,7 @@ class SubsumptionAnalyzerTest {
 
         // No subsumption across different classes
         assertEquals(2, essential.size)
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "no cross-class subsumption expected, got: $subsumed")
     }
 
     @Test
@@ -110,7 +110,7 @@ class SubsumptionAnalyzerTest {
 
         // No subsumption across different methods
         assertEquals(2, essential.size)
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "no cross-method subsumption expected, got: $subsumed")
     }
 
     @Test
@@ -122,15 +122,15 @@ class SubsumptionAnalyzerTest {
         val (essential, subsumed) = analyzer.analyze(mutations, killSets)
 
         assertEquals(1, essential.size)
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "single mutation cannot be subsumed, got: $subsumed")
     }
 
     @Test
     fun `analyze handles empty list`() {
         val (essential, subsumed) = analyzer.analyze(emptyList(), emptyMap())
 
-        assertTrue(essential.isEmpty())
-        assertTrue(subsumed.isEmpty())
+        assertTrue(essential.isEmpty(), "empty input should produce empty essential list")
+        assertTrue(subsumed.isEmpty(), "empty input should produce empty subsumed list")
     }
 
     @Test
@@ -155,8 +155,8 @@ class SubsumptionAnalyzerTest {
         assertEquals(1, essential.size)
         assertEquals(mutationA.id, essential[0].id)
         assertEquals(2, subsumed.size)
-        assertTrue(subsumed.contains(mutationB.id))
-        assertTrue(subsumed.contains(mutationC.id))
+        assertTrue(subsumed.contains(mutationB.id), "B should be subsumed by A, got: $subsumed")
+        assertTrue(subsumed.contains(mutationC.id), "C should be subsumed by A, got: $subsumed")
     }
 
     @Test
@@ -177,7 +177,7 @@ class SubsumptionAnalyzerTest {
 
         // B is not killed, so no subsumption possible
         assertEquals(2, essential.size)
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "unkilled mutation cannot subsume, got: $subsumed")
     }
 
     @Test
@@ -210,7 +210,7 @@ class SubsumptionAnalyzerTest {
             )
 
         val subsumed = analyzer.predictSubsumed(mutations, emptyMap())
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "no historical data → no subsumption prediction, got: $subsumed")
     }
 
     @Test
@@ -222,7 +222,7 @@ class SubsumptionAnalyzerTest {
         val historical = mapOf(mutations[0].id to setOf("Test1"))
 
         val subsumed = analyzer.predictSubsumed(mutations, historical)
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "single mutation cannot be subsumed, got: $subsumed")
     }
 
     @Test
@@ -241,7 +241,7 @@ class SubsumptionAnalyzerTest {
 
         val subsumed = analyzer.predictSubsumed(mutations, historical)
         assertEquals(1, subsumed.size)
-        assertTrue(subsumed.contains(mutations[0].id))
+        assertTrue(subsumed.contains(mutations[0].id), "M1 should be subsumed by M2, got: $subsumed")
     }
 
     @Test
@@ -259,7 +259,7 @@ class SubsumptionAnalyzerTest {
 
         val subsumed = analyzer.predictSubsumed(mutations, historical)
         // Different methods → no subsumption
-        assertTrue(subsumed.isEmpty())
+        assertTrue(subsumed.isEmpty(), "no cross-method subsumption prediction, got: $subsumed")
     }
 
     private fun createMutation(

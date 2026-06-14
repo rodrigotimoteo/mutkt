@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutation.registry
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.time.Clock
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -22,7 +23,7 @@ class MutationRegistryTest {
     @Test
     fun `enable sets active to true`() {
         MutationRegistry.enable()
-        assertTrue(MutationRegistry.isActive())
+        assertTrue(MutationRegistry.isActive(), "expected registry active after enable()")
     }
 
     @Test
@@ -34,7 +35,7 @@ class MutationRegistryTest {
 
     @Test
     fun `isActive returns false initially`() {
-        assertFalse(MutationRegistry.isActive())
+        assertFalse(MutationRegistry.isActive(), "registry should be inactive before enable()")
     }
 
     @Test
@@ -86,18 +87,30 @@ class MutationRegistryTest {
 
     @Test
     fun `markStartTime records current time`() {
-        MutationRegistry.markStartTime()
-        assertFalse(MutationRegistry.checkTimeout())
-        Thread.sleep(10)
-        assertFalse(MutationRegistry.checkTimeout())
+        val fakeClock = FakeClock(initialMillis = 1_000L)
+        MutationRegistry.setClock(fakeClock)
+        try {
+            MutationRegistry.markStartTime()
+            assertFalse(MutationRegistry.checkTimeout())
+            fakeClock.advance(10)
+            assertFalse(MutationRegistry.checkTimeout())
+        } finally {
+            MutationRegistry.reset()
+        }
     }
 
     @Test
     fun `checkTimeout returns true when elapsed exceeds timeout`() {
-        MutationRegistry.setTimeoutMs(1L)
-        MutationRegistry.markStartTime()
-        Thread.sleep(50)
-        assertTrue(MutationRegistry.checkTimeout())
+        val fakeClock = FakeClock(initialMillis = 1_000L)
+        MutationRegistry.setClock(fakeClock)
+        try {
+            MutationRegistry.setTimeoutMs(50L)
+            MutationRegistry.markStartTime()
+            fakeClock.advance(100)
+            assertTrue(MutationRegistry.checkTimeout())
+        } finally {
+            MutationRegistry.reset()
+        }
     }
 
     @Test
@@ -151,7 +164,7 @@ class MutationRegistryTest {
     @Test
     fun `ThreadState triggeredMutations is empty initially`() {
         val state = MutationRegistry.current()
-        assertTrue(state.triggeredMutations.isEmpty())
+        assertTrue(state.triggeredMutations.isEmpty(), "expected empty triggered mutations, got: ${state.triggeredMutations}")
     }
 
     @Test
@@ -169,4 +182,24 @@ class MutationRegistryTest {
         threads.forEach { it.start() }
         threads.forEach { it.join(5000) }
     }
+}
+
+/**
+ * Test double for [Clock] that allows manual time advancement.
+ */
+private class FakeClock(initialMillis: Long = 0L) : Clock() {
+    @Volatile
+    private var nowMillis: Long = initialMillis
+
+    fun advance(deltaMs: Long) {
+        nowMillis += deltaMs
+    }
+
+    override fun getZone(): java.time.ZoneId = java.time.ZoneOffset.UTC
+
+    override fun withZone(zone: java.time.ZoneId?): Clock = this
+
+    override fun millis(): Long = nowMillis
+
+    override fun instant(): java.time.Instant = java.time.Instant.ofEpochMilli(nowMillis)
 }

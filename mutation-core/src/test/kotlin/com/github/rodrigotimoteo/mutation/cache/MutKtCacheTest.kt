@@ -39,14 +39,14 @@ class MutKtCacheTest {
     @Test
     fun `computeClassHash returns 64 char hex string`() {
         val hash = cache.computeClassHash("test".toByteArray())
-        assertEquals(64, hash.length)
-        assertTrue(hash.all { it in '0'..'9' || it in 'a'..'f' })
+        assertEquals(64, hash.length, "SHA-256 hex should be 64 chars, got: $hash")
+        assertTrue(hash.all { it in '0'..'9' || it in 'a'..'f' }, "expected lowercase hex, got: $hash")
     }
 
     @Test
     fun `lookup returns null when no cache exists`() {
         val result = cache.lookup("nonexistent", "ARITHMETIC", 42)
-        assertNull(result)
+        assertNull(result, "lookup with no cache file should return null")
     }
 
     @Test
@@ -64,7 +64,7 @@ class MutKtCacheTest {
         cache.store(classHash, "ARITHMETIC", 42, MutationStatus.KILLED)
 
         val result = cache.lookup(classHash, "RETURN_VALS", 42)
-        assertNull(result)
+        assertNull(result, "different operator should not match, got: $result")
     }
 
     @Test
@@ -73,7 +73,7 @@ class MutKtCacheTest {
         cache.store(classHash, "ARITHMETIC", 42, MutationStatus.KILLED)
 
         val result = cache.lookup(classHash, "ARITHMETIC", 43)
-        assertNull(result)
+        assertNull(result, "different line number should not match, got: $result")
     }
 
     @Test
@@ -129,7 +129,7 @@ class MutKtCacheTest {
         cache.store("abc123def456ghi789", "ARITHMETIC", 42, MutationStatus.KILLED)
 
         val cacheDir = File(tempDir, ".mutkt/cache")
-        assertTrue(cacheDir.exists())
-        assertTrue(cacheDir.isDirectory)
+        assertTrue(cacheDir.exists(), "cache directory should be created at ${cacheDir.absolutePath}")
+        assertTrue(cacheDir.isDirectory, "cache path should be a directory")
     }
 }

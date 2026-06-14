@@ -27,8 +27,8 @@ class HtmlReportGeneratorTest {
         val report = createTestReport()
         val outputFile = generator.generate(report, tempDir)
 
-        assertTrue(outputFile.exists())
-        assertTrue(outputFile.name.endsWith(".html"))
+        assertTrue(outputFile.exists(), "expected HTML file at ${outputFile.absolutePath}")
+        assertTrue(outputFile.name.endsWith(".html"), "expected .html extension, got: ${outputFile.name}")
     }
 
     @Test
@@ -37,9 +37,9 @@ class HtmlReportGeneratorTest {
         val outputFile = generator.generate(report, tempDir)
         val content = outputFile.readText()
 
-        assertTrue(content.startsWith("<!DOCTYPE html>"))
-        assertTrue(content.contains("<html lang=\"en\">"))
-        assertTrue(content.contains("</html>"))
+        assertTrue(content.startsWith("<!DOCTYPE html>"), "expected DOCTYPE at start, got: ${content.take(50)}")
+        assertTrue(content.contains("<html lang=\"en\">"), "expected <html lang=\"en\"> tag")
+        assertTrue(content.contains("</html>"), "expected closing </html> tag")
     }
 
     @Test
@@ -111,11 +111,11 @@ class HtmlReportGeneratorTest {
             )
 
         val outputFile = generator.generate(report, tempDir)
-        assertTrue(outputFile.exists())
+        assertTrue(outputFile.exists(), "expected HTML file for empty report")
 
         val content = outputFile.readText()
-        assertTrue(content.contains("Total Mutations"))
-        assertTrue(content.contains("0"))
+        assertTrue(content.contains("Total Mutations"), "expected 'Total Mutations' label")
+        assertTrue(content.contains("0"), "expected '0' for empty totals")
     }
 
     @Test
@@ -124,8 +124,8 @@ class HtmlReportGeneratorTest {
         val report = createTestReport()
 
         val outputFile = generator.generate(report, outputDir)
-        assertTrue(outputFile.exists())
-        assertTrue(outputDir.exists())
+        assertTrue(outputFile.exists(), "expected file in nested dir, got: ${outputFile.absolutePath}")
+        assertTrue(outputDir.exists(), "expected nested directory created")
     }
 
     private fun createTestReport(): MutationReport {

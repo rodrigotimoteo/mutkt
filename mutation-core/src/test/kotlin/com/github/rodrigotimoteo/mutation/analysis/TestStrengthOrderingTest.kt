@@ -69,8 +69,8 @@ class TestStrengthOrderingTest {
 
         val stats = ordering.getStats()
         assertEquals(2, stats.size)
-        assertTrue(stats.containsKey("TestA"))
-        assertTrue(stats.containsKey("TestB"))
+        assertTrue(stats.containsKey("TestA"), "expected TestA in stats, got: ${stats.keys}")
+        assertTrue(stats.containsKey("TestB"), "expected TestB in stats, got: ${stats.keys}")
     }
 
     @Test
@@ -81,13 +81,13 @@ class TestStrengthOrderingTest {
         ordering.clear()
 
         val stats = ordering.getStats()
-        assertTrue(stats.isEmpty())
+        assertTrue(stats.isEmpty(), "expected stats empty after clear, got: $stats")
     }
 
     @Test
     fun `orderTests handles empty list`() {
         val ordered = ordering.orderTests(emptyList())
-        assertTrue(ordered.isEmpty())
+        assertTrue(ordered.isEmpty(), "ordering empty list should return empty list, got: $ordered")
     }
 
     @Test
@@ -99,6 +99,6 @@ class TestStrengthOrderingTest {
         val ordered = ordering.orderTests(tests)
 
         assertEquals(3, ordered.size)
-        assertTrue(ordered.containsAll(tests))
+        assertTrue(ordered.containsAll(tests), "all input tests should be preserved, got: $ordered")
     }
 }

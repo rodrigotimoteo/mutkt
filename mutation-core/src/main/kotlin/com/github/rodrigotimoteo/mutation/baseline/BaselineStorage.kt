@@ -1,5 +1,7 @@
 package com.github.rodrigotimoteo.mutation.baseline
 
+import com.github.rodrigotimoteo.mutation.LOG_PREFIX
+import com.github.rodrigotimoteo.mutation.MUTKT_DIR
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import java.io.File
 
@@ -23,7 +25,7 @@ import java.io.File
  * ```
  */
 class BaselineStorage(private val projectDir: File) {
-    private val baselineDir = File(projectDir, ".mutkt")
+    private val baselineDir = File(projectDir, MUTKT_DIR)
     private val baselineFile = File(baselineDir, "baseline")
 
     init {
@@ -102,7 +104,7 @@ class BaselineStorage(private val projectDir: File) {
             val exitCode = process.waitFor()
 
             if (exitCode != 0) {
-                System.err.println("[MutKt] git diff failed (exit code $exitCode), no incremental filtering applied")
+                System.err.println("$LOG_PREFIX git diff failed (exit code $exitCode), no incremental filtering applied")
                 return emptySet()
             }
 
@@ -117,7 +119,7 @@ class BaselineStorage(private val projectDir: File) {
                 }
                 .toSet()
         } catch (e: Exception) {
-            System.err.println("[MutKt] git not available: ${e.message}, running all mutations (no filtering)")
+            System.err.println("$LOG_PREFIX git not available: ${e.message}, running all mutations (no filtering)")
             emptySet()
         }
     }

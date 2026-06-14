@@ -21,34 +21,34 @@ class ConsoleReporterTest {
     @Test
     fun `progress returns formatted string`() {
         val result = reporter.progress(50, 100, "TestMutation")
-        assertTrue(result.contains("50/100"))
-        assertTrue(result.contains("50.0%"))
-        assertTrue(result.contains("TestMutation"))
+        assertTrue(result.contains("50/100"), "expected 50/100 in progress, got: $result")
+        assertTrue(result.contains("50.0%"), "expected 50.0% in progress, got: $result")
+        assertTrue(result.contains("TestMutation"), "expected mutation name in progress, got: $result")
     }
 
     @Test
     fun `progress handles 0 percent`() {
         val result = reporter.progress(0, 100, "TestMutation")
-        assertTrue(result.contains("0/100"))
-        assertTrue(result.contains("0.0%"))
+        assertTrue(result.contains("0/100"), "expected 0/100 in progress, got: $result")
+        assertTrue(result.contains("0.0%"), "expected 0.0% in progress, got: $result")
     }
 
     @Test
     fun `progress handles 100 percent`() {
         val result = reporter.progress(100, 100, "TestMutation")
-        assertTrue(result.contains("100/100"))
-        assertTrue(result.contains("100.0%"))
+        assertTrue(result.contains("100/100"), "expected 100/100 in progress, got: $result")
+        assertTrue(result.contains("100.0%"), "expected 100.0% in progress, got: $result")
     }
 
     @Test
     fun `generate returns formatted report`() {
         val report = createTestReport()
         val result = reporter.generate(report)
-        assertTrue(result.contains("MutKt Mutation Report"))
-        assertTrue(result.contains("Total Mutations:    10"))
-        assertTrue(result.contains("Killed:             7"))
-        assertTrue(result.contains("Survived:           2"))
-        assertTrue(result.contains("Kill Rate:"))
+        assertTrue(result.contains("MutKt Mutation Report"), "expected title in report")
+        assertTrue(result.contains("Total Mutations:    10"), "expected total=10 line, got:\n$result")
+        assertTrue(result.contains("Killed:             7"), "expected killed=7 line, got:\n$result")
+        assertTrue(result.contains("Survived:           2"), "expected survived=2 line, got:\n$result")
+        assertTrue(result.contains("Kill Rate:"), "expected kill rate line in report")
     }
 
     @Test
@@ -69,16 +69,16 @@ class ConsoleReporterTest {
     @Test
     fun `update returns formatted string`() {
         val result = reporter.update(5, 2, "TestMutation")
-        assertTrue(result.contains("Killed: 5"))
-        assertTrue(result.contains("Survived: 2"))
-        assertTrue(result.contains("Kill Rate:"))
-        assertTrue(result.contains("TestMutation"))
+        assertTrue(result.contains("Killed: 5"), "expected 'Killed: 5', got: $result")
+        assertTrue(result.contains("Survived: 2"), "expected 'Survived: 2', got: $result")
+        assertTrue(result.contains("Kill Rate:"), "expected 'Kill Rate:' in update")
+        assertTrue(result.contains("TestMutation"), "expected mutation name in update, got: $result")
     }
 
     @Test
     fun `update handles zero killed`() {
         val result = reporter.update(0, 5, "TestMutation")
-        assertTrue(result.contains("Kill Rate: 0.0%"))
+        assertTrue(result.contains("Kill Rate: 0.0%"), "expected 'Kill Rate: 0.0%', got: $result")
     }
 
     @Test

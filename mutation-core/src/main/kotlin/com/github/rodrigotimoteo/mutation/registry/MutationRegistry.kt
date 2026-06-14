@@ -1,5 +1,7 @@
 package com.github.rodrigotimoteo.mutation.registry
 
+import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
+import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -31,12 +33,14 @@ import java.util.concurrent.atomic.AtomicLong
  * @see MutKt
  */
 object MutationRegistry {
-    private const val DEFAULT_TIMEOUT_MS = 30_000L
     private val active = AtomicBoolean(false)
     private val threads = ConcurrentHashMap<Long, ThreadState>()
     private val classThreads = ConcurrentHashMap<String, MutableSet<Long>>()
 
-    private val timeoutMs = AtomicLong(30_000L)
+    private val timeoutMs = AtomicLong(DEFAULT_TIMEOUT_MS)
+
+    @Volatile
+    private var clock: Clock = Clock.systemUTC()
 
     class ThreadState {
         val mutationsEnabled = AtomicBoolean(true)
@@ -109,7 +113,7 @@ object MutationRegistry {
         val state = threads[Thread.currentThread().id] ?: return false
         val start = state.startTimeMs.get()
         if (start == 0L) return false // Not marked yet
-        val elapsed = System.currentTimeMillis() - start
+        val elapsed = clock.millis() - start
         return elapsed > timeoutMs.get()
     }
 
@@ -117,7 +121,16 @@ object MutationRegistry {
      * Mark the start time for the current mutation.
      */
     fun markStartTime() {
-        current().startTimeMs.set(System.currentTimeMillis())
+        current().startTimeMs.set(clock.millis())
+    }
+
+    /**
+     * Replace the clock used for time-based operations. Intended for tests
+     * that need deterministic control over wall-clock time. Pass
+     * `Clock.systemUTC()` (or call [reset]) to restore default behaviour.
+     */
+    fun setClock(newClock: Clock) {
+        clock = newClock
     }
 
     /**
@@ -144,6 +157,7 @@ object MutationRegistry {
         threads.clear()
         classThreads.clear()
         timeoutMs.set(DEFAULT_TIMEOUT_MS)
+        clock = Clock.systemUTC()
     }
 
     /**

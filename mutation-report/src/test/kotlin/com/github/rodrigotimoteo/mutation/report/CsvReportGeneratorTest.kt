@@ -80,13 +80,13 @@ class CsvReportGeneratorTest {
         val report = createReport(createResult("m1", MutationStatus.KILLED))
         val file = CsvReportGenerator.generate(report, tempDir.toFile())
 
-        assertTrue(file.exists())
+        assertTrue(file.exists(), "expected mutations.csv at ${file.absolutePath}")
         assertEquals("mutations.csv", file.name)
 
         val content = file.readText()
         val lines = content.trim().split("\n")
         assertEquals(2, lines.size) // header + 1 data row
-        assertTrue(lines[0].startsWith("mutation_id,status,operator"))
+        assertTrue(lines[0].startsWith("mutation_id,status,operator"), "expected CSV header, got: ${lines[0]}")
     }
 
     @Test
@@ -122,7 +122,7 @@ class CsvReportGeneratorTest {
 
         val file = CsvReportGenerator.generateSummary(report, tempDir.toFile())
 
-        assertTrue(file.exists())
+        assertTrue(file.exists(), "expected mutation-summary.csv at ${file.absolutePath}")
         assertEquals("mutation-summary.csv", file.name)
 
         val content = file.readText()
@@ -162,7 +162,7 @@ class CsvReportGeneratorTest {
 
         val lines = content.split("\n")
         assertEquals(1, lines.size) // header only
-        assertTrue(lines[0].startsWith("mutation_id"))
+        assertTrue(lines[0].startsWith("mutation_id"), "expected CSV header, got: ${lines[0]}")
     }
 
     @Test

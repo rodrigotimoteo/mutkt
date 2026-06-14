@@ -12,8 +12,8 @@ class MutationPluginTest {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply(MutationPlugin::class.java)
         val ext = project.extensions.findByName("mutationTest")
-        assertNotNull(ext)
-        assertTrue(ext is MutationPluginExtension)
+        assertNotNull(ext, "expected 'mutationTest' extension to be registered")
+        assertTrue(ext is MutationPluginExtension, "expected extension type MutationPluginExtension, got: ${ext?.javaClass?.name}")
     }
 
     @Test
@@ -21,8 +21,8 @@ class MutationPluginTest {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply(MutationPlugin::class.java)
         val task = project.tasks.findByName("mutationTest")
-        assertNotNull(task)
-        assertTrue(task is MutationTask)
+        assertNotNull(task, "expected 'mutationTest' task to be registered")
+        assertTrue(task is MutationTask, "expected task type MutationTask, got: ${task?.javaClass?.name}")
     }
 
     @Test

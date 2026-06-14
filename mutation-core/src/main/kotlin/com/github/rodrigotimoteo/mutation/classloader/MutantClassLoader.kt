@@ -4,6 +4,9 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
 import java.util.concurrent.ConcurrentHashMap
 
+private const val STRIPE_COUNT = 64
+private const val STRIPE_MASK = STRIPE_COUNT - 1
+
 /**
  * Loads non-target project classes. Shared across all mutations of the same target class.
  * Excludes the target class so child [MutationClassLoader] can intercept it.
@@ -17,7 +20,9 @@ class BaseProjectClassLoader(
     private val excludedClasses: Set<String>,
     private val failedClassCache: MutableSet<String>,
 ) : ClassLoader(parent) {
-    private val defineLocks: MutableMap<String, Any> = java.util.concurrent.ConcurrentHashMap()
+    private val lockStripes: Array<Any> = Array(STRIPE_COUNT) { Any() }
+
+    private fun lockFor(name: String): Any = lockStripes[name.hashCode() and STRIPE_MASK]
 
     override fun loadClass(
         name: String,
@@ -31,7 +36,7 @@ class BaseProjectClassLoader(
 
         // Excluded classes (target + test classes) handled by child MutationClassLoader.
         if (slashedName in excludedClasses) {
-            return super.loadClass(binaryName, resolve)
+            throw ClassNotFoundException(name)
         }
 
         if (slashedName in failedClassCache) {
@@ -40,7 +45,7 @@ class BaseProjectClassLoader(
 
         // Serialize concurrent defineClass attempts for the same class name to avoid
         // duplicate class definition LinkageError under concurrent loadClass calls.
-        synchronized(defineLocks.computeIfAbsent(binaryName) { Any() }) {
+        synchronized(lockFor(binaryName)) {
             findLoadedClass(binaryName)?.let { return it }
 
             val bytes = classBytes[slashedName]
@@ -76,7 +81,9 @@ class MutationClassLoader(
     private val allClassBytes: Map<String, ByteArray>,
     private val failedClassCache: MutableSet<String>,
 ) : ClassLoader(baseLoader) {
-    private val defineLocks: MutableMap<String, Any> = java.util.concurrent.ConcurrentHashMap()
+    private val lockStripes: Array<Any> = Array(STRIPE_COUNT) { Any() }
+
+    private fun lockFor(name: String): Any = lockStripes[name.hashCode() and STRIPE_MASK]
 
     override fun loadClass(
         name: String,
@@ -90,7 +97,7 @@ class MutationClassLoader(
 
         // Serialize concurrent defineClass attempts for the same class name to avoid
         // duplicate class definition LinkageError under concurrent loadClass calls.
-        synchronized(defineLocks.computeIfAbsent(binaryName) { Any() }) {
+        synchronized(lockFor(binaryName)) {
             // Re-check after acquiring lock — another thread may have defined it.
             findLoadedClass(binaryName)?.let { return it }
 
@@ -103,6 +110,22 @@ class MutationClassLoader(
                 } catch (e: LinkageError) {
                     failedClassCache.add(slashedName)
                     throw e
+                }
+            }
+
+            // Target inner class (companion, nested) → define from project bytes in
+            // THIS classloader so they share runtime identity with the mutated target.
+            if (slashedName.startsWith("$targetClassName\$") && slashedName !in failedClassCache) {
+                val innerBytes = allClassBytes[slashedName]
+                if (innerBytes != null) {
+                    try {
+                        val clazz = defineClass(binaryName, innerBytes, 0, innerBytes.size)
+                        if (resolve) resolveClass(clazz)
+                        return clazz
+                    } catch (e: LinkageError) {
+                        failedClassCache.add(slashedName)
+                        return super.loadClass(binaryName, resolve)
+                    }
                 }
             }
 
@@ -176,6 +199,10 @@ object MutantClassLoaderFactory {
         targetClassName: String,
     ): BaseProjectClassLoader {
         val excludedClasses = mutableSetOf(targetClassName)
+        // Exclude target inner classes (companion, nested) so child MutationClassLoader
+        // can define them alongside the mutated target.
+        val targetInnerPrefix = "$targetClassName\$"
+        excludedClasses.addAll(classFiles.keys.filter { it.startsWith(targetInnerPrefix) })
         // Also exclude test classes so they're loaded by MutationClassLoader.
         excludedClasses.addAll(testClassBytes.keys)
         return BaseProjectClassLoader(parent, classFiles, excludedClasses, sharedFailedClassCache)
@@ -236,7 +263,9 @@ class MutantClassLoader(
     private val failedClassCache: MutableSet<String> = ConcurrentHashMap.newKeySet(),
 ) : ClassLoader(parent) {
     private val targetClassName: String = targetMutation.className.replace('.', '/')
-    private val defineLocks: MutableMap<String, Any> = java.util.concurrent.ConcurrentHashMap()
+    private val lockStripes: Array<Any> = Array(STRIPE_COUNT) { Any() }
+
+    private fun lockFor(name: String): Any = lockStripes[name.hashCode() and STRIPE_MASK]
 
     override fun loadClass(
         name: String,
@@ -250,7 +279,7 @@ class MutantClassLoader(
 
         // Serialize concurrent defineClass attempts for the same class name to avoid
         // duplicate class definition LinkageError under concurrent loadClass calls.
-        synchronized(defineLocks.computeIfAbsent(binaryName) { Any() }) {
+        synchronized(lockFor(binaryName)) {
             findLoadedClass(binaryName)?.let { return it }
 
             val classBytes = originalClassBytes[slashedName]

@@ -1,5 +1,7 @@
 package com.github.rodrigotimoteo.mutation.engine
 
+import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
+import com.github.rodrigotimoteo.mutation.LOG_PREFIX
 import com.github.rodrigotimoteo.mutation.analysis.KillSetStorage
 import com.github.rodrigotimoteo.mutation.analysis.SubsumptionAnalyzer
 import com.github.rodrigotimoteo.mutation.analysis.TestStrengthOrdering
@@ -71,7 +73,7 @@ import java.util.concurrent.TimeUnit
  */
 class MutationEngine(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
-    private val timeoutMs: Long = 30000,
+    private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     maxParallelMutants: Int = 0,
     private val enableInlinedFinally: Boolean = true,
     private val enableTestOrdering: Boolean = true,
@@ -124,10 +126,10 @@ class MutationEngine(
         val scanStart = System.currentTimeMillis()
         val allMutations = generateAllMutations(classFiles)
         val scanTime = System.currentTimeMillis() - scanStart
-        System.err.println("[MutKt] Scanned ${allMutations.size} mutations in ${scanTime}ms")
+        System.err.println("$LOG_PREFIX Scanned ${allMutations.size} mutations in ${scanTime}ms")
 
         if (allMutations.isEmpty()) {
-            System.err.println("[MutKt] WARNING: No mutations found. Check enabled operators and class filter patterns.")
+            System.err.println("$LOG_PREFIX WARNING: No mutations found. Check enabled operators and class filter patterns.")
         }
 
         // Combine class files with test class files
@@ -138,7 +140,7 @@ class MutationEngine(
         val skippedRegex = allMutations.size - mutationsAfterRegex.size
         if (skippedRegex > 0) {
             System.err.println(
-                "[MutKt] Regex: skipped $skippedRegex mutations (include=${includePatterns.size}, exclude=${excludePatterns.size})",
+                "$LOG_PREFIX Regex: skipped $skippedRegex mutations (include=${includePatterns.size}, exclude=${excludePatterns.size})",
             )
         }
 
@@ -174,7 +176,7 @@ class MutationEngine(
                         mutation in reachableSet
                     }
                 if (unreachable.isNotEmpty()) {
-                    System.err.println("[MutKt] Weak mutation: skipped ${unreachable.size} unreachable mutations")
+                    System.err.println("$LOG_PREFIX Weak mutation: skipped ${unreachable.size} unreachable mutations")
                 }
                 reachable
             } else {
@@ -222,7 +224,8 @@ class MutationEngine(
                 val skippedIncremental = mutationsAfterInlined.size - filtered.size
                 if (skippedIncremental > 0) {
                     System.err.println(
-                        "[MutKt] Incremental: skipped $skippedIncremental mutations (only testing ${changedClasses.size} changed classes)",
+                        "$LOG_PREFIX Incremental: skipped $skippedIncremental " +
+                            "mutations (only testing ${changedClasses.size} changed classes)",
                     )
                 }
                 filtered
@@ -233,7 +236,7 @@ class MutationEngine(
         // Check cache for previously tested mutations
         val (mutationsToTest, cachedResults) = filterByCache(mutationsAfterIncremental)
         if (cachedResults.isNotEmpty()) {
-            System.err.println("[MutKt] Cache: ${cachedResults.size} mutations already tested")
+            System.err.println("$LOG_PREFIX Cache: ${cachedResults.size} mutations already tested")
         }
 
         // Run tests against each mutant
@@ -241,7 +244,7 @@ class MutationEngine(
         val (results, killSets) = runMutants(mutationsToTest, allClassFiles, orderedTestNames, testClassLoader)
         val testTime = System.currentTimeMillis() - testStart
         System.err.println(
-            "[MutKt] Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
+            "$LOG_PREFIX Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
         )
 
         // Update cache with new results
@@ -270,7 +273,7 @@ class MutationEngine(
                 val mutations = results.map { it.mutation }
                 val (essential, subsumed) = subsumptionAnalyzer.analyze(mutations, killSets)
                 if (subsumed.isNotEmpty()) {
-                    System.err.println("[MutKt] Subsumption: ${subsumed.size} redundant mutations identified")
+                    System.err.println("$LOG_PREFIX Subsumption: ${subsumed.size} redundant mutations identified")
                     results.map { result ->
                         if (result.mutation.id in subsumed) {
                             result.copy(status = MutationStatus.SUBSUMED)
@@ -366,11 +369,12 @@ class MutationEngine(
             val classBytes = getOriginalClassBytes(mutation.className)
             if (classBytes != null) {
                 val classHash = cache.computeClassHash(classBytes)
-                val cachedStatus = cache.lookup(classHash, mutation.operator.operatorName, mutation.lineNumber)
+                val cacheKey = "${mutation.operator.operatorName}:${mutation.methodName}"
+                val cachedStatus = cache.lookup(classHash, cacheKey, mutation.lineNumber)
                 if (cachedStatus != null) {
                     cached.add(
                         MutationResult(
-                            mutation = toMutation(mutation),
+                            mutation = toMutation(mutation, mutatedBytes),
                             status = cachedStatus,
                             executionTimeMs = 0,
                         ),
@@ -394,9 +398,10 @@ class MutationEngine(
             val classBytes = getOriginalClassBytes(result.mutation.className)
             if (classBytes != null) {
                 val classHash = cache.computeClassHash(classBytes)
+                val cacheKey = "${result.mutation.operator.operatorName}:${result.mutation.methodName}"
                 cache.store(
                     classHash,
-                    result.mutation.operator.operatorName,
+                    cacheKey,
                     result.mutation.lineNumber,
                     result.status,
                 )
@@ -467,29 +472,31 @@ class MutationEngine(
         coverageExecFile: File,
     ): List<Pair<MutationInfo, ByteArray>> {
         val coverageData = coverageAnalyzer.loadExecutionData(coverageExecFile)
-        if (coverageData.empty) {
-            logger.warn("Empty coverage data, skipping coverage filtering")
-            return allMutations
-        }
-
-        val filtered = mutableListOf<Pair<MutationInfo, ByteArray>>()
-
-        for ((mutation, mutatedBytes) in allMutations) {
-            val classBytes = classFiles[mutation.className.replace('.', '/')]
-            if (classBytes != null) {
-                val coverage =
-                    coverageAnalyzer.analyzeCoverage(
-                        classBytes,
-                        mutation.className,
-                        coverageData,
-                        listOf(mutation),
-                    )
-                if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
-                    filtered.add(mutation to mutatedBytes)
+        return when (coverageData) {
+            is CoverageAnalyzer.CoverageData.Empty -> {
+                logger.warn("Empty coverage data, skipping coverage filtering")
+                allMutations
+            }
+            is CoverageAnalyzer.CoverageData.Valid -> {
+                val filtered = mutableListOf<Pair<MutationInfo, ByteArray>>()
+                for ((mutation, mutatedBytes) in allMutations) {
+                    val classBytes = classFiles[mutation.className.replace('.', '/')]
+                    if (classBytes != null) {
+                        val coverage =
+                            coverageAnalyzer.analyzeCoverage(
+                                classBytes,
+                                mutation.className,
+                                coverageData,
+                                listOf(mutation),
+                            )
+                        if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
+                            filtered.add(mutation to mutatedBytes)
+                        }
+                    }
                 }
+                filtered
             }
         }
-        return filtered
     }
 
     private fun runMutants(
@@ -512,7 +519,7 @@ class MutationEngine(
         // Group mutations by target class. Each group shares a BaseProjectClassLoader
         // that loads all non-target project classes once, avoiding repeated defineClass.
         val mutationsByClass = mutations.groupBy { it.first.className }
-        System.err.println("[MutKt] ${mutations.size} mutations across ${mutationsByClass.size} classes")
+        System.err.println("$LOG_PREFIX ${mutations.size} mutations across ${mutationsByClass.size} classes")
 
         // Pre-create BaseProjectClassLoader per target class (shared across mutations).
         val baseLoaders = mutableMapOf<String, com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader>()
@@ -532,7 +539,7 @@ class MutationEngine(
             Executors.newFixedThreadPool(parallelism) { runnable ->
                 Thread(runnable, "mutation-worker").apply { isDaemon = true }
             }
-        System.err.println("[MutKt] Running $parallelism parallel workers")
+        System.err.println("$LOG_PREFIX Running $parallelism parallel workers")
 
         try {
             val futures =
@@ -559,7 +566,7 @@ class MutationEngine(
                     val rate = count / elapsed
                     val pct = count * 100 / mutations.size
                     System.err.print(
-                        "\r[MutKt] Progress: $count/${mutations.size} ($pct%) ${elapsed}s ${rate.toInt()} mut/s",
+                        "\r$LOG_PREFIX Progress: $count/${mutations.size} ($pct%) ${elapsed}s ${rate.toInt()} mut/s",
                     )
                 } catch (e: java.util.concurrent.TimeoutException) {
                     future.cancel(true)
@@ -637,7 +644,7 @@ class MutationEngine(
         val (status, failedTestClasses) = runTestsWithClassLoader(classLoader, testClassNames)
 
         return MutationResult(
-            mutation = toMutation(mutation),
+            mutation = toMutation(mutation, mutatedBytes),
             status = status,
             executionTimeMs = System.currentTimeMillis() - startTime,
         ) to failedTestClasses
@@ -671,10 +678,10 @@ class MutationEngine(
 
     private fun toMutation(
         info: MutationInfo,
-        originalBytes: ByteArray = ByteArray(0),
         mutatedBytes: ByteArray = ByteArray(0),
     ): Mutation {
         val (sourceFile, sourceCode) = findSourceCode(info.className, info.lineNumber)
+        val originalBytes = getOriginalClassBytes(info.className) ?: ByteArray(0)
         return Mutation(
             id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}",
             className = info.className,
@@ -758,7 +765,7 @@ class MutationEngine(
         val totalBefore = mutations.size
         val totalAfter = limited.size
         if (totalBefore != totalAfter) {
-            System.err.println("[MutKt] Max mutations per class: limited $totalBefore → $totalAfter mutations")
+            System.err.println("$LOG_PREFIX Max mutations per class: limited $totalBefore → $totalAfter mutations")
         }
         return limited
     }

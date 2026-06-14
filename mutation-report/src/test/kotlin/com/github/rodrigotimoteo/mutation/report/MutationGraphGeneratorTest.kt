@@ -103,8 +103,8 @@ class MutationGraphGeneratorTest {
         val report = MutationReport(emptyList(), 0, 0, 0, 0, 0, 0, 0L)
         val file = MutationGraphGenerator.generate(report, tempDir.toFile())
         val content = file.readText()
-        assertTrue(content.startsWith("<!DOCTYPE html>"))
-        assertTrue(content.contains("Mutation Test Graph"))
+        assertTrue(content.startsWith("<!DOCTYPE html>"), "expected DOCTYPE for empty report")
+        assertTrue(content.contains("Mutation Test Graph"), "expected title for empty report")
     }
 
     @Test
@@ -127,8 +127,8 @@ class MutationGraphGeneratorTest {
         subDir.mkdir()
         val report = createReport()
         val file = MutationGraphGenerator.generate(report, subDir)
-        assertTrue(file.absolutePath.contains("subdir"), "File should be in subdir")
-        assertTrue(file.exists())
+        assertTrue(file.absolutePath.contains("subdir"), "File should be in subdir, got: ${file.absolutePath}")
+        assertTrue(file.exists(), "expected graph file at ${file.absolutePath}")
     }
 
     @Test
@@ -161,7 +161,7 @@ class MutationGraphGeneratorTest {
         val file = MutationGraphGenerator.generate(report, tempDir.toFile())
         val content = file.readText()
         // We don't necessarily assert escaping — just that it doesn't crash
-        assertTrue(content.contains("m"))
+        assertTrue(content.contains("m"), "expected graph content for special-char class, got: ${content.take(200)}")
     }
 
     private fun createReport(): MutationReport {

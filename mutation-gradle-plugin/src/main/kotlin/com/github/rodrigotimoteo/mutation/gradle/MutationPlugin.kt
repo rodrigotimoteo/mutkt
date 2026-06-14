@@ -74,11 +74,7 @@ class MutationPlugin : Plugin<Project> {
                 task.excludedMethods.set(extension.excludedMethods)
                 task.failOnScoreThreshold.set(extension.failOnScoreThreshold)
                 task.coverageExecFile.set(extension.coverageExecFile)
-                task.reportsDir.set(
-                    extension.outputDir.map { dir ->
-                        project.layout.projectDirectory.dir(dir)
-                    },
-                )
+                task.reportsDir.set(extension.outputDir)
                 // Wire newly added extension properties
                 task.failOnCoverageThreshold.set(extension.failOnCoverageThreshold)
                 task.maxMutationsPerClass.set(extension.maxMutationsPerClass)

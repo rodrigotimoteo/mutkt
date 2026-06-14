@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutation.runner
 
+import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
 import com.github.rodrigotimoteo.mutation.engine.MutationEngine
 import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
@@ -107,7 +108,7 @@ class MutationTestRunner(
  */
 object MutationTestRunnerFactory {
     fun create(
-        timeoutMs: Long = 30000,
+        timeoutMs: Long = DEFAULT_TIMEOUT_MS,
         maxParallelMutants: Int = 4,
         enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
         enableInlinedFinally: Boolean = true,

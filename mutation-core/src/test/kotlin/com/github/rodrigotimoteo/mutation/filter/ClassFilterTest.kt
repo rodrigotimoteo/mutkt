@@ -8,8 +8,8 @@ class ClassFilterTest {
     @Test
     fun `shouldMutate returns true when no patterns configured`() {
         val filter = ClassFilter.all()
-        assertTrue(filter.shouldMutate("com.example.MyClass"))
-        assertTrue(filter.shouldMutate("org.anything.Bar"))
+        assertTrue(filter.shouldMutate("com.example.MyClass"), "ClassFilter.all() should permit any class")
+        assertTrue(filter.shouldMutate("org.anything.Bar"), "ClassFilter.all() should permit any class")
     }
 
     @Test
@@ -38,8 +38,8 @@ class ClassFilterTest {
                 targetClasses = listOf("com\\.example\\..*"),
                 excludeClasses = listOf("com\\.example\\.internal\\..*"),
             )
-        assertTrue(filter.shouldMutate("com.example.MyClass"))
-        assertFalse(filter.shouldMutate("com.example.internal.Hidden"))
+        assertTrue(filter.shouldMutate("com.example.MyClass"), "should be permitted by include")
+        assertFalse(filter.shouldMutate("com.example.internal.Hidden"), "should be blocked by exclude")
     }
 
     @Test

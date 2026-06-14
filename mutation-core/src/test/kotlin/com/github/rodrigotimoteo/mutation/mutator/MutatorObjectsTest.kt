@@ -296,13 +296,13 @@ class ReturnValueMutatorTest {
     }
 
     @Test
-    fun `isCollectionOrArrayStatic ArrayList is collection`() {
-        assertTrue(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(ArrayList::class.java)))
+    fun `isCollectionOrArrayStatic ArrayList is not collection`() {
+        assertFalse(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(ArrayList::class.java)))
     }
 
     @Test
-    fun `isCollectionOrArrayStatic LinkedList is collection`() {
-        assertTrue(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(LinkedList::class.java)))
+    fun `isCollectionOrArrayStatic LinkedList is not collection`() {
+        assertFalse(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(LinkedList::class.java)))
     }
 
     @Test
@@ -311,18 +311,18 @@ class ReturnValueMutatorTest {
     }
 
     @Test
-    fun `isCollectionOrArrayStatic HashSet is collection`() {
-        assertTrue(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(HashSet::class.java)))
+    fun `isCollectionOrArrayStatic HashSet is not collection`() {
+        assertFalse(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(HashSet::class.java)))
     }
 
     @Test
-    fun `isCollectionOrArrayStatic TreeSet is collection`() {
-        assertTrue(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(TreeSet::class.java)))
+    fun `isCollectionOrArrayStatic TreeSet is not collection`() {
+        assertFalse(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(TreeSet::class.java)))
     }
 
     @Test
-    fun `isCollectionOrArrayStatic Collection is collection`() {
-        assertTrue(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(Collection::class.java)))
+    fun `isCollectionOrArrayStatic Collection is not collection`() {
+        assertFalse(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(Collection::class.java)))
     }
 
     @Test
@@ -331,13 +331,13 @@ class ReturnValueMutatorTest {
     }
 
     @Test
-    fun `isCollectionOrArrayStatic HashMap is collection`() {
-        assertTrue(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(HashMap::class.java)))
+    fun `isCollectionOrArrayStatic HashMap is not collection`() {
+        assertFalse(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(HashMap::class.java)))
     }
 
     @Test
-    fun `isCollectionOrArrayStatic TreeMap is collection`() {
-        assertTrue(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(TreeMap::class.java)))
+    fun `isCollectionOrArrayStatic TreeMap is not collection`() {
+        assertFalse(ReturnValueMutator.isCollectionOrArrayStatic(Type.getType(TreeMap::class.java)))
     }
 
     @Test

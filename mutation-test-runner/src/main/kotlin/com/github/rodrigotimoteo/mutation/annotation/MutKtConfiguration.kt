@@ -1,5 +1,7 @@
 package com.github.rodrigotimoteo.mutation.annotation
 
+import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
+
 /**
  * Configuration for mutation test execution.
  */
@@ -11,7 +13,7 @@ data class MutKtConfiguration(
     /**
      * Timeout in milliseconds for each mutant execution.
      */
-    val timeoutMs: Long = 30_000L,
+    val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     /**
      * Whether to skip testing when running from IDE (single test).
      */

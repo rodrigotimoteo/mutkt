@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutation.junit
 
+import com.github.rodrigotimoteo.mutation.REPORT_WIDTH
 import com.github.rodrigotimoteo.mutation.annotation.MutKtConfiguration
 import com.github.rodrigotimoteo.mutation.annotation.MutKtTest
 import com.github.rodrigotimoteo.mutation.annotation.VerificationMode
@@ -94,11 +95,11 @@ class MutKtExtension : InvocationInterceptor {
         try {
             val triggered = MutationRegistry.current().triggeredMutations
             val sb = StringBuilder("\n")
-            sb.appendLine("=".repeat(60))
+            sb.appendLine("=".repeat(REPORT_WIDTH))
             sb.appendLine("  MutKt Mutation Testing Report")
-            sb.appendLine("=".repeat(60))
+            sb.appendLine("=".repeat(REPORT_WIDTH))
             sb.appendLine("  Triggered mutations: ${triggered.size}")
-            sb.appendLine("=".repeat(60))
+            sb.appendLine("=".repeat(REPORT_WIDTH))
             logger.info(sb.toString())
 
             if (config.mode == VerificationMode.STRICT && triggered.isNotEmpty()) {

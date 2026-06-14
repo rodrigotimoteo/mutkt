@@ -1,5 +1,8 @@
 package com.github.rodrigotimoteo.mutation.gradle
 
+import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
+import com.github.rodrigotimoteo.mutation.LOG_PREFIX
+import com.github.rodrigotimoteo.mutation.REPORT_WIDTH
 import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import com.github.rodrigotimoteo.mutation.runner.MutationTestRunnerFactory
@@ -61,7 +64,7 @@ abstract class MutationTask : DefaultTask() {
     /** Timeout in milliseconds for each mutant test execution. */
     @Input
     @Optional
-    val timeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(30000)
+    val timeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(DEFAULT_TIMEOUT_MS)
 
     /** Number of parallel mutant test executions. */
     @Input
@@ -80,6 +83,17 @@ abstract class MutationTask : DefaultTask() {
     val reportsDir: DirectoryProperty =
         project.objects.directoryProperty()
             .convention(project.layout.buildDirectory.dir("reports/mutation"))
+
+    /**
+     * Directory holding MutKt state (cache, baseline, kill-sets, test-strength,
+     * incremental analysis). Declared as task output so Gradle's build cache
+     * is aware of writes performed by `IncrementalAnalyzer`, `MutKtCache`,
+     * `BaselineStorage`, `KillSetStorage`, and `TestStrengthOrdering`.
+     */
+    @OutputDirectory
+    val mutktDir: DirectoryProperty =
+        project.objects.directoryProperty()
+            .convention(project.layout.projectDirectory.dir(".mutkt"))
 
     /** Whether to fail the build if any mutants survive. */
     @Input
@@ -209,12 +223,12 @@ abstract class MutationTask : DefaultTask() {
             currentFormats.add("console")
             currentFormats.add("xml")
             reportFormats.set(currentFormats)
-            logger.lifecycle("[MutKt] CI mode enabled — console + XML reports will be generated")
+            logger.lifecycle("$LOG_PREFIX CI mode enabled — console + XML reports will be generated")
         }
 
-        logger.lifecycle("=".repeat(60))
+        logger.lifecycle("=".repeat(REPORT_WIDTH))
         logger.lifecycle("  Kotlin Mutation Testing - PITest-style")
-        logger.lifecycle("=".repeat(60))
+        logger.lifecycle("=".repeat(REPORT_WIDTH))
 
         // Find classes directories from file collections
         val classesDir = findClassesDir(targetClasses.files)
@@ -369,8 +383,25 @@ abstract class MutationTask : DefaultTask() {
         printSummary(report)
 
         // Fail build if configured
+        checkFailConditions(report)
+
+        // Auto-add graph to report formats if generateGraph is set
+        if (generateGraph.get()) {
+            logger.lifecycle("$LOG_PREFIX Graph report enabled via generateGraph option")
+        }
+    }
+
+    /**
+     * Enforce configured build-failure thresholds against a finished report.
+     * Throws [org.gradle.api.GradleException] when any threshold is violated.
+     * Extracted from [runMutationTests] so it can be exercised in isolation
+     * without spinning up the full mutation runner.
+     */
+    internal fun checkFailConditions(report: MutationReport) {
         if (failOnSurvived.get() && report.survivedMutations > 0) {
-            throw org.gradle.api.GradleException("${report.survivedMutations} mutants survived! Build failed.")
+            throw org.gradle.api.GradleException(
+                "${report.survivedMutations} mutants survived! Build failed.",
+            )
         }
 
         val threshold = failOnScoreThreshold.get()
@@ -380,17 +411,11 @@ abstract class MutationTask : DefaultTask() {
             )
         }
 
-        // Check coverage threshold (uses same kill rate as score threshold for now)
         val coverageThreshold = failOnCoverageThreshold.get()
         if (coverageThreshold > 0 && report.killedPercentage < coverageThreshold) {
             throw org.gradle.api.GradleException(
                 "Coverage score ${report.killedPercentage}% is below threshold $coverageThreshold%. Build failed.",
             )
-        }
-
-        // Auto-add graph to report formats if generateGraph is set
-        if (generateGraph.get()) {
-            logger.lifecycle("[MutKt] Graph report enabled via generateGraph option")
         }
     }
 
@@ -428,6 +453,8 @@ abstract class MutationTask : DefaultTask() {
         val buildDirFile = project.layout.buildDirectory.asFile.get()
         return File(buildDirFile, "classes/kotlin/$subDir")
             .takeIf { it.exists() }
+            ?: File(buildDirFile, "classes/kotlin/jvm/$subDir")
+                .takeIf { it.exists() }
             ?: File(buildDirFile, "classes/java/$subDir")
     }
 
@@ -472,9 +499,9 @@ abstract class MutationTask : DefaultTask() {
 
     private fun printSummary(report: MutationReport) {
         logger.lifecycle("")
-        logger.lifecycle("=".repeat(60))
+        logger.lifecycle("=".repeat(REPORT_WIDTH))
         logger.lifecycle("  Mutation Test Results")
-        logger.lifecycle("=".repeat(60))
+        logger.lifecycle("=".repeat(REPORT_WIDTH))
         logger.lifecycle("Total mutations:  ${report.totalMutations}")
         logger.lifecycle("Killed:           ${report.killedMutations} (${report.killedPercentage}%)")
         logger.lifecycle("Survived:         ${report.survivedMutations} (${report.survivedPercentage}%)")
@@ -482,6 +509,6 @@ abstract class MutationTask : DefaultTask() {
         logger.lifecycle("Timeouts:         ${report.timeoutMutations}")
         logger.lifecycle("No coverage:      ${report.noCoverageMutations}")
         logger.lifecycle("Total time:       ${"%.1f".format(report.totalExecutionTimeMs / 1000.0)}s")
-        logger.lifecycle("=".repeat(60))
+        logger.lifecycle("=".repeat(REPORT_WIDTH))
     }
 }

@@ -71,7 +71,7 @@ class JsonReportGeneratorTest {
         val report = createReport(result)
 
         val file = JsonReportGenerator.generate(report, tempDir.toFile())
-        assertTrue(file.exists())
+        assertTrue(file.exists(), "expected mutations.json at ${file.absolutePath}")
         assertEquals("mutations.json", file.name)
     }
 

@@ -2,15 +2,24 @@ package com.github.rodrigotimoteo.mutation.runner
 
 import com.github.rodrigotimoteo.mutation.engine.MutationEngine
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertTrue
 
 /**
  * Integration test that runs the full mutation testing pipeline
- * against the sample Calculator class.
+ * against the sample Calculator class. Requires the mutation-sample
+ * module to be built (./gradlew :mutation-sample:build) and the
+ * RUN_INTEGRATION=true environment variable to be set.
  */
+@Tag("integration")
+@Timeout(value = 60, unit = TimeUnit.SECONDS)
+@EnabledIfEnvironmentVariable(named = "RUN_INTEGRATION", matches = "true")
 class MutationEngineIntegrationTest {
     private val projectRoot =
         File(System.getProperty("user.dir")).let { dir ->

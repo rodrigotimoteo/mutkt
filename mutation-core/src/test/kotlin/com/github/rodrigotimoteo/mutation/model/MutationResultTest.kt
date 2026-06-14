@@ -12,14 +12,14 @@ class MutationResultTest {
     fun `MutationResult with KILLED status isKilled is true`() {
         val mutation = createTestMutation()
         val result = MutationResult(mutation, MutationStatus.KILLED, 100L)
-        assertTrue(result.isKilled)
+        assertTrue(result.isKilled, "KILLED result should have isKilled=true")
     }
 
     @Test
     fun `MutationResult with SURVIVED status isSurvived is true`() {
         val mutation = createTestMutation()
         val result = MutationResult(mutation, MutationStatus.SURVIVED, 100L)
-        assertTrue(result.isSurvived)
+        assertTrue(result.isSurvived, "SURVIVED result should have isSurvived=true")
     }
 
     @Test

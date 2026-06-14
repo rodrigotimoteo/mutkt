@@ -17,9 +17,9 @@ class MutationPluginExtensionTest {
     }
 
     @Test
-    fun `maxParallelMutants defaults to availableProcessors`() {
+    fun `maxParallelMutants defaults to 4 for build-cache determinism`() {
         assertThat(extension.maxParallelMutants.get())
-            .isEqualTo(Runtime.getRuntime().availableProcessors())
+            .isEqualTo(4)
     }
 
     @Test
@@ -128,7 +128,8 @@ class MutationPluginExtensionTest {
 
     @Test
     fun `outputDir defaults to build reports mutation`() {
-        assertThat(extension.outputDir.get()).isEqualTo("build/reports/mutation")
+        assertThat(extension.outputDir.get().asFile.path)
+            .endsWith("build" + java.io.File.separator + "reports" + java.io.File.separator + "mutation")
     }
 
     @Test

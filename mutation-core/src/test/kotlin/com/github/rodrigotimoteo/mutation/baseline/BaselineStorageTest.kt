@@ -41,7 +41,7 @@ class BaselineStorageTest {
     @Test
     fun `load returns empty map when no baseline exists`() {
         val loaded = baseline.load()
-        assertTrue(loaded.isEmpty())
+        assertTrue(loaded.isEmpty(), "expected empty map when no baseline file, got: $loaded")
     }
 
     @Test
@@ -60,7 +60,7 @@ class BaselineStorageTest {
 
         val loaded = baseline.load()
         assertEquals(1, loaded.size)
-        assertTrue(loaded.containsKey("com.example.Bar"))
+        assertTrue(loaded.containsKey("com.example.Bar"), "expected com.example.Bar after overwrite, got: ${loaded.keys}")
     }
 
     @Test
@@ -148,14 +148,14 @@ class BaselineStorageTest {
         baseline.clear()
 
         val loaded = baseline.load()
-        assertTrue(loaded.isEmpty())
+        assertTrue(loaded.isEmpty(), "expected empty map after clear, got: $loaded")
     }
 
     @Test
     fun `detectChanges returns empty set when not in git repo`() {
         // tempDir is not a git repo
         val changes = baseline.detectChanges()
-        assertTrue(changes.isEmpty())
+        assertTrue(changes.isEmpty(), "expected no git changes outside repo, got: $changes")
     }
 
     @Test

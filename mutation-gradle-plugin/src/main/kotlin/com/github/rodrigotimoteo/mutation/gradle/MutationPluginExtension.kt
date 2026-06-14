@@ -1,7 +1,9 @@
 package com.github.rodrigotimoteo.mutation.gradle
 
+import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
 import org.gradle.api.Project
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
@@ -83,7 +85,7 @@ open class MutationPluginExtension(project: Project) {
      * Timeout in milliseconds for each mutant test execution.
      */
 
-    val timeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(30000)
+    val timeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(DEFAULT_TIMEOUT_MS)
 
     /**
      * Number of parallel mutant test executions.
@@ -91,15 +93,15 @@ open class MutationPluginExtension(project: Project) {
 
     val maxParallelMutants: Property<Int> =
         project.objects.property(Int::class.java)
-            .convention(Runtime.getRuntime().availableProcessors())
+            .convention(4)
 
     /**
      * Output directory for mutation test reports.
      */
 
-    val outputDir: Property<String> =
-        project.objects.property(String::class.java)
-            .convention("build/reports/mutation")
+    val outputDir: DirectoryProperty =
+        project.objects.directoryProperty()
+            .convention(project.layout.buildDirectory.dir("reports/mutation"))
 
     /**
      * Whether to fail the build if any mutants survive.

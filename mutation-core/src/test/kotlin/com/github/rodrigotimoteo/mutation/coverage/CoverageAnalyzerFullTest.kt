@@ -18,10 +18,10 @@ import java.io.FileOutputStream
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CoverageAnalyzerFullTest {
@@ -29,9 +29,7 @@ class CoverageAnalyzerFullTest {
     fun `loadExecutionData with non-existent file returns empty data`() {
         val analyzer = CoverageAnalyzer()
         val result = analyzer.loadExecutionData(File("/non/existent/file.exec"))
-        assertTrue(result.empty)
-        assertNull(result.execFile)
-        assertNull(result.executionDataStore)
+        assertTrue(result is CoverageAnalyzer.CoverageData.Empty)
     }
 
     @Test
@@ -47,7 +45,7 @@ class CoverageAnalyzerFullTest {
         createEmptyExecFile(execFile)
         val classBytes = buildClassWithLineNumbers()
         val className = "TestClass"
-        val coverageData = analyzer.loadExecutionData(execFile)
+        val coverageData = assertIs<CoverageAnalyzer.CoverageData.Valid>(analyzer.loadExecutionData(execFile))
 
         val mutations =
             listOf(
@@ -80,7 +78,7 @@ class CoverageAnalyzerFullTest {
         val file = tempDir.resolve("invalid.exec").toFile()
         file.writeBytes(ByteArray(20) { (it * 7 + 13).toByte() })
         val result = analyzer.loadExecutionData(file)
-        assertTrue(result.empty)
+        assertTrue(result is CoverageAnalyzer.CoverageData.Empty)
     }
 
     @Test
@@ -91,9 +89,10 @@ class CoverageAnalyzerFullTest {
         val file = tempDir.resolve("valid.exec").toFile()
         createEmptyExecFile(file)
         val result = analyzer.loadExecutionData(file)
-        assertFalse(result.empty)
-        assertNotNull(result.execFile)
-        assertNotNull(result.executionDataStore)
+        assertTrue(result is CoverageAnalyzer.CoverageData.Valid)
+        val valid = result
+        assertEquals(file, valid.execFile)
+        assertNotNull(valid.executionDataStore)
     }
 
     @Test
@@ -173,18 +172,22 @@ class CoverageAnalyzerFullTest {
     }
 
     @Test
-    fun `analyzeCoverage with empty coverage data returns all for each mutation`() {
+    fun `analyzeCoverage with empty coverage data returns covered for each mutation`(
+        @TempDir tempDir: Path,
+    ) {
         val analyzer = CoverageAnalyzer()
+        val file = tempDir.resolve("empty.exec").toFile()
+        val valid = CoverageAnalyzer.CoverageData.Valid(file, ExecutionDataStore())
         val mutation = createMutation("m1", "com.Foo", 10)
         val result =
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                coverageData = CoverageAnalyzer.CoverageData(empty = true),
+                coverageData = valid,
                 mutations = listOf(mutation),
             )
         assertEquals(1, result.size)
-        assertEquals(listOf("all"), result.first().coveringTests)
+        assertEquals(listOf("covered"), result.first().coveringTests)
     }
 
     @Test
@@ -195,7 +198,7 @@ class CoverageAnalyzerFullTest {
         val execFile = tempDir.resolve("valid.exec").toFile()
         createEmptyExecFile(execFile)
         val classBytes = buildClassWithLineNumbers()
-        val coverageData = analyzer.loadExecutionData(execFile)
+        val coverageData = assertIs<CoverageAnalyzer.CoverageData.Valid>(analyzer.loadExecutionData(execFile))
         val mutation = createMutation("m1", "TestClass", 10)
         val result =
             analyzer.analyzeCoverage(
@@ -209,75 +212,73 @@ class CoverageAnalyzerFullTest {
     }
 
     @Test
-    fun `analyzeCoverage with empty mutations list returns empty list`() {
+    fun `analyzeCoverage with empty mutations list returns empty list`(
+        @TempDir tempDir: Path,
+    ) {
         val analyzer = CoverageAnalyzer()
+        val file = tempDir.resolve("empty.exec").toFile()
+        val valid = CoverageAnalyzer.CoverageData.Valid(file, ExecutionDataStore())
         val result =
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                coverageData = CoverageAnalyzer.CoverageData(empty = true),
+                coverageData = valid,
                 mutations = emptyList(),
             )
         assertEquals(0, result.size)
     }
 
     @Test
-    fun `CoverageData one-arg constructor sets empty flag`() {
-        val data = CoverageAnalyzer.CoverageData(empty = true)
-        assertTrue(data.empty)
-        assertNull(data.execFile)
-        assertNull(data.executionDataStore)
+    fun `CoverageData Empty is a singleton`() {
+        val a: CoverageAnalyzer.CoverageData = CoverageAnalyzer.CoverageData.Empty
+        val b: CoverageAnalyzer.CoverageData = CoverageAnalyzer.CoverageData.Empty
+        assertEquals(a, b)
+        assertTrue(a is CoverageAnalyzer.CoverageData.Empty)
     }
 
     @Test
-    fun `CoverageData two-arg constructor sets execFile`(
+    fun `CoverageData Valid exposes execFile`(
         @TempDir tempDir: Path,
     ) {
         val file = tempDir.resolve("test.exec").toFile()
-        val data = CoverageAnalyzer.CoverageData(empty = false, execFile = file)
-        assertFalse(data.empty)
+        val data = CoverageAnalyzer.CoverageData.Valid(file, ExecutionDataStore())
         assertEquals(file, data.execFile)
-        assertNull(data.executionDataStore)
+        assertNotNull(data.executionDataStore)
     }
 
     @Test
-    fun `CoverageData three-arg constructor sets all fields`(
+    fun `CoverageData Valid holds all fields`(
         @TempDir tempDir: Path,
     ) {
         val file = tempDir.resolve("test.exec").toFile()
         val store = ExecutionDataStore()
-        val data =
-            CoverageAnalyzer.CoverageData(
-                empty = false,
-                execFile = file,
-                executionDataStore = store,
-            )
-        assertFalse(data.empty)
+        val data = CoverageAnalyzer.CoverageData.Valid(file, store)
         assertEquals(file, data.execFile)
         assertEquals(store, data.executionDataStore)
     }
 
     @Test
-    fun `CoverageData equals and hashCode work correctly`(
+    fun `CoverageData Valid equals and hashCode work correctly`(
         @TempDir tempDir: Path,
     ) {
         val file = tempDir.resolve("test.exec").toFile()
         val store = ExecutionDataStore()
-        val a = CoverageAnalyzer.CoverageData(empty = false, execFile = file, executionDataStore = store)
-        val b = CoverageAnalyzer.CoverageData(empty = false, execFile = file, executionDataStore = store)
+        val a = CoverageAnalyzer.CoverageData.Valid(file, store)
+        val b = CoverageAnalyzer.CoverageData.Valid(file, store)
         assertEquals(a, b)
         assertEquals(a.hashCode(), b.hashCode())
     }
 
     @Test
-    fun `CoverageData copy creates independent instance`(
+    fun `CoverageData Valid copy creates independent instance`(
         @TempDir tempDir: Path,
     ) {
-        val file = tempDir.resolve("test.exec").toFile()
-        val original = CoverageAnalyzer.CoverageData(empty = false, execFile = file)
-        val copy = original.copy(empty = true)
-        assertTrue(copy.empty)
-        assertEquals(file, copy.execFile)
+        val file1 = tempDir.resolve("test1.exec").toFile()
+        val file2 = tempDir.resolve("test2.exec").toFile()
+        val original = CoverageAnalyzer.CoverageData.Valid(file1, ExecutionDataStore())
+        val copy = original.copy(execFile = file2)
+        assertEquals(file1, original.execFile)
+        assertEquals(file2, copy.execFile)
     }
 
     @Test
@@ -293,7 +294,7 @@ class CoverageAnalyzerFullTest {
         createEmptyExecFile(execFile)
         val classBytes = buildClassWithLineNumbers()
         val className = "TestClass"
-        val coverageData = analyzer.loadExecutionData(execFile)
+        val coverageData = assertIs<CoverageAnalyzer.CoverageData.Valid>(analyzer.loadExecutionData(execFile))
 
         val coveredMutation = createMutation("m1", className, 10)
         val uncoveredMutation = createMutation("m2", className, 99)
@@ -390,12 +391,13 @@ class CoverageAnalyzerFullTest {
             }
         }
 
-        latch.await()
+        assertTrue(latch.await(5, TimeUnit.SECONDS), "Concurrent loadExecutionData timed out")
         executor.shutdown()
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor failed to terminate")
 
         assertEquals(10, results.size)
         results.forEach {
-            assertFalse(it.empty)
+            assertTrue(it is CoverageAnalyzer.CoverageData.Valid)
         }
     }
 
@@ -422,8 +424,9 @@ class CoverageAnalyzerFullTest {
             }
         }
 
-        latch.await()
+        assertTrue(latch.await(5, TimeUnit.SECONDS), "Concurrent getCoveredLinesForClass timed out")
         executor.shutdown()
+        assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Executor failed to terminate")
 
         assertEquals(10, results.size)
         results.forEach {

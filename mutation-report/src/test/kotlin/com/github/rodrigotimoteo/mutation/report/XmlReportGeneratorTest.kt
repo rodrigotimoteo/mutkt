@@ -71,7 +71,7 @@ class XmlReportGeneratorTest {
         val report = createReport(createResult("m1", MutationStatus.KILLED))
         val file = XmlReportGenerator.generate(report, tempDir.toFile())
 
-        assertTrue(file.exists())
+        assertTrue(file.exists(), "expected mutations.xml at ${file.absolutePath}")
         assertEquals("mutations.xml", file.name)
 
         val factory = DocumentBuilderFactory.newInstance()

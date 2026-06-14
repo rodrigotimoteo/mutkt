@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutation.cache
 
+import com.github.rodrigotimoteo.mutation.MUTKT_DIR
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import java.io.File
 import java.security.MessageDigest
@@ -24,7 +25,7 @@ import java.security.MessageDigest
  * ```
  */
 class MutKtCache(private val projectDir: File) {
-    private val cacheDir = File(projectDir, ".mutkt/cache")
+    private val cacheDir = File(projectDir, "$MUTKT_DIR/cache")
 
     init {
         cacheDir.mkdirs()

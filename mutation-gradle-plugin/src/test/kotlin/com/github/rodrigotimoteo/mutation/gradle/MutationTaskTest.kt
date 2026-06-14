@@ -1,5 +1,9 @@
 package com.github.rodrigotimoteo.mutation.gradle
 
+import com.github.rodrigotimoteo.mutation.model.Mutation
+import com.github.rodrigotimoteo.mutation.model.MutationReport
+import com.github.rodrigotimoteo.mutation.model.MutationResult
+import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
@@ -18,7 +22,7 @@ class MutationTaskTest {
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
         // The task group is not explicitly set in MutationTask, so it defaults to null
         // (Gradle's verification group is set by the plugin when the task is registered)
-        assertNotNull(task)
+        assertNotNull(task, "expected mutationTest task to be created")
     }
 
     @Test
@@ -61,9 +65,9 @@ class MutationTaskTest {
         val project = createProject()
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
         val dir = task.reportsDir.get().asFile
-        assertNotNull(dir)
-        assertTrue(dir.absolutePath.contains("reports"))
-        assertTrue(dir.absolutePath.contains("mutation"))
+        assertNotNull(dir, "expected reportsDir to be resolvable")
+        assertTrue(dir.absolutePath.contains("reports"), "expected 'reports' in path, got: ${dir.absolutePath}")
+        assertTrue(dir.absolutePath.contains("mutation"), "expected 'mutation' in path, got: ${dir.absolutePath}")
     }
 
     @Test
@@ -402,9 +406,46 @@ class MutationTaskActionTest {
 
     @Test
     fun `runMutationTests throws GradleException when failOnSurvived and survived`() {
-        // This is harder to test without running real mutations
-        // We can mock by having classes+test that don't kill
-        // But for coverage, just calling runMutationTests increases coverage
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.failOnSurvived.set(true)
+
+        val report = buildSurvivedReport()
+
+        try {
+            invokeCheckFailConditions(task, report)
+            error("Expected GradleException for survived mutations")
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            val cause = e.cause
+            assertNotNull(cause, "Expected wrapped cause")
+            assertTrue(
+                cause is org.gradle.api.GradleException,
+                "Expected GradleException, got ${cause::class.java.name}: ${cause.message}",
+            )
+        }
+    }
+
+    @Test
+    fun `checkFailConditions does not throw when failOnSurvived true but no survivors`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.failOnSurvived.set(true)
+
+        val report =
+            MutationReport(
+                results = emptyList(),
+                totalMutations = 0,
+                killedMutations = 0,
+                survivedMutations = 0,
+                errorMutations = 0,
+                timeoutMutations = 0,
+                noCoverageMutations = 0,
+                totalExecutionTimeMs = 0,
+            )
+
+        invokeCheckFailConditions(task, report)
     }
 
     @Test
@@ -439,6 +480,48 @@ class MutationTaskActionTest {
         val method = MutationTask::class.java.getDeclaredMethod("runMutationTests")
         method.isAccessible = true
         method.invoke(task)
+    }
+
+    private fun invokeCheckFailConditions(
+        task: MutationTask,
+        report: MutationReport,
+    ) {
+        val method =
+            MutationTask::class.java.declaredMethods.firstOrNull {
+                it.name.startsWith("checkFailConditions") &&
+                    it.parameterCount == 1 &&
+                    it.parameterTypes[0] == MutationReport::class.java
+            } ?: error("checkFailConditions(MutationReport) not found on MutationTask")
+        method.isAccessible = true
+        method.invoke(task, report)
+    }
+
+    private fun buildSurvivedReport(): MutationReport {
+        val survivedMutation =
+            MutationResult(
+                mutation =
+                    Mutation(
+                        id = "m-survived-1",
+                        className = "com.example.Foo",
+                        methodName = "bar",
+                        methodDescriptor = "()I",
+                        operator = MutationOperator.NEGATE_CONDITIONALS,
+                        lineNumber = 10,
+                        description = "test survived mutation",
+                    ),
+                status = MutationStatus.SURVIVED,
+                executionTimeMs = 5,
+            )
+        return MutationReport(
+            results = listOf(survivedMutation),
+            totalMutations = 1,
+            killedMutations = 0,
+            survivedMutations = 1,
+            errorMutations = 0,
+            timeoutMutations = 0,
+            noCoverageMutations = 0,
+            totalExecutionTimeMs = 5,
+        )
     }
 
     private fun buildSimpleClassBytes(className: String): ByteArray {

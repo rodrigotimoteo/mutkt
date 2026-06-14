@@ -169,26 +169,19 @@ class ReflectionTestRunner(
                 testsFound += repetitions
                 for (rep in 1..repetitions) {
                     val instance = createInstance(testClass, null)
-                    try {
-                        for (setup in beforeEachMethods) {
-                            setup.isAccessible = true
-                            setup.invoke(instance)
-                        }
-                        method.invoke(instance)
-                        testsSucceeded++
-                    } catch (e: java.lang.reflect.InvocationTargetException) {
-                        testsFailed++
-                        failures.add("$className.${method.name}: ${e.targetException?.message}")
-                    } catch (e: Exception) {
-                        testsFailed++
-                        failures.add("$className.${method.name}: ${e.message}")
-                    } finally {
-                        for (teardown in afterEachMethods) {
-                            try {
-                                teardown.isAccessible = true
-                                teardown.invoke(instance)
-                            } catch (_: Exception) {
-                            }
+                    val result =
+                        invokeWithLifecycle(
+                            instance = instance,
+                            method = method,
+                            beforeEach = beforeEachMethods,
+                            afterEach = afterEachMethods,
+                            className = className,
+                        )
+                    when (result) {
+                        is TestInvocationResult.Success -> testsSucceeded++
+                        is TestInvocationResult.Failure -> {
+                            testsFailed++
+                            failures.add(result.message)
                         }
                     }
                 }
@@ -262,26 +255,19 @@ class ReflectionTestRunner(
         if (paramCount == 0) {
             testsFound++
             val instance = createInstance(testClass, outerInstance)
-            try {
-                for (setup in beforeEachMethods) {
-                    setup.isAccessible = true
-                    setup.invoke(instance)
-                }
-                method.invoke(instance)
-                testsSucceeded++
-            } catch (e: java.lang.reflect.InvocationTargetException) {
-                testsFailed++
-                failures.add("${testClass.name}.${method.name}: ${e.targetException?.message}")
-            } catch (e: Exception) {
-                testsFailed++
-                failures.add("${testClass.name}.${method.name}: ${e.message}")
-            } finally {
-                for (teardown in afterEachMethods) {
-                    try {
-                        teardown.isAccessible = true
-                        teardown.invoke(instance)
-                    } catch (_: Exception) {
-                    }
+            val result =
+                invokeWithLifecycle(
+                    instance = instance,
+                    method = method,
+                    beforeEach = beforeEachMethods,
+                    afterEach = afterEachMethods,
+                    className = testClass.name,
+                )
+            when (result) {
+                is TestInvocationResult.Success -> testsSucceeded++
+                is TestInvocationResult.Failure -> {
+                    testsFailed++
+                    failures.add(result.message)
                 }
             }
         } else {
@@ -298,29 +284,25 @@ class ReflectionTestRunner(
                                 for (param in params) {
                                     testsFound++
                                     val inst = createInstance(testClass, outerInstance)
-                                    try {
-                                        for (setup in beforeEachMethods) {
-                                            setup.isAccessible = true
-                                            setup.invoke(inst)
-                                        }
+                                    val args: Array<Any?> =
                                         when (param) {
-                                            is Array<*> -> method.invoke(inst, *param)
-                                            else -> method.invoke(inst, param)
+                                            is Array<*> -> Array(param.size) { param[it] }
+                                            else -> arrayOf(param)
                                         }
-                                        testsSucceeded++
-                                    } catch (e: java.lang.reflect.InvocationTargetException) {
-                                        testsFailed++
-                                        failures.add("${testClass.name}.${method.name}: ${e.targetException?.message}")
-                                    } catch (e: Exception) {
-                                        testsFailed++
-                                        failures.add("${testClass.name}.${method.name}: ${e.message}")
-                                    } finally {
-                                        for (teardown in afterEachMethods) {
-                                            try {
-                                                teardown.isAccessible = true
-                                                teardown.invoke(inst)
-                                            } catch (_: Exception) {
-                                            }
+                                    val result =
+                                        invokeWithLifecycle(
+                                            instance = inst,
+                                            method = method,
+                                            args = args,
+                                            beforeEach = beforeEachMethods,
+                                            afterEach = afterEachMethods,
+                                            className = testClass.name,
+                                        )
+                                    when (result) {
+                                        is TestInvocationResult.Success -> testsSucceeded++
+                                        is TestInvocationResult.Failure -> {
+                                            testsFailed++
+                                            failures.add(result.message)
                                         }
                                     }
                                 }
@@ -347,26 +329,20 @@ class ReflectionTestRunner(
                 for (value in values) {
                     testsFound++
                     val inst = createInstance(testClass, outerInstance)
-                    try {
-                        for (setup in beforeEachMethods) {
-                            setup.isAccessible = true
-                            setup.invoke(inst)
-                        }
-                        method.invoke(inst, value)
-                        testsSucceeded++
-                    } catch (e: java.lang.reflect.InvocationTargetException) {
-                        testsFailed++
-                        failures.add("${testClass.name}.${method.name}: ${e.targetException?.message}")
-                    } catch (e: Exception) {
-                        testsFailed++
-                        failures.add("${testClass.name}.${method.name}: ${e.message}")
-                    } finally {
-                        for (teardown in afterEachMethods) {
-                            try {
-                                teardown.isAccessible = true
-                                teardown.invoke(inst)
-                            } catch (_: Exception) {
-                            }
+                    val result =
+                        invokeWithLifecycle(
+                            instance = inst,
+                            method = method,
+                            args = arrayOf(value),
+                            beforeEach = beforeEachMethods,
+                            afterEach = afterEachMethods,
+                            className = testClass.name,
+                        )
+                    when (result) {
+                        is TestInvocationResult.Success -> testsSucceeded++
+                        is TestInvocationResult.Failure -> {
+                            testsFailed++
+                            failures.add(result.message)
                         }
                     }
                 }
@@ -429,26 +405,19 @@ class ReflectionTestRunner(
                 testsFound += repetitions
                 for (rep in 1..repetitions) {
                     val instance = createInstance(testClass, outerInstance)
-                    try {
-                        for (setup in beforeEachMethods) {
-                            setup.isAccessible = true
-                            setup.invoke(instance)
-                        }
-                        method.invoke(instance)
-                        testsSucceeded++
-                    } catch (e: java.lang.reflect.InvocationTargetException) {
-                        testsFailed++
-                        failures.add("$className.${method.name}: ${e.targetException?.message}")
-                    } catch (e: Exception) {
-                        testsFailed++
-                        failures.add("$className.${method.name}: ${e.message}")
-                    } finally {
-                        for (teardown in afterEachMethods) {
-                            try {
-                                teardown.isAccessible = true
-                                teardown.invoke(instance)
-                            } catch (_: Exception) {
-                            }
+                    val result =
+                        invokeWithLifecycle(
+                            instance = instance,
+                            method = method,
+                            beforeEach = beforeEachMethods,
+                            afterEach = afterEachMethods,
+                            className = className,
+                        )
+                    when (result) {
+                        is TestInvocationResult.Success -> testsSucceeded++
+                        is TestInvocationResult.Failure -> {
+                            testsFailed++
+                            failures.add(result.message)
                         }
                     }
                 }
@@ -478,6 +447,42 @@ class ReflectionTestRunner(
         }
 
         return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)
+    }
+
+    /**
+     * Invokes a test method with @BeforeEach / @AfterEach lifecycle, returning a
+     * structured result. Centralises the duplicated try/catch/finally blocks that
+     * previously appeared in every standard test, @ParameterizedTest, and @Nested
+     * call site.
+     */
+    private fun invokeWithLifecycle(
+        instance: Any?,
+        method: java.lang.reflect.Method,
+        args: Array<Any?> = emptyArray(),
+        beforeEach: List<java.lang.reflect.Method>,
+        afterEach: List<java.lang.reflect.Method>,
+        className: String,
+    ): TestInvocationResult {
+        try {
+            for (setup in beforeEach) {
+                setup.isAccessible = true
+                setup.invoke(instance)
+            }
+            method.invoke(instance, *args)
+            return TestInvocationResult.Success
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            return TestInvocationResult.Failure("$className.${method.name}: ${e.targetException?.message}")
+        } catch (e: Exception) {
+            return TestInvocationResult.Failure("$className.${method.name}: ${e.message}")
+        } finally {
+            for (teardown in afterEach) {
+                try {
+                    teardown.isAccessible = true
+                    teardown.invoke(instance)
+                } catch (_: Exception) {
+                }
+            }
+        }
     }
 
     /**
@@ -563,4 +568,10 @@ class ReflectionTestRunner(
         val testsFailed: Int,
         val failures: List<String>,
     )
+
+    sealed class TestInvocationResult {
+        data object Success : TestInvocationResult()
+
+        data class Failure(val message: String) : TestInvocationResult()
+    }
 }

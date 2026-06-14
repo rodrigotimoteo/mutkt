@@ -14,7 +14,7 @@ class CoverageAnalyzerTest {
     fun `loadExecutionData on non-existent file returns empty data`() {
         val analyzer = CoverageAnalyzer()
         val result = analyzer.loadExecutionData(File("/non/existent/file.exec"))
-        assertTrue(result.empty)
+        assertTrue(result is CoverageAnalyzer.CoverageData.Empty)
     }
 
     @Test
@@ -25,7 +25,7 @@ class CoverageAnalyzerTest {
         file.writeBytes(ByteArray(10) { it.toByte() })
         val result = analyzer.loadExecutionData(file)
         // File has content but invalid JaCoCo format — parsing fails gracefully
-        assertTrue(result.empty)
+        assertTrue(result is CoverageAnalyzer.CoverageData.Empty)
     }
 
     @Test
@@ -36,54 +36,70 @@ class CoverageAnalyzerTest {
         val file = tempDir.resolve("empty.exec").toFile()
         file.writeBytes(ByteArray(0))
         val result = analyzer.loadExecutionData(file)
-        assertTrue(result.empty)
+        assertTrue(result is CoverageAnalyzer.CoverageData.Empty)
     }
 
     @Test
-    fun `analyzeCoverage on empty mutations list returns empty list`() {
+    fun `analyzeCoverage on empty mutations list returns empty list`(
+        @TempDir tempDir: Path,
+    ) {
         val analyzer = CoverageAnalyzer()
+        val file = tempDir.resolve("empty.exec").toFile()
+        val valid = CoverageAnalyzer.CoverageData.Valid(file, org.jacoco.core.data.ExecutionDataStore())
         val result =
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                coverageData = CoverageAnalyzer.CoverageData(empty = true),
+                coverageData = valid,
                 mutations = emptyList(),
             )
         assertEquals(0, result.size)
     }
 
     @Test
-    fun `analyzeCoverage on single mutation returns one coverage with all test`() {
+    fun `analyzeCoverage on single mutation returns one coverage with covered test`(
+        @TempDir tempDir: Path,
+    ) {
         val analyzer = CoverageAnalyzer()
+        val file = tempDir.resolve("empty.exec").toFile()
+        val valid = CoverageAnalyzer.CoverageData.Valid(file, org.jacoco.core.data.ExecutionDataStore())
         val mutation = createMutation("m1", "com.Foo", 10)
         val result =
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                coverageData = CoverageAnalyzer.CoverageData(empty = true),
+                coverageData = valid,
                 mutations = listOf(mutation),
             )
         assertEquals(1, result.size)
-        assertEquals("all", result.first().coveringTests.first())
+        assertEquals("covered", result.first().coveringTests.first())
     }
 
     @Test
-    fun `analyzeCoverage preserves mutation in result`() {
+    fun `analyzeCoverage preserves mutation in result`(
+        @TempDir tempDir: Path,
+    ) {
         val analyzer = CoverageAnalyzer()
+        val file = tempDir.resolve("empty.exec").toFile()
+        val valid = CoverageAnalyzer.CoverageData.Valid(file, org.jacoco.core.data.ExecutionDataStore())
         val mutation = createMutation("m1", "com.Foo", 10)
         val result =
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                coverageData = CoverageAnalyzer.CoverageData(empty = true),
+                coverageData = valid,
                 mutations = listOf(mutation),
             )
         assertEquals(mutation, result.first().mutation)
     }
 
     @Test
-    fun `analyzeCoverage on multiple mutations returns same count`() {
+    fun `analyzeCoverage on multiple mutations returns same count`(
+        @TempDir tempDir: Path,
+    ) {
         val analyzer = CoverageAnalyzer()
+        val file = tempDir.resolve("empty.exec").toFile()
+        val valid = CoverageAnalyzer.CoverageData.Valid(file, org.jacoco.core.data.ExecutionDataStore())
         val mutations =
             listOf(
                 createMutation("m1", "com.Foo", 10),
@@ -94,15 +110,19 @@ class CoverageAnalyzerTest {
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                coverageData = CoverageAnalyzer.CoverageData(empty = true),
+                coverageData = valid,
                 mutations = mutations,
             )
         assertEquals(3, result.size)
     }
 
     @Test
-    fun `analyzeCoverage returns all as covering test for each mutation`() {
+    fun `analyzeCoverage returns covered as covering test for each mutation`(
+        @TempDir tempDir: Path,
+    ) {
         val analyzer = CoverageAnalyzer()
+        val file = tempDir.resolve("empty.exec").toFile()
+        val valid = CoverageAnalyzer.CoverageData.Valid(file, org.jacoco.core.data.ExecutionDataStore())
         val mutations =
             listOf(
                 createMutation("m1", "com.Foo", 10),
@@ -112,11 +132,11 @@ class CoverageAnalyzerTest {
             analyzer.analyzeCoverage(
                 classBytes = ByteArray(0),
                 className = "com.Foo",
-                coverageData = CoverageAnalyzer.CoverageData(empty = true),
+                coverageData = valid,
                 mutations = mutations,
             )
         result.forEach { coverage ->
-            assertEquals(listOf("all"), coverage.coveringTests)
+            assertEquals(listOf("covered"), coverage.coveringTests)
         }
     }
 

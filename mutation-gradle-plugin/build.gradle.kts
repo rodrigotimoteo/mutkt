@@ -14,17 +14,15 @@ gradlePlugin {
             tags.set(listOf("mutation-testing", "kotlin", "testing", "code-quality"))
             website.set("https://github.com/rodrigotimoteo/mutkt")
             vcsUrl.set("https://github.com/rodrigotimoteo/mutkt")
-            plugins {
-                create("mutation-kotlin-sample") {
-                    id = "io.github.rodrigotimoteo.mutation-kotlin-sample"
-                    implementationClass = "com.github.rodrigotimoteo.mutation.gradle.MutationPlugin"
-                    displayName = "MutKt Sample (internal)"
-                    description = "Sample project for MutKt plugin testing."
-                    tags.set(listOf("mutation-testing", "kotlin", "sample"))
-                    website.set("https://github.com/rodrigotimoteo/mutkt")
-                    vcsUrl.set("https://github.com/rodrigotimoteo/mutkt")
-                }
-            }
+        }
+        create("mutation-kotlin-sample") {
+            id = "io.github.rodrigotimoteo.mutation-kotlin-sample"
+            implementationClass = "com.github.rodrigotimoteo.mutation.gradle.MutationPlugin"
+            displayName = "MutKt Sample (internal)"
+            description = "Sample project for MutKt plugin testing."
+            tags.set(listOf("mutation-testing", "kotlin", "sample"))
+            website.set("https://github.com/rodrigotimoteo/mutkt")
+            vcsUrl.set("https://github.com/rodrigotimoteo/mutkt")
         }
     }
 }

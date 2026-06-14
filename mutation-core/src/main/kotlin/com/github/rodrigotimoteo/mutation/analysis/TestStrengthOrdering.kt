@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutation.analysis
 
+import com.github.rodrigotimoteo.mutation.MUTKT_DIR
 import java.io.File
 
 /**
@@ -18,7 +19,7 @@ import java.io.File
  * ```
  */
 class TestStrengthOrdering(private val projectDir: File) {
-    private val historyFile = File(projectDir, ".mutkt/test-strength.json")
+    private val historyFile = File(projectDir, "$MUTKT_DIR/test-strength.json")
     private val inMemoryCache = mutableMapOf<String, TestStrengthEntry>()
     private var cacheLoaded = false
 

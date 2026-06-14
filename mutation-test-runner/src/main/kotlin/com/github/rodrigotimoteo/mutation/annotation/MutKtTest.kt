@@ -1,5 +1,7 @@
 package com.github.rodrigotimoteo.mutation.annotation
 
+import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
+
 /**
  * Annotation to mark a test class for mutation testing.
  *
@@ -28,7 +30,7 @@ annotation class MutKtTest(
     /**
      * Timeout in milliseconds for each mutation execution.
      */
-    val timeoutMs: Long = 30_000L,
+    val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
     /**
      * Whether to skip mutation testing when running in IDE.
      */

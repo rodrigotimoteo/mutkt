@@ -35,28 +35,27 @@ class CoverageAnalyzer {
     fun loadExecutionData(execFile: File): CoverageData {
         if (!execFile.exists()) {
             logger.warn("Execution data file not found: ${execFile.absolutePath}")
-            return CoverageData(empty = true)
+            return CoverageData.Empty
         }
 
         return try {
             val size = execFile.length()
             if (size == 0L) {
                 logger.warn("Execution data file is empty: ${execFile.absolutePath}")
-                return CoverageData(empty = true)
+                return CoverageData.Empty
             }
 
             val loader = ExecFileLoader()
             loader.load(execFile)
 
             logger.info("Loaded coverage data from ${execFile.absolutePath} ($size bytes)")
-            CoverageData(
-                empty = false,
+            CoverageData.Valid(
                 execFile = execFile,
                 executionDataStore = loader.executionDataStore,
             )
         } catch (e: Exception) {
             logger.warn("Failed to load execution data from ${execFile.absolutePath}: ${e.message}")
-            CoverageData(empty = true)
+            CoverageData.Empty
         }
     }
 
@@ -72,13 +71,19 @@ class CoverageAnalyzer {
         classFiles: Map<String, ByteArray>,
     ): Map<String, Set<Int>> {
         val coverageData = loadExecutionData(execFile)
-        if (coverageData.empty || coverageData.executionDataStore == null) {
-            return emptyMap()
+        when (coverageData) {
+            is CoverageData.Empty -> return emptyMap()
+            is CoverageData.Valid -> return analyzeCoveredLines(coverageData, classFiles)
         }
+    }
 
+    private fun analyzeCoveredLines(
+        valid: CoverageData.Valid,
+        classFiles: Map<String, ByteArray>,
+    ): Map<String, Set<Int>> {
         return try {
             val coverageBuilder = CoverageBuilder()
-            val analyzer = Analyzer(coverageData.executionDataStore, coverageBuilder)
+            val analyzer = Analyzer(valid.executionDataStore, coverageBuilder)
 
             for ((className, classBytes) in classFiles) {
                 try {
@@ -123,13 +128,20 @@ class CoverageAnalyzer {
         classBytes: ByteArray,
     ): Set<Int> {
         val coverageData = loadExecutionData(execFile)
-        if (coverageData.empty || coverageData.executionDataStore == null) {
-            return emptySet()
+        when (coverageData) {
+            is CoverageData.Empty -> return emptySet()
+            is CoverageData.Valid -> return analyzeCoveredLinesForClass(coverageData, className, classBytes)
         }
+    }
 
+    private fun analyzeCoveredLinesForClass(
+        valid: CoverageData.Valid,
+        className: String,
+        classBytes: ByteArray,
+    ): Set<Int> {
         return try {
             val coverageBuilder = CoverageBuilder()
-            val analyzer = Analyzer(coverageData.executionDataStore, coverageBuilder)
+            val analyzer = Analyzer(valid.executionDataStore, coverageBuilder)
             analyzer.analyzeAll(classBytes.inputStream(), className)
 
             var coveredLines = emptySet<Int>()
@@ -158,24 +170,20 @@ class CoverageAnalyzer {
     }
 
     /**
-     * Analyzes coverage for mutations.
+     * Analyzes coverage for mutations against loaded coverage data.
      *
-     * If coverage data is available, filters mutations to only those
-     * that are covered by tests.
+     * Callers must handle [CoverageData.Empty] before invoking this method
+     * so the invalid state is unrepresentable at the call site.
      */
     fun analyzeCoverage(
         classBytes: ByteArray,
         className: String,
-        coverageData: CoverageData,
+        coverageData: CoverageData.Valid,
         mutations: List<MutationInfo>,
     ): List<MutationCoverage> {
-        if (coverageData.empty) {
-            return mutations.map { MutationCoverage(it, listOf("all")) }
-        }
-
         val coveredLines =
             getCoveredLinesForClass(
-                coverageData.execFile!!,
+                coverageData.execFile,
                 className,
                 classBytes,
             )
@@ -208,11 +216,18 @@ class CoverageAnalyzer {
     }
 
     /**
-     * Wrapper for coverage data.
+     * Coverage data loaded from a JaCoCo .exec file.
+     *
+     * The invalid state (missing file, empty file, parse failure) is
+     * represented as [CoverageData.Empty] rather than nullable fields,
+     * so callers can exhaustively pattern-match on the type.
      */
-    data class CoverageData(
-        val empty: Boolean,
-        val execFile: File? = null,
-        val executionDataStore: ExecutionDataStore? = null,
-    )
+    sealed interface CoverageData {
+        data object Empty : CoverageData
+
+        data class Valid(
+            val execFile: File,
+            val executionDataStore: ExecutionDataStore,
+        ) : CoverageData
+    }
 }
