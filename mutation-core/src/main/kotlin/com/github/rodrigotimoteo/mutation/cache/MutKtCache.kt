@@ -18,10 +18,10 @@ import java.security.MessageDigest
  * ```kotlin
  * val cache = MutKtCache(projectDir)
  * val hash = cache.computeClassHash(classBytes)
- * val status = cache.lookup(hash, "RETURN_VALS", 42)
+ * val status = cache.lookup(hash, "RETURN_VALS", "myMethod", 42, 0)
  * if (status != null) return status // skip re-testing
  * // ... run test ...
- * cache.store(hash, "RETURN_VALS", 42, MutationStatus.KILLED)
+ * cache.store(hash, "RETURN_VALS", "myMethod", 42, 0, MutationStatus.KILLED)
  * ```
  */
 class MutKtCache(private val projectDir: File) {
@@ -48,18 +48,22 @@ class MutKtCache(private val projectDir: File) {
      *
      * @param classHash SHA-256 hash of original class
      * @param operator Mutation operator name
+     * @param methodName Method name containing the mutation
      * @param lineNumber Source line number
+     * @param occurrenceIndex Index of the mutation occurrence within the line
      * @return Cached status or null if not found
      */
     fun lookup(
         classHash: String,
         operator: String,
+        methodName: String,
         lineNumber: Int,
+        occurrenceIndex: Int = 0,
     ): MutationStatus? {
         val cacheFile = getCacheFile(classHash)
         if (!cacheFile.exists()) return null
 
-        val key = "$operator:$lineNumber"
+        val key = "$operator:$methodName:$lineNumber:$occurrenceIndex"
         return cacheFile.readLines()
             .firstOrNull { it.startsWith("$key=") }
             ?.substringAfter("=")
@@ -71,17 +75,21 @@ class MutKtCache(private val projectDir: File) {
      *
      * @param classHash SHA-256 hash of original class
      * @param operator Mutation operator name
+     * @param methodName Method name containing the mutation
      * @param lineNumber Source line number
+     * @param occurrenceIndex Index of the mutation occurrence within the line
      * @param status Test result status
      */
     fun store(
         classHash: String,
         operator: String,
+        methodName: String,
         lineNumber: Int,
+        occurrenceIndex: Int,
         status: MutationStatus,
     ) {
         val cacheFile = getCacheFile(classHash)
-        val key = "$operator:$lineNumber"
+        val key = "$operator:$methodName:$lineNumber:$occurrenceIndex"
         val entry = "$key=$status"
 
         val lines =

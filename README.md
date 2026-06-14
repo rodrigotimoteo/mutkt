@@ -172,7 +172,7 @@ class Service {
 | `enableCache` | `Property<Boolean>` | `false` | Cache results for faster re-runs |
 | `enableIncrementalAnalysis` | `Property<Boolean>` | `false` | Only test changed classes |
 | `failOnScoreThreshold` | `Property<Int>` | `0` | Fail build if score below threshold |
-| `failOnCoverageThreshold` | `Property<Int>` | `0` | Fail build if coverage below threshold |
+| `failOnMutationScoreThreshold` | `Property<Int>` | `0` | Fail build if mutation score below threshold (formerly `failOnCoverageThreshold`) |
 | `targetClassPatterns` | `SetProperty<String>` | empty | Regex patterns to include classes |
 | `excludeClassPatterns` | `SetProperty<String>` | empty | Regex patterns to exclude classes |
 | `targetPackages` | `SetProperty<String>` | empty | Packages to include (e.g., `com.example.service`) |

@@ -280,10 +280,9 @@ class MutatorEdgeCasesTest {
     // ======================================================================
 
     @Test
-    fun `ALL_OPERATORS contains 16 active operators (INVERT_NEGS excluded)`() {
+    fun `ALL_OPERATORS contains 16 active operators`() {
         val all = MutationOperator.ALL_OPERATORS
         assertEquals(16, all.size, "Expected 16 active operators")
-        assertFalse(MutationOperator.INVERT_NEGS in all, "Deprecated INVERT_NEGS excluded")
     }
 
     // ======================================================================

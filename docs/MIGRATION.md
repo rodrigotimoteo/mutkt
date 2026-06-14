@@ -29,8 +29,8 @@ mutationTest {
     // New: Fail build if mutation score below threshold (0-100)
     failOnScoreThreshold.set(80)
 
-    // New: Fail build if line coverage below threshold (0-100)
-    failOnCoverageThreshold.set(90)
+    // New: Fail build if mutation score below threshold (0-100)
+    failOnMutationScoreThreshold.set(90)
 
     // New: Limit mutations per class (0 = no limit)
     maxMutationsPerClass.set(100)

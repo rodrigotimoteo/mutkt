@@ -21,10 +21,10 @@ class EndToEndSmokeTest {
         try {
             val cache = MutKtCache(cacheDir)
             val hash = "test-hash-123"
-            cache.store(hash, "ARITHMETIC", 42, MutationStatus.KILLED)
+            cache.store(hash, "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
 
-            assertEquals(MutationStatus.KILLED, cache.lookup(hash, "ARITHMETIC", 42))
-            assertEquals(null, cache.lookup(hash, "ARITHMETIC", 99))
+            assertEquals(MutationStatus.KILLED, cache.lookup(hash, "ARITHMETIC", "foo", 42))
+            assertEquals(null, cache.lookup(hash, "ARITHMETIC", "foo", 99))
             val (entries, _) = cache.stats()
             assertTrue(entries >= 1)
         } finally {

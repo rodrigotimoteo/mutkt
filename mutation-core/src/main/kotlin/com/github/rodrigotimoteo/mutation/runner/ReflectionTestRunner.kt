@@ -85,17 +85,33 @@ class ReflectionTestRunner(
         var testsFound = 0
         var testsSucceeded = 0
         var testsFailed = 0
+        var testsSkipped = 0
         val failures = mutableListOf<String>()
 
         // Skip disabled classes
         if (testClass.isAnnotationPresent(Disabled::class.java)) {
-            return TestClassResult(0, 0, 0, failures)
+            return TestClassResult(0, 0, 0, 0, failures)
+        }
+
+        // Count @Disabled test methods (excluded by filter below) as skipped
+        val allDeclaredMethods = testClass.allDeclaredMethods()
+        val candidateMethods =
+            allDeclaredMethods.filter { method ->
+                method.isAnnotationPresent(Test::class.java) ||
+                    method.isAnnotationPresent(org.junit.Test::class.java) ||
+                    method.isAnnotationPresent(ParameterizedTest::class.java) ||
+                    method.isAnnotationPresent(RepeatedTest::class.java)
+            }
+        candidateMethods.forEach { method ->
+            if (method.isAnnotationPresent(Disabled::class.java)) {
+                testsSkipped += method.getAnnotation(RepeatedTest::class.java)?.value ?: 1
+            }
         }
 
         // Discover test methods (@Test, @ParameterizedTest, @RepeatedTest) — walk superclass hierarchy
         // Support both JUnit 5 (org.junit.jupiter.api.Test) and JUnit 4 (org.junit.Test)
         val testMethods =
-            testClass.allDeclaredMethods().filter { method ->
+            allDeclaredMethods.filter { method ->
                 !method.isAnnotationPresent(Disabled::class.java) &&
                     (
                         method.isAnnotationPresent(Test::class.java) ||
@@ -150,7 +166,7 @@ class ReflectionTestRunner(
         }
 
         if (beforeAllFailed) {
-            return TestClassResult(0, 0, 1, failures)
+            return TestClassResult(0, 0, 1, 0, failures)
         }
 
         // Run each test method
@@ -229,7 +245,7 @@ class ReflectionTestRunner(
             }
         }
 
-        return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)
+        return TestClassResult(testsFound, testsSucceeded, testsFailed, testsSkipped, failures)
     }
 
     /**
@@ -245,6 +261,7 @@ class ReflectionTestRunner(
         var testsFound = 0
         var testsSucceeded = 0
         var testsFailed = 0
+        var testsSkipped = 0
         val failures = mutableListOf<String>()
 
         val methodSource = method.getAnnotation(MethodSource::class.java)
@@ -354,7 +371,7 @@ class ReflectionTestRunner(
             failures.add("${testClass.name}.${method.name}: Could not resolve @ParameterizedTest parameters")
         }
 
-        return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)
+        return TestClassResult(testsFound, testsSucceeded, testsFailed, testsSkipped, failures)
     }
 
     /**
@@ -370,14 +387,28 @@ class ReflectionTestRunner(
         var testsFound = 0
         var testsSucceeded = 0
         var testsFailed = 0
+        var testsSkipped = 0
         val failures = mutableListOf<String>()
 
         if (testClass.isAnnotationPresent(Disabled::class.java)) {
-            return TestClassResult(0, 0, 0, failures)
+            return TestClassResult(0, 0, 0, 0, failures)
+        }
+
+        val allDeclaredMethods = testClass.allDeclaredMethods()
+        val candidateMethods =
+            allDeclaredMethods.filter { method ->
+                method.isAnnotationPresent(org.junit.jupiter.api.Test::class.java) ||
+                    method.isAnnotationPresent(RepeatedTest::class.java) ||
+                    method.isAnnotationPresent(ParameterizedTest::class.java)
+            }
+        candidateMethods.forEach { method ->
+            if (method.isAnnotationPresent(Disabled::class.java)) {
+                testsSkipped += method.getAnnotation(RepeatedTest::class.java)?.value ?: 1
+            }
         }
 
         val testMethods =
-            testClass.allDeclaredMethods().filter { method ->
+            allDeclaredMethods.filter { method ->
                 !method.isAnnotationPresent(Disabled::class.java) &&
                     (
                         method.isAnnotationPresent(org.junit.jupiter.api.Test::class.java) ||
@@ -442,11 +473,12 @@ class ReflectionTestRunner(
                 testsFound += nestedResults.testsFound
                 testsSucceeded += nestedResults.testsSucceeded
                 testsFailed += nestedResults.testsFailed
+                testsSkipped += nestedResults.testsSkipped
                 failures.addAll(nestedResults.failures)
             }
         }
 
-        return TestClassResult(testsFound, testsSucceeded, testsFailed, failures)
+        return TestClassResult(testsFound, testsSucceeded, testsFailed, testsSkipped, failures)
     }
 
     /**
@@ -566,6 +598,7 @@ class ReflectionTestRunner(
         val testsFound: Int,
         val testsSucceeded: Int,
         val testsFailed: Int,
+        val testsSkipped: Int,
         val failures: List<String>,
     )
 

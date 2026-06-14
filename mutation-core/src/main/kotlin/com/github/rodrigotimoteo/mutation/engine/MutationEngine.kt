@@ -254,7 +254,7 @@ class MutationEngine(
 
         // Update test strength ordering
         if (enableTestOrdering && testStrengthOrdering != null) {
-            updateTestStrength(results, testClassNames, killSets)
+            updateTestStrength(results, filteredTestNames, killSets)
             testStrengthOrdering.flushHistory()
         }
 
@@ -369,8 +369,15 @@ class MutationEngine(
             val classBytes = getOriginalClassBytes(mutation.className)
             if (classBytes != null) {
                 val classHash = cache.computeClassHash(classBytes)
-                val cacheKey = "${mutation.operator.operatorName}:${mutation.methodName}"
-                val cachedStatus = cache.lookup(classHash, cacheKey, mutation.lineNumber)
+                val occurrenceIndex = mutation.metadata["occurrenceIndex"]?.toIntOrNull() ?: 0
+                val cachedStatus =
+                    cache.lookup(
+                        classHash,
+                        mutation.operator.operatorName,
+                        mutation.methodName,
+                        mutation.lineNumber,
+                        occurrenceIndex,
+                    )
                 if (cachedStatus != null) {
                     cached.add(
                         MutationResult(
@@ -398,11 +405,13 @@ class MutationEngine(
             val classBytes = getOriginalClassBytes(result.mutation.className)
             if (classBytes != null) {
                 val classHash = cache.computeClassHash(classBytes)
-                val cacheKey = "${result.mutation.operator.operatorName}:${result.mutation.methodName}"
+                val occurrenceIndex = result.mutation.id.substringAfterLast("::").toIntOrNull() ?: 0
                 cache.store(
                     classHash,
-                    cacheKey,
+                    result.mutation.operator.operatorName,
+                    result.mutation.methodName,
                     result.mutation.lineNumber,
+                    occurrenceIndex,
                     result.status,
                 )
             }
@@ -682,8 +691,11 @@ class MutationEngine(
     ): Mutation {
         val (sourceFile, sourceCode) = findSourceCode(info.className, info.lineNumber)
         val originalBytes = getOriginalClassBytes(info.className) ?: ByteArray(0)
+        val occurrenceIndex = info.metadata["occurrenceIndex"] ?: "0"
+        val id =
+            "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}::$occurrenceIndex"
         return Mutation(
-            id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}",
+            id = id,
             className = info.className,
             methodName = info.methodName,
             methodDescriptor = info.methodDescriptor,

@@ -97,19 +97,6 @@ class MutatorScanTest {
     }
 
     @Test
-    fun `INVERT_NEGS generates no mutations (intentional no-op)`() {
-        val bytes =
-            buildClassWithMethod { mv: MethodVisitor ->
-                mv.visitInsn(Opcodes.ICONST_1)
-                val l = Label()
-                mv.visitJumpInsn(Opcodes.IFNE, l)
-                mv.visitLabel(l)
-            }
-        val mutations = Mutator(setOf(MutationOperator.INVERT_NEGS)).scanMutations(bytes)
-        assertEquals(0, mutations.size)
-    }
-
-    @Test
     fun `class with no methods generates no mutations`() {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
         cw.visit(Opcodes.ASM9, Opcodes.ACC_PUBLIC, "Empty", null, "java/lang/Object", null)

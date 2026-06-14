@@ -216,7 +216,7 @@ class MutationTaskInternalMethodsTest {
         project.plugins.apply("java")
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
         val operators = invokeParseOperators(task, emptySet())
-        // MVP_OPERATORS is 6 (INVERT_NEGS removed — generates no mutations)
+        // MVP_OPERATORS is 6 active operators
         assertEquals(6, operators.size)
         assertTrue(operators.contains(MutationOperator.CONDITIONALS_BOUNDARY))
     }
@@ -252,13 +252,13 @@ class MutationTaskInternalMethodsTest {
     }
 
     @Test
-    fun `parseOperators with all valid 17 operators returns all 17`() {
+    fun `parseOperators with all valid operators returns all`() {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("java")
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
         val allNames = MutationOperator.values().map { it.name }.toSet()
         val operators = invokeParseOperators(task, allNames)
-        assertEquals(17, operators.size)
+        assertEquals(MutationOperator.values().size, operators.size)
     }
 
     @Test

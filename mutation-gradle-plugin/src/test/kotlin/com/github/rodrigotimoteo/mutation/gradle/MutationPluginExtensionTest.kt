@@ -107,8 +107,8 @@ class MutationPluginExtensionTest {
     }
 
     @Test
-    fun `failOnCoverageThreshold defaults to 0`() {
-        assertThat(extension.failOnCoverageThreshold.get()).isEqualTo(0)
+    fun `failOnMutationScoreThreshold defaults to 0`() {
+        assertThat(extension.failOnMutationScoreThreshold.get()).isEqualTo(0)
     }
 
     @Test
@@ -140,8 +140,8 @@ class MutationPluginExtensionTest {
 
     @Test
     fun `custom operators can be set`() {
-        extension.enabledOperators.set(setOf("ARITHMETIC", "INVERT_NEGS"))
-        assertThat(extension.enabledOperators.get()).contains("ARITHMETIC", "INVERT_NEGS")
+        extension.enabledOperators.set(setOf("ARITHMETIC", "RETURN_VALS"))
+        assertThat(extension.enabledOperators.get()).contains("ARITHMETIC", "RETURN_VALS")
     }
 
     @Test

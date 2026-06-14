@@ -45,57 +45,75 @@ class MutKtCacheTest {
 
     @Test
     fun `lookup returns null when no cache exists`() {
-        val result = cache.lookup("nonexistent", "ARITHMETIC", 42)
+        val result = cache.lookup("nonexistent", "ARITHMETIC", "foo", 42)
         assertNull(result, "lookup with no cache file should return null")
     }
 
     @Test
     fun `store and lookup work correctly`() {
         val classHash = "abc123"
-        cache.store(classHash, "ARITHMETIC", 42, MutationStatus.KILLED)
+        cache.store(classHash, "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
 
-        val result = cache.lookup(classHash, "ARITHMETIC", 42)
+        val result = cache.lookup(classHash, "ARITHMETIC", "foo", 42)
         assertEquals(MutationStatus.KILLED, result)
     }
 
     @Test
     fun `lookup returns null for different operator`() {
         val classHash = "abc123"
-        cache.store(classHash, "ARITHMETIC", 42, MutationStatus.KILLED)
+        cache.store(classHash, "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
 
-        val result = cache.lookup(classHash, "RETURN_VALS", 42)
+        val result = cache.lookup(classHash, "RETURN_VALS", "foo", 42)
         assertNull(result, "different operator should not match, got: $result")
     }
 
     @Test
     fun `lookup returns null for different line number`() {
         val classHash = "abc123"
-        cache.store(classHash, "ARITHMETIC", 42, MutationStatus.KILLED)
+        cache.store(classHash, "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
 
-        val result = cache.lookup(classHash, "ARITHMETIC", 43)
+        val result = cache.lookup(classHash, "ARITHMETIC", "foo", 43)
         assertNull(result, "different line number should not match, got: $result")
+    }
+
+    @Test
+    fun `lookup returns null for different method name`() {
+        val classHash = "abc123"
+        cache.store(classHash, "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
+
+        val result = cache.lookup(classHash, "ARITHMETIC", "bar", 42)
+        assertNull(result, "different method name should not match, got: $result")
+    }
+
+    @Test
+    fun `lookup returns null for different occurrence index`() {
+        val classHash = "abc123"
+        cache.store(classHash, "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
+
+        val result = cache.lookup(classHash, "ARITHMETIC", "foo", 42, 1)
+        assertNull(result, "different occurrence index should not match, got: $result")
     }
 
     @Test
     fun `store overwrites existing entry`() {
         val classHash = "abc123"
-        cache.store(classHash, "ARITHMETIC", 42, MutationStatus.KILLED)
-        cache.store(classHash, "ARITHMETIC", 42, MutationStatus.SURVIVED)
+        cache.store(classHash, "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
+        cache.store(classHash, "ARITHMETIC", "foo", 42, 0, MutationStatus.SURVIVED)
 
-        val result = cache.lookup(classHash, "ARITHMETIC", 42)
+        val result = cache.lookup(classHash, "ARITHMETIC", "foo", 42)
         assertEquals(MutationStatus.SURVIVED, result)
     }
 
     @Test
     fun `multiple entries per class hash`() {
         val classHash = "abc123"
-        cache.store(classHash, "ARITHMETIC", 42, MutationStatus.KILLED)
-        cache.store(classHash, "RETURN_VALS", 43, MutationStatus.SURVIVED)
-        cache.store(classHash, "NULL_RETURNS", 44, MutationStatus.NO_COVERAGE)
+        cache.store(classHash, "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
+        cache.store(classHash, "RETURN_VALS", "foo", 43, 0, MutationStatus.SURVIVED)
+        cache.store(classHash, "NULL_RETURNS", "bar", 44, 0, MutationStatus.NO_COVERAGE)
 
-        assertEquals(MutationStatus.KILLED, cache.lookup(classHash, "ARITHMETIC", 42))
-        assertEquals(MutationStatus.SURVIVED, cache.lookup(classHash, "RETURN_VALS", 43))
-        assertEquals(MutationStatus.NO_COVERAGE, cache.lookup(classHash, "NULL_RETURNS", 44))
+        assertEquals(MutationStatus.KILLED, cache.lookup(classHash, "ARITHMETIC", "foo", 42))
+        assertEquals(MutationStatus.SURVIVED, cache.lookup(classHash, "RETURN_VALS", "foo", 43))
+        assertEquals(MutationStatus.NO_COVERAGE, cache.lookup(classHash, "NULL_RETURNS", "bar", 44))
     }
 
     @Test
@@ -103,9 +121,9 @@ class MutKtCacheTest {
         val (entries, _) = cache.stats()
         assertEquals(0, entries)
 
-        cache.store("hash1", "ARITHMETIC", 42, MutationStatus.KILLED)
-        cache.store("hash1", "RETURN_VALS", 43, MutationStatus.SURVIVED)
-        cache.store("hash2", "NULL_RETURNS", 44, MutationStatus.NO_COVERAGE)
+        cache.store("hash1", "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
+        cache.store("hash1", "RETURN_VALS", "foo", 43, 0, MutationStatus.SURVIVED)
+        cache.store("hash2", "NULL_RETURNS", "bar", 44, 0, MutationStatus.NO_COVERAGE)
 
         val (entriesAfter, _) = cache.stats()
         assertEquals(3, entriesAfter)
@@ -113,20 +131,20 @@ class MutKtCacheTest {
 
     @Test
     fun `clear removes all cached data`() {
-        cache.store("hash1", "ARITHMETIC", 42, MutationStatus.KILLED)
-        cache.store("hash2", "RETURN_VALS", 43, MutationStatus.SURVIVED)
+        cache.store("hash1", "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
+        cache.store("hash2", "RETURN_VALS", "bar", 43, 0, MutationStatus.SURVIVED)
 
         cache.clear()
 
         val (entries, _) = cache.stats()
         assertEquals(0, entries)
-        assertNull(cache.lookup("hash1", "ARITHMETIC", 42))
-        assertNull(cache.lookup("hash2", "RETURN_VALS", 43))
+        assertNull(cache.lookup("hash1", "ARITHMETIC", "foo", 42))
+        assertNull(cache.lookup("hash2", "RETURN_VALS", "bar", 43))
     }
 
     @Test
     fun `cache creates directory structure`() {
-        cache.store("abc123def456ghi789", "ARITHMETIC", 42, MutationStatus.KILLED)
+        cache.store("abc123def456ghi789", "ARITHMETIC", "foo", 42, 0, MutationStatus.KILLED)
 
         val cacheDir = File(tempDir, ".mutkt/cache")
         assertTrue(cacheDir.exists(), "cache directory should be created at ${cacheDir.absolutePath}")

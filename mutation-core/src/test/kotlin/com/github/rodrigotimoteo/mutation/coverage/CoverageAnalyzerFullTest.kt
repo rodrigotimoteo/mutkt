@@ -172,7 +172,7 @@ class CoverageAnalyzerFullTest {
     }
 
     @Test
-    fun `analyzeCoverage with empty coverage data returns covered for each mutation`(
+    fun `analyzeCoverage with empty coverage data returns empty covering tests for each mutation`(
         @TempDir tempDir: Path,
     ) {
         val analyzer = CoverageAnalyzer()
@@ -187,11 +187,11 @@ class CoverageAnalyzerFullTest {
                 mutations = listOf(mutation),
             )
         assertEquals(1, result.size)
-        assertEquals(listOf("covered"), result.first().coveringTests)
+        assertTrue(result.first().coveringTests.isEmpty())
     }
 
     @Test
-    fun `analyzeCoverage with valid empty exec file returns covered for each mutation`(
+    fun `analyzeCoverage with valid empty exec file returns empty covering tests for each mutation`(
         @TempDir tempDir: Path,
     ) {
         val analyzer = CoverageAnalyzer()
@@ -208,7 +208,7 @@ class CoverageAnalyzerFullTest {
                 mutations = listOf(mutation),
             )
         assertEquals(1, result.size)
-        assertEquals(listOf("covered"), result.first().coveringTests)
+        assertTrue(result.first().coveringTests.isEmpty())
     }
 
     @Test

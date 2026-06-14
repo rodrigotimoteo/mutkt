@@ -76,7 +76,7 @@ class MutationPlugin : Plugin<Project> {
                 task.coverageExecFile.set(extension.coverageExecFile)
                 task.reportsDir.set(extension.outputDir)
                 // Wire newly added extension properties
-                task.failOnCoverageThreshold.set(extension.failOnCoverageThreshold)
+                task.failOnMutationScoreThreshold.set(extension.failOnMutationScoreThreshold)
                 task.maxMutationsPerClass.set(extension.maxMutationsPerClass)
                 task.enableIncrementalAnalysis.set(extension.enableIncrementalAnalysis)
                 task.mutantTimeoutMs.set(extension.mutantTimeoutMs)

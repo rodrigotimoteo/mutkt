@@ -115,10 +115,10 @@ abstract class MutationTask : DefaultTask() {
     @Optional
     val failOnScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
 
-    /** Fail build if line coverage below this threshold (0-100). */
+    /** Fail build if mutation score below this threshold (0-100). */
     @Input
     @Optional
-    val failOnCoverageThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
+    val failOnMutationScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
 
     /** Maximum mutations per class. 0 = no limit. */
     @Input
@@ -317,8 +317,7 @@ abstract class MutationTask : DefaultTask() {
         // Merge excludedClasses (extension defaults, glob patterns) with excludeClassPatterns (user regex)
         val excludeGlobPatterns =
             excludedClasses.getOrElse(emptySet()).toList().map { glob ->
-                // Convert glob patterns to regex: **/*.Test → .*.Test, *Test → .*Test
-                glob.replace("**/", ".*").replace("*", ".*").replace("?", ".")
+                globToRegex(glob)
             }
         val allExcludePatterns = (excludeRegexPatterns + excludeGlobPatterns).toList()
 
@@ -359,7 +358,7 @@ abstract class MutationTask : DefaultTask() {
                 enableCache = enableCache.get(),
                 enableSubsumption = enableSubsumption.get(),
                 enableWeakMutation = enableWeakMutation.get(),
-                projectDir = project.projectDir,
+                projectDir = mutktDir.asFile.get(),
                 excludedMethods = excludedMethods.getOrElse(emptySet()),
                 maxMutationsPerClass = maxMutationsPerClass.get(),
                 targetTestPatterns = targetTestPatterns.getOrElse(emptySet()).toList(),
@@ -387,6 +386,9 @@ abstract class MutationTask : DefaultTask() {
 
         // Auto-add graph to report formats if generateGraph is set
         if (generateGraph.get()) {
+            val currentFormats = reportFormats.getOrElse(emptySet()).toMutableSet()
+            currentFormats.add("graph")
+            reportFormats.set(currentFormats)
             logger.lifecycle("$LOG_PREFIX Graph report enabled via generateGraph option")
         }
     }
@@ -411,12 +413,22 @@ abstract class MutationTask : DefaultTask() {
             )
         }
 
-        val coverageThreshold = failOnCoverageThreshold.get()
+        val coverageThreshold = failOnMutationScoreThreshold.get()
         if (coverageThreshold > 0 && report.killedPercentage < coverageThreshold) {
             throw org.gradle.api.GradleException(
-                "Coverage score ${report.killedPercentage}% is below threshold $coverageThreshold%. Build failed.",
+                "Mutation score ${report.killedPercentage}% is below threshold $coverageThreshold%. Build failed.",
             )
         }
+    }
+
+    private fun globToRegex(glob: String): String {
+        return glob
+            .replace("\\", "\\\\")
+            .replace(".", "\\.")
+            .replace("**", "\u0000")
+            .replace("*", "[^/]*")
+            .replace("\u0000", ".*")
+            .replace("?", ".")
     }
 
     private fun parseOperators(names: Set<String>): List<MutationOperator> {

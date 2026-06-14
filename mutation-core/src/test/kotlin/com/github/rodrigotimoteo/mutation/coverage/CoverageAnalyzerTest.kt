@@ -57,7 +57,7 @@ class CoverageAnalyzerTest {
     }
 
     @Test
-    fun `analyzeCoverage on single mutation returns one coverage with covered test`(
+    fun `analyzeCoverage on single mutation returns one coverage with empty covering tests when class uncovered`(
         @TempDir tempDir: Path,
     ) {
         val analyzer = CoverageAnalyzer()
@@ -72,7 +72,7 @@ class CoverageAnalyzerTest {
                 mutations = listOf(mutation),
             )
         assertEquals(1, result.size)
-        assertEquals("covered", result.first().coveringTests.first())
+        assertTrue(result.first().coveringTests.isEmpty())
     }
 
     @Test
@@ -117,7 +117,7 @@ class CoverageAnalyzerTest {
     }
 
     @Test
-    fun `analyzeCoverage returns covered as covering test for each mutation`(
+    fun `analyzeCoverage returns empty covering tests when class has no covered lines`(
         @TempDir tempDir: Path,
     ) {
         val analyzer = CoverageAnalyzer()
@@ -136,7 +136,7 @@ class CoverageAnalyzerTest {
                 mutations = mutations,
             )
         result.forEach { coverage ->
-            assertEquals(listOf("covered"), coverage.coveringTests)
+            assertTrue(coverage.coveringTests.isEmpty())
         }
     }
 

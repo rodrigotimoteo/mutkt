@@ -90,8 +90,10 @@ class MutationEngineInternalTest {
     @Test
     fun `toMutation creates correct id format`() {
         val info = makeMutationInfo()
-        val id = "${info.operator.operatorName}::${info.className}::${info.methodName}::${info.lineNumber}"
-        assertEquals("ARITHMETIC::com.example.Foo::bar::10", id)
+        val id =
+            "${info.operator.operatorName}::${info.className}" +
+                "::${info.methodName}::${info.lineNumber}::${info.metadata["occurrenceIndex"] ?: "0"}"
+        assertEquals("ARITHMETIC::com.example.Foo::bar::10::0", id)
     }
 
     @Test

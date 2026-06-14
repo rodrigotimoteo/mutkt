@@ -118,7 +118,7 @@ class Calculator {
 
     /**
      * Returns absolute value.
-     * Demonstrates: RETURN_VALS, INVERT_NEGS
+     * Demonstrates: RETURN_VALS, NEGATE_CONDITIONALS
      */
     fun absolute(n: Int): Int {
         return if (n < 0) -n else n

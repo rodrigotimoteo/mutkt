@@ -189,7 +189,7 @@ class CoverageAnalyzer {
             )
 
         if (coveredLines.isEmpty()) {
-            return mutations.map { MutationCoverage(it, listOf("covered")) }
+            return mutations.map { MutationCoverage(it, emptyList()) }
         }
 
         return mutations.map { mutation ->

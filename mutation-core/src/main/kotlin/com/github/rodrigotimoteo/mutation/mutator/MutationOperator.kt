@@ -46,12 +46,7 @@ enum class MutationOperator(val operatorName: String, val description: String) {
         "Replaces collection/array returns with empty instances",
     ),
 
-    // Boolean mutations
-    @Deprecated("No-op operator, use NEGATE_CONDITIONALS instead")
-    INVERT_NEGS(
-        "INVERT_NEGS",
-        "Inverts boolean negation: !x -> x, x -> !x",
-    ),
+    // Boolean mutations — covered by NEGATE_CONDITIONALS
 
     // Kotlin-specific mutations
     DATA_CLASS_COPY(

@@ -164,10 +164,12 @@ open class MutationPluginExtension(project: Project) {
     val failOnScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
 
     /**
-     * Line coverage threshold (0-100). Fail build if coverage below this.
+     * Mutation score threshold (0-100). Fail build if mutation score below this.
+     * Note: previously named `failOnCoverageThreshold` — the legacy name
+     * compared the mutation score (not line coverage) and was misleading.
      */
 
-    val failOnCoverageThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
+    val failOnMutationScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
 
     /**
      * Maximum mutations per class. 0 = no limit.

@@ -5,7 +5,6 @@ import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.Label
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class MutatorScannerOperatorTest {
@@ -668,21 +667,6 @@ class MutatorScannerOperatorTest {
             }
         val mutations = Mutator(setOf(MutationOperator.INCREMENTS)).scanMutations(bytes)
         assertTrue(mutations.any { it.operator == MutationOperator.INCREMENTS && it.originalOpcode == Opcodes.IINC })
-    }
-
-    // === INVERT_NEGS (1 test — intentionally no-op) ===
-
-    @Test
-    fun `INVERT_NEGS generates no mutations`() {
-        val bytes =
-            buildClassWithMethod { mv ->
-                mv.visitInsn(Opcodes.ICONST_1)
-                val l = Label()
-                mv.visitJumpInsn(Opcodes.IFNE, l)
-                mv.visitLabel(l)
-            }
-        val mutations = Mutator(setOf(MutationOperator.INVERT_NEGS)).scanMutations(bytes)
-        assertEquals(0, mutations.size)
     }
 
     // === Builder ===
