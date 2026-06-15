@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Android support** — Full Android support via Robolectric. Plugin auto-detects AGP, extracts AARs, injects android.jar, filters generated classes. See [docs/ANDROID.md](docs/ANDROID.md).
+- `mutation-sample-android` module — Working example with Robolectric tests for SharedPreferences + Resources.
+- 22 new test cases for Android variant resolution + generated class filter.
+
 ## [0.3.0] - 2026-06-14
 
 ### Critical Bug Fixes (4)

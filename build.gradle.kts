@@ -1,3 +1,15 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        google()
+        gradlePluginPortal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.7.3")
+    }
+}
+
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.kover)
@@ -9,7 +21,10 @@ plugins {
 
 allprojects {
     repositories {
+        mavenLocal()
+        google()
         mavenCentral()
+        gradlePluginPortal()
     }
 }
 
@@ -27,25 +42,17 @@ subprojects {
 allprojects {
     group = "io.github.rodrigotimoteo"
     version = "0.3.0"
-
-    repositories {
-        mavenCentral()
-        gradlePluginPortal()
-    }
 }
 
-// Dokka V2 multi-module aggregation: include each subproject's docs in the
-// root aggregated output. See https://kotlinlang.org/docs/dokka-migration.html
 dependencies {
     dokka(project(":mutation-core"))
     dokka(project(":mutation-report"))
     dokka(project(":mutation-test-runner"))
-    dokka(project(":mutation-gradle-plugin"))
     dokka(project(":mutation-sample"))
 }
 
 subprojects {
-    if (name == "mutation-sample" || name == "mutation-self-test") return@subprojects
+    if (name == "mutation-sample" || name == "mutation-sample-android" || name == "mutation-self-test") return@subprojects
 
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "maven-publish")
@@ -53,7 +60,6 @@ subprojects {
     apply(plugin = "org.jetbrains.kotlinx.kover")
 
     extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
-        // Exclude deprecated/dead code from coverage
         excludeSourceSets {
             names("generated")
         }
@@ -79,54 +85,14 @@ subprojects {
                     name.set("mutkt")
                     description.set("Kotlin Mutation Testing - PITest-style for Kotlin/JVM")
                     url.set("https://github.com/rodrigotimoteo/mutkt")
-
-                    licenses {
-                        license {
-                            name.set("The Apache License, Version 2.0")
-                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                        }
-                    }
-
-                    developers {
-                        developer {
-                            id.set("rodrigotimoteo")
-                            name.set("Rodrigo Timoteo")
-                            email.set("rodrigo.timoteo2603@gmail.com")
-                        }
-                    }
-
-                    scm {
-                        connection.set("scm:git:git://github.com/rodrigotimoteo/mutkt.git")
-                        developerConnection.set("scm:git:ssh://github.com/rodrigotimoteo/mutkt.git")
-                        url.set("https://github.com/rodrigotimoteo/mutkt")
-                    }
                 }
             }
 
-            // Configure all publications (including plugin marker) with required POM metadata
             withType<MavenPublication>().configureEach {
                 pom {
                     name.set(project.name)
                     description.set("Kotlin Mutation Testing - PITest-style for Kotlin/JVM")
                     url.set("https://github.com/rodrigotimoteo/mutkt")
-                    licenses {
-                        license {
-                            name.set("The Apache License, Version 2.0")
-                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                        }
-                    }
-                    developers {
-                        developer {
-                            id.set("rodrigotimoteo")
-                            name.set("Rodrigo Timoteo")
-                            email.set("rodrigo.timoteo2603@gmail.com")
-                        }
-                    }
-                    scm {
-                        connection.set("scm:git:git://github.com/rodrigotimoteo/mutkt.git")
-                        developerConnection.set("scm:git:ssh://github.com/rodrigotimoteo/mutkt.git")
-                        url.set("https://github.com/rodrigotimoteo/mutkt")
-                    }
                 }
             }
         }
@@ -137,11 +103,7 @@ subprojects {
                 url = uri("https://maven.pkg.github.com/rodrigotimoteo/mutkt")
                 credentials {
                     username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String? ?: "rodrigotimoteo"
-                    password =
-                        System.getenv("GH_PACKAGES_TOKEN")
-                            ?: System.getenv("GITHUB_TOKEN")
-                            ?: project.findProperty("gpr.key") as String?
-                            ?: ""
+                    password = System.getenv("GH_PACKAGES_TOKEN") ?: System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String? ?: ""
                 }
             }
             maven {
@@ -162,8 +124,6 @@ subprojects {
             useInMemoryPgpKeys(signingKey, signingPassword)
             val publishing = extensions.getByType<PublishingExtension>()
             sign(publishing.publications)
-
-            // Fix: ensure signing tasks run before publish tasks
             tasks.withType<AbstractPublishToMaven>().configureEach {
                 val signingTasks = tasks.withType<Sign>()
                 mustRunAfter(signingTasks)
@@ -192,13 +152,6 @@ subprojects {
     }
 }
 
-// OWASP dependency-check configuration.
-// Use the NVD data feed (no API key required). The public REST API
-// is heavily rate-limited and CI runs hit 429s without a key. The
-// data feed is a single bulk JSON download per year, cached locally
-// and reused for `validForHours`. Optionally set NVD_API_KEY (free
-// at https://nvd.nist.gov/developers/request-an-api-key) to switch
-// back to the REST API for freshest data.
 extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckExtension> {
     failOnError.set(false)
     autoUpdate.set(false)

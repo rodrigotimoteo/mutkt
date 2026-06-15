@@ -8,6 +8,12 @@
 
 MutKt is a mutation testing library for Kotlin and Java that runs your existing test suite against mutated versions of your code. It finds gaps in your tests by verifying they actually catch bugs — not just pass.
 
+## Android Support
+
+MutKt fully supports Android unit tests via Robolectric. See [docs/ANDROID.md](docs/ANDROID.md) for the quick start.
+
+**TL;DR**: Apply the plugin, add Robolectric to your test classpath, run `./gradlew mutationTest`.
+
 ## Quick Start
 
 ### Gradle Plugin (Recommended)
