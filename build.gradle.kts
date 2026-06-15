@@ -103,7 +103,11 @@ subprojects {
                 url = uri("https://maven.pkg.github.com/rodrigotimoteo/mutkt")
                 credentials {
                     username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String? ?: "rodrigotimoteo"
-                    password = System.getenv("GH_PACKAGES_TOKEN") ?: System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String? ?: ""
+                    password =
+                        System.getenv("GH_PACKAGES_TOKEN")
+                            ?: System.getenv("GITHUB_TOKEN")
+                            ?: project.findProperty("gpr.key") as String?
+                            ?: ""
                 }
             }
             maven {

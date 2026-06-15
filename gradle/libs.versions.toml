@@ -21,6 +21,9 @@ mockk = "1.14.11"
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+# Kotlin Gradle Plugin (compileOnly — used for KotlinCompile task discovery on
+# the consuming project's classpath, not bundled into the published artifact).
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 
 # ASM
 asm-core = { module = "org.ow2.asm:asm", version.ref = "asm" }

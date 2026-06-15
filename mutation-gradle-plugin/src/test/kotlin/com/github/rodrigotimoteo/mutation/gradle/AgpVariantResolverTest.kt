@@ -18,49 +18,27 @@ class AgpVariantResolverTest {
     }
 
     @Test
-    fun `resolve returns null when AGP is not on the classpath of the project`() {
+    fun `registerOnVariants is a no-op when AGP is not on the classpath of the project`() {
         val localProject = ProjectBuilder.builder().build()
         val r = AgpVariantResolver(localProject.objects)
-        val ext =
-            localProject.extensions.create(
-                "mutationTest",
-                MutationPluginExtension::class.java,
-                localProject,
-            )
-        ext.isAndroid.set(true)
-        ext.androidVariant.set("debug")
-        val ctx = r.resolve(localProject, ext)
-        assertThat(ctx).isNull()
+        val captures = mutableListOf<AgpVariantResolver.VariantCapture>()
+        r.registerOnVariants(localProject, captures)
+        assertThat(captures).isEmpty()
     }
 
     @Test
-    fun `resolve returns null when isAndroid extension flag is false`() {
-        val localProject = ProjectBuilder.builder().build()
-        val r = AgpVariantResolver(localProject.objects)
-        val ext =
-            localProject.extensions.create(
-                "mutationTest",
-                MutationPluginExtension::class.java,
-                localProject,
-            )
-        ext.isAndroid.set(false)
-        ext.androidVariant.set("debug")
-        val ctx = r.resolve(localProject, ext)
-        assertThat(ctx).isNull()
+    fun `registerOnVariants swallows NoClassDefFoundError and leaves captures empty`() {
+        val captures = mutableListOf<AgpVariantResolver.VariantCapture>()
+        resolver.registerOnVariants(project, captures)
+        assertThat(captures).isEmpty()
     }
 
     @Test
-    fun `resolve swallows NoClassDefFoundError and returns null when AGP is absent`() {
-        val ctx = resolver.resolve(project, extensionFor(project))
-        assertThat(ctx).isNull()
-    }
-
-    @Test
-    fun `resolve returns null for a pure-JVM project with no Android plugin`() {
+    fun `registerOnVariants returns no captures for a pure-JVM project with no Android plugin`() {
         project.plugins.apply("java")
-        val ext = extensionFor(project)
-        val ctx = resolver.resolve(project, ext)
-        assertThat(ctx).isNull()
+        val captures = mutableListOf<AgpVariantResolver.VariantCapture>()
+        resolver.registerOnVariants(project, captures)
+        assertThat(captures).isEmpty()
     }
 
     @Test
@@ -68,16 +46,91 @@ class AgpVariantResolverTest {
         val localProject = ProjectBuilder.builder().build()
         val r = AgpVariantResolver(localProject.objects)
         assertThat(r).isNotNull()
-        // Second resolve should also be safe and return null
-        val ext = extensionFor(localProject)
-        assertThat(r.resolve(localProject, ext)).isNull()
+        // Second invocation should also be safe and return an empty list
+        val captures = mutableListOf<AgpVariantResolver.VariantCapture>()
+        r.registerOnVariants(localProject, captures)
+        assertThat(captures).isEmpty()
     }
 
-    private fun extensionFor(project: org.gradle.api.Project): MutationPluginExtension =
-        project.extensions.findByType(MutationPluginExtension::class.java)
-            ?: project.extensions.create(
-                "mutationTest",
-                MutationPluginExtension::class.java,
-                project,
+    @Test
+    fun `findVariant returns null when captures list is empty`() {
+        val result = resolver.findVariant(emptyList(), "debug")
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `findVariant returns null when no capture matches the requested name`() {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val dummyCapture =
+            AgpVariantResolver.VariantCapture(
+                name = "release",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileReleaseKotlin",
+                testCompileTask = "compileReleaseUnitTestKotlin",
             )
+        val result = r.findVariant(listOf(dummyCapture), "debug")
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `findVariant returns the matching capture by name`() {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val debugCapture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val releaseCapture =
+            AgpVariantResolver.VariantCapture(
+                name = "release",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileReleaseKotlin",
+                testCompileTask = "compileReleaseUnitTestKotlin",
+            )
+        val result = r.findVariant(listOf(debugCapture, releaseCapture), "debug")
+        assertThat(result).isNotNull()
+        assertThat(result?.name).isEqualTo("debug")
+    }
+
+    @Test
+    fun `findVariant matches case-insensitively`() {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "Release",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileReleaseKotlin",
+                testCompileTask = "compileReleaseUnitTestKotlin",
+            )
+        val result = r.findVariant(listOf(capture), "release")
+        assertThat(result).isNotNull()
+        assertThat(result?.name).isEqualTo("Release")
+    }
+
+    @Test
+    fun `buildContext produces an AndroidMutationContext from a VariantCapture`() {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val ctx = r.buildContext(localProject, capture)
+        assertThat(ctx.variantName).isEqualTo("debug")
+        assertThat(ctx.compileTask).isEqualTo("compileDebugKotlin")
+        assertThat(ctx.testCompileTask).isEqualTo("compileDebugUnitTestKotlin")
+        // androidJar is a real File — verify it's a non-null path containing "android.jar"
+        assertThat(ctx.androidJar).isNotNull
+        assertThat(ctx.androidJar.name).isEqualTo("android.jar")
+        // runtimeClasspath is non-null (file collection)
+        assertThat(ctx.runtimeClasspath).isNotNull
+    }
 }

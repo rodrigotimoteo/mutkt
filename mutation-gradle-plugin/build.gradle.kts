@@ -48,6 +48,11 @@ dependencies {
     compileOnly(libs.agp)
     testImplementation(libs.agp)
 
+    // Kotlin Gradle Plugin (compileOnly — used to discover KotlinCompile tasks
+    // on the consuming project's classpath via project.tasks.withType).
+    compileOnly(libs.kotlin.gradle.plugin)
+    testImplementation(libs.kotlin.gradle.plugin)
+
     // Logging
     implementation(libs.slf4j.api)
 

@@ -5,6 +5,7 @@ import com.android.build.gradle.LibraryPlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.SourceSetContainer
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 /**
  * Gradle plugin for Kotlin Mutation Testing.
@@ -39,6 +40,9 @@ class MutationPlugin : Plugin<Project> {
                 project,
             )
 
+        val agpVariantResolver = AgpVariantResolver(project.objects)
+        val variantCaptures = mutableListOf<AgpVariantResolver.VariantCapture>()
+
         // Detect Android Gradle Plugin. withType callbacks only fire if AGP is on the
         // classpath, so this is a no-op for pure-JVM projects. The class literals would
         // fail to resolve at runtime when AGP is absent (test classpath, pure-JVM users),
@@ -47,10 +51,15 @@ class MutationPlugin : Plugin<Project> {
             project.plugins.withType(AppPlugin::class.java) {
                 extension.isAndroid.set(true)
                 extension.androidPluginType.set("application")
+                // Must register onVariants synchronously while the AGP DSL block is
+                // still open. Calling this from afterEvaluate yields the
+                // "It is too late to add actions" error from AGP.
+                agpVariantResolver.registerOnVariants(project, variantCaptures)
             }
             project.plugins.withType(LibraryPlugin::class.java) {
                 extension.isAndroid.set(true)
                 extension.androidPluginType.set("library")
+                agpVariantResolver.registerOnVariants(project, variantCaptures)
             }
         } catch (_: NoClassDefFoundError) {
             // AGP not on classpath — pure-JVM project, detection skipped.
@@ -65,20 +74,16 @@ class MutationPlugin : Plugin<Project> {
                 task.group = "verification"
                 task.description = "Runs mutation testing analysis"
 
-                // Support both JVM-only and KMP projects
-                val compileKotlinTask =
-                    when {
-                        project.tasks.findByName("compileKotlin") != null -> "compileKotlin"
-                        project.tasks.findByName("compileKotlinJvm") != null -> "compileKotlinJvm"
-                        else -> "compileKotlin" // Fallback — will fail if neither exists
-                    }
-                val compileTestKotlinTask =
-                    when {
-                        project.tasks.findByName("compileTestKotlin") != null -> "compileTestKotlin"
-                        project.tasks.findByName("compileTestKotlinJvm") != null -> "compileTestKotlinJvm"
-                        else -> "compileTestKotlin" // Fallback
-                    }
-                task.dependsOn(compileKotlinTask, compileTestKotlinTask)
+                // Discover the Kotlin compile tasks for both pure-JVM and Android
+                // projects. Android variants use compileDebugKotlin / compileReleaseKotlin
+                // / compileDebugUnitTestKotlin; pure-JVM uses compileKotlin /
+                // compileTestKotlin (or compileKotlinJvm for KMP). withType is evaluated
+                // at task-realization time so all plugins (including AGP) have been
+                // applied by the time this runs.
+                val isAndroid = extension.isAndroid.getOrElse(false)
+                val (compileTaskName, testCompileTaskName) =
+                    discoverKotlinCompileTasks(project, isAndroid)
+                task.dependsOn(compileTaskName, testCompileTaskName)
 
                 // Wire extension properties lazily
                 task.targetClasses.from(extension.targetClasses)
@@ -115,6 +120,8 @@ class MutationPlugin : Plugin<Project> {
                 task.excludePackages.set(extension.excludePackages)
                 task.ciMode.set(extension.ciMode)
                 task.verbose.set(extension.verbose)
+                task.excludeGeneratedClasses.set(extension.excludeGeneratedClasses)
+                task.androidContext.set(extension.androidContext)
             }
 
         // Auto-detect sourceSets after project evaluation
@@ -122,6 +129,7 @@ class MutationPlugin : Plugin<Project> {
             autoDetectSourceSets(project, extension)
             autoDetectClasspath(project, extension)
             autoDetectJaCoCo(project, extension)
+            resolveAndroidContext(project, extension, mutationTask, agpVariantResolver, variantCaptures)
         }
 
         // Don't auto-depend on check - mutationTest is opt-in
@@ -200,6 +208,94 @@ class MutationPlugin : Plugin<Project> {
             }
         } catch (e: Exception) {
             project.logger.warn("Could not auto-detect JaCoCo: ${e.message}")
+        }
+    }
+
+    private fun resolveAndroidContext(
+        project: Project,
+        extension: MutationPluginExtension,
+        mutationTask: org.gradle.api.tasks.TaskProvider<MutationTask>,
+        resolver: AgpVariantResolver,
+        variantCaptures: List<AgpVariantResolver.VariantCapture>,
+    ) {
+        try {
+            if (!extension.isAndroid.getOrElse(false)) return
+            val requestedVariant = extension.androidVariant.getOrElse("debug")
+            val capture = resolver.findVariant(variantCaptures, requestedVariant)
+            if (capture == null) {
+                if (variantCaptures.isEmpty()) {
+                    project.logger.info("No Android variants captured — skipping Android context")
+                } else {
+                    project.logger.warn(
+                        "Android variant '$requestedVariant' not found. Available: " +
+                            variantCaptures.joinToString { it.name },
+                    )
+                }
+                return
+            }
+            val context = resolver.buildContext(project, capture)
+            extension.androidContext.set(context)
+            mutationTask.configure { task ->
+                task.dependsOn(context.compileTask, context.testCompileTask)
+            }
+            project.logger.info(
+                "Android variant '${context.variantName}' resolved " +
+                    "(compile: ${context.compileTask}, test: ${context.testCompileTask})",
+            )
+        } catch (e: NoClassDefFoundError) {
+            // AGP not on classpath — pure-JVM project, no variant context.
+        } catch (e: Exception) {
+            project.logger.warn("Could not resolve Android variant context: ${e.message}")
+        }
+    }
+
+    /**
+     * Discover the main and test Kotlin compile task names for this project.
+     *
+     * - Pure-JVM / KMP: prefers `compileKotlin` / `compileTestKotlin` (with the
+     *   `Jvm` suffix variant for KMP). Falls back to the same names if nothing
+     *   matches.
+     * - Android: picks the first `compile<Variant>Kotlin` (preferring the
+     *   `debug` variant) for main, and the first matching
+     *   `compile<Variant>UnitTestKotlin` for tests.
+     *
+     * @return Pair of (mainCompileTaskName, testCompileTaskName).
+     */
+    internal fun discoverKotlinCompileTasks(
+        project: Project,
+        isAndroid: Boolean,
+    ): Pair<String, String> = discoverKotlinCompileTasksInternal(project, isAndroid)
+
+    private fun discoverKotlinCompileTasksInternal(
+        project: Project,
+        isAndroid: Boolean,
+    ): Pair<String, String> {
+        val kotlinCompiles =
+            project.tasks
+                .withType(KotlinCompile::class.java)
+                .matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }
+                .map { it.name }
+                .toList()
+
+        return if (isAndroid) {
+            val unitTestCompile =
+                kotlinCompiles.firstOrNull { it.contains("UnitTest") }
+                    ?: "compileDebugUnitTestKotlin"
+            val mainCompile =
+                kotlinCompiles.firstOrNull { it == "compileDebugKotlin" }
+                    ?: kotlinCompiles.firstOrNull { !it.contains("UnitTest") && !it.contains("AndroidTest") }
+                    ?: "compileDebugKotlin"
+            mainCompile to unitTestCompile
+        } else {
+            val main =
+                kotlinCompiles.firstOrNull { it == "compileKotlin" || it == "compileKotlinJvm" }
+                    ?: "compileKotlin"
+            val test =
+                kotlinCompiles.firstOrNull {
+                    it == "compileTestKotlin" || it == "compileTestKotlinJvm"
+                }
+                    ?: "compileTestKotlin"
+            main to test
         }
     }
 }

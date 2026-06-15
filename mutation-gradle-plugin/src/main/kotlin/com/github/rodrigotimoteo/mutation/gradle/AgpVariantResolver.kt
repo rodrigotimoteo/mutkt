@@ -3,81 +3,131 @@ package com.github.rodrigotimoteo.mutation.gradle
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.gradle.BaseExtension
 import org.gradle.api.Project
+import org.gradle.api.file.FileCollection
 import org.gradle.api.model.ObjectFactory
 import java.io.File
 
 /**
  * Resolves an [AndroidMutationContext] for a given AGP variant.
  *
- * The resolver inspects the active [AndroidComponentsExtension] to find the
- * variant matching [MutationPluginExtension.androidVariant], then captures
- * its runtime classpath, classes dirs, test classes dirs, and the matching
- * `android.jar` for the variant's compileSdk.
+ * The resolver is split into two phases to satisfy AGP's contract that
+ * [AndroidComponentsExtension.onVariants] must be registered during the
+ * `androidComponents { ... }` DSL block — never from `afterEvaluate`:
  *
- * Pure-JVM projects (no AGP on the classpath) are supported: the resolver
- * returns `null` and the plugin falls back to standard JVM detection.
+ * 1. [registerOnVariants] — call from `MutationPlugin.apply()` (or from
+ *    inside `project.plugins.withType(AppPlugin::class.java) {}`) to
+ *    capture raw [VariantCapture]s for every Android variant. Must run
+ *    before the AGP DSL block ends.
+ * 2. [buildContext] — call from `afterEvaluate` (or any post-DSL phase)
+ *    to convert a captured [VariantCapture] into a fully resolved
+ *    [AndroidMutationContext] with live file collections and the
+ *    matching `android.jar` for the variant's compileSdk.
+ *
+ * Pure-JVM projects (no AGP on the classpath) are supported: both methods
+ * are safe no-ops and the plugin falls back to standard JVM detection.
  */
 class AgpVariantResolver(private val objectFactory: ObjectFactory) {
     /**
-     * Resolve the Android variant context. Returns `null` when AGP is not
-     * applied or the requested variant does not exist.
+     * Raw info captured during the AGP `onVariants` callback. Holds the
+     * variant's [FileCollection] references (which are safe to query
+     * later) and the conventional compile-task names so [buildContext]
+     * does not need to re-enter the AGP API.
+     *
+     * @property name Variant name as reported by AGP (e.g. "debug").
+     * @property runtimeConfiguration Lazy [FileCollection] for the
+     *   variant's runtime classpath. Captured from the variant API at
+     *   registration time; resolved at execution time.
+     * @property compileTask Name of the Kotlin compile task for this
+     *   variant (e.g. `compileDebugKotlin`).
+     * @property testCompileTask Name of the Kotlin unit-test compile
+     *   task (e.g. `compileDebugUnitTestKotlin`).
      */
-    fun resolve(
+    data class VariantCapture(
+        val name: String,
+        val runtimeConfiguration: FileCollection,
+        val compileTask: String,
+        val testCompileTask: String,
+    )
+
+    /**
+     * Register `onVariants` callbacks on the project's
+     * [AndroidComponentsExtension]. Must be called synchronously while
+     * the AGP DSL block is still open — typically from inside
+     * `project.plugins.withType(AppPlugin::class.java) {}` in the
+     * plugin's `apply()` method.
+     *
+     * Populates [captures] with one [VariantCapture] per Android variant.
+     * Safe to call when AGP is absent on the classpath (no-op).
+     */
+    fun registerOnVariants(
         project: Project,
-        extension: MutationPluginExtension,
-    ): AndroidMutationContext? {
-        if (!extension.isAndroid.getOrElse(false)) {
-            return null
-        }
-        return try {
-            val requestedVariant = extension.androidVariant.getOrElse("debug")
+        captures: MutableList<VariantCapture>,
+    ) {
+        try {
             val androidComponents =
                 project.extensions.findByType(AndroidComponentsExtension::class.java)
-                    ?: return null
-
-            val contextHolder = arrayOfNulls<AndroidMutationContext>(1)
+                    ?: return
             androidComponents.onVariants { variant ->
-                if (variant.name.equals(requestedVariant, ignoreCase = true)) {
-                    val cap = variant.name.replaceFirstChar { it.uppercaseChar() }
-                    val compileTask = "compile${cap}Kotlin"
-                    val testCompileTask = "compile${cap}UnitTestKotlin"
-
-                    val runtimeClasspath =
-                        objectFactory.fileCollection().from(variant.runtimeConfiguration)
-
-                    val classesDirs = objectFactory.fileCollection()
-                    val mainCompile = project.tasks.findByName(compileTask)
-                    if (mainCompile != null) {
-                        classesDirs.from(mainCompile.outputs.files)
-                    }
-
-                    val testClassesDirs = objectFactory.fileCollection()
-                    val testCompile = project.tasks.findByName(testCompileTask)
-                    if (testCompile != null) {
-                        testClassesDirs.from(testCompile.outputs.files)
-                    }
-
-                    val androidJar = project.findAndroidJar()
-
-                    contextHolder[0] =
-                        AndroidMutationContext(
-                            variantName = variant.name,
-                            runtimeClasspath = runtimeClasspath,
-                            classesDirs = classesDirs,
-                            testClassesDirs = testClassesDirs,
-                            androidJar = androidJar,
-                            compileTask = compileTask,
-                            testCompileTask = testCompileTask,
-                        )
-                }
+                val cap = variant.name.replaceFirstChar { it.uppercaseChar() }
+                captures.add(
+                    VariantCapture(
+                        name = variant.name,
+                        runtimeConfiguration = variant.runtimeConfiguration,
+                        compileTask = "compile${cap}Kotlin",
+                        testCompileTask = "compile${cap}UnitTestKotlin",
+                    ),
+                )
             }
-            contextHolder[0]
         } catch (_: NoClassDefFoundError) {
-            null
-        } catch (e: Exception) {
-            project.logger.warn("Could not resolve Android variant: ${e.message}")
-            null
+            // AGP not on classpath — pure-JVM project, no variant capture.
         }
+    }
+
+    /**
+     * Find the captured variant matching [requestedName] (case-insensitive).
+     * Returns `null` when no match is found.
+     */
+    fun findVariant(
+        captures: List<VariantCapture>,
+        requestedName: String,
+    ): VariantCapture? = captures.firstOrNull { it.name.equals(requestedName, ignoreCase = true) }
+
+    /**
+     * Build an [AndroidMutationContext] for the given captured variant.
+     * Resolves the live `runtimeClasspath`, the variant's main + test
+     * classes directories, and the matching `android.jar` for the
+     * variant's compileSdk. Safe to call from `afterEvaluate` or any
+     * post-DSL phase.
+     */
+    fun buildContext(
+        project: Project,
+        capture: VariantCapture,
+    ): AndroidMutationContext {
+        val runtimeClasspath = objectFactory.fileCollection().from(capture.runtimeConfiguration)
+
+        val classesDirs = objectFactory.fileCollection()
+        val mainCompile = project.tasks.findByName(capture.compileTask)
+        if (mainCompile != null) {
+            classesDirs.from(mainCompile.outputs.files)
+        }
+
+        val testClassesDirs = objectFactory.fileCollection()
+        val testCompile = project.tasks.findByName(capture.testCompileTask)
+        if (testCompile != null) {
+            testClassesDirs.from(testCompile.outputs.files)
+        }
+
+        val androidJar = project.findAndroidJar()
+
+        return AndroidMutationContext(
+            variantName = capture.name,
+            runtimeClasspath = runtimeClasspath,
+            classesDirs = classesDirs,
+            testClassesDirs = testClassesDirs,
+            androidJar = androidJar,
+            compileTask = capture.compileTask,
+            testCompileTask = capture.testCompileTask,
+        )
     }
 
     private fun Project.findAndroidJar(): File {

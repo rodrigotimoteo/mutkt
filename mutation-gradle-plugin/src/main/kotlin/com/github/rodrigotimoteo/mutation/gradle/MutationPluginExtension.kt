@@ -359,4 +359,13 @@ open class MutationPluginExtension(project: Project) {
                 "**/META-INF/**",
             ),
         )
+
+    /**
+     * Resolved Android variant context, set by the plugin after project
+     * evaluation when an Android plugin is detected. Consumed by
+     * [MutationTask] to wire variant-specific classpath, classes dirs,
+     * compile tasks, and the `android.jar` location.
+     */
+    val androidContext: Property<AndroidMutationContext> =
+        project.objects.property(AndroidMutationContext::class.java)
 }

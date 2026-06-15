@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutation.gradle
 import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
 import com.github.rodrigotimoteo.mutation.LOG_PREFIX
 import com.github.rodrigotimoteo.mutation.REPORT_WIDTH
+import com.github.rodrigotimoteo.mutation.android.AarExtractor
 import com.github.rodrigotimoteo.mutation.model.MutationReport
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import com.github.rodrigotimoteo.mutation.runner.MutationTestRunnerFactory
@@ -243,6 +244,17 @@ abstract class MutationTask
         @Optional
         val verbose: Property<Boolean> = objectFactory.property(Boolean::class.java).convention(false)
 
+        /** Resolved Android variant context, set by the plugin when AGP is applied. */
+        @Internal
+        val androidContext: Property<AndroidMutationContext> =
+            objectFactory.property(AndroidMutationContext::class.java)
+
+        /** Patterns for generated classes (R, BuildConfig, Hilt, etc.) to exclude. */
+        @Input
+        @Optional
+        val excludeGeneratedClasses: SetProperty<String> =
+            objectFactory.setProperty(String::class.java).convention(emptySet())
+
         @TaskAction
         fun runMutationTests() {
             // CI mode: ensure console report is enabled
@@ -261,7 +273,22 @@ abstract class MutationTask
             // Find classes directories from file collections
             val classesDir = findClassesDir(targetClasses.files)
             val testClassesDir = findClassesDir(testClasses.files, isTestClasses = true)
-            val classpathFiles = classpath.files.toList()
+            val androidCtx = androidContext.getOrNull()
+            val rawClasspathFiles =
+                if (androidCtx != null) {
+                    logger.lifecycle("Using Android variant '${androidCtx.variantName}' runtime classpath")
+                    androidCtx.runtimeClasspath.files.toList()
+                } else {
+                    classpath.files.toList()
+                }
+            // Extract classes.jar from any AAR files in the classpath so the
+            // URLClassLoader can consume them. Safe for pure-JVM projects (no
+            // AARs present → returns the same list). Runs even when the
+            // Android resolver failed so users with manually-wired
+            // debugUnitTestRuntimeClasspath still get working classpath.
+            val aarTempDir =
+                File(buildDirectory.asFile.get(), "mutkt-aars").apply { mkdirs() }
+            val classpathFiles = expandAars(rawClasspathFiles, aarTempDir)
 
             // Find coverage file
             val coverageFile =
@@ -339,6 +366,23 @@ abstract class MutationTask
                     excludeRegexPatterns.add("${pkg.replace(".", "\\.")}\\..*")
                 }
                 logger.lifecycle("Exclude packages: ${excludePkgs.joinToString()}")
+            }
+
+            // Apply GeneratedClassFilter when Android context is present or when
+            // the user has supplied excludeGeneratedClasses patterns. Walks the
+            // resolved classes directory, identifies generated classes, and adds
+            // exact-match regex patterns so the runner skips them.
+            val generatedPatterns = excludeGeneratedClasses.getOrElse(emptySet())
+            if (generatedPatterns.isNotEmpty() && classesDir.exists()) {
+                val generatedClassNames = collectGeneratedClassNames(classesDir, generatedPatterns)
+                if (generatedClassNames.isNotEmpty()) {
+                    generatedClassNames.forEach { className ->
+                        excludeRegexPatterns.add(Regex.escape(className))
+                    }
+                    logger.lifecycle(
+                        "GeneratedClassFilter: excluding ${generatedClassNames.size} generated classes",
+                    )
+                }
             }
 
             // Create runner with all new features
@@ -462,6 +506,40 @@ abstract class MutationTask
                 .replace("?", ".")
         }
 
+        /**
+         * Replace any `.aar` entries in [classpath] with their inner
+         * `classes.jar` extracted via [AarExtractor]. Plain JARs and other
+         * files pass through unchanged. Failures during AAR extraction
+         * (corrupt zip, missing `classes.jar`) are logged and the AAR is
+         * dropped from the classpath — never fatal, because the URL
+         * classloader can survive a missing entry.
+         *
+         * Runs regardless of whether [androidContext] is set so that
+         * Android projects whose resolver failed still get a working
+         * classpath. Pure-JVM projects see no AARs and pay only a
+         * single `for` loop.
+         */
+        internal fun expandAars(
+            classpath: List<File>,
+            tempDir: File,
+        ): List<File> {
+            if (classpath.none { it.extension == "aar" }) return classpath
+            val aarExtractor = AarExtractor(tempDir)
+            val expanded = mutableListOf<File>()
+            for (file in classpath) {
+                if (file.extension == "aar") {
+                    try {
+                        expanded.add(aarExtractor.extractClassesJar(file))
+                    } catch (e: Exception) {
+                        logger.warn("Could not extract AAR ${file.name}: ${e.message}")
+                    }
+                } else {
+                    expanded.add(file)
+                }
+            }
+            return expanded
+        }
+
         private fun parseOperators(names: Set<String>): List<MutationOperator> {
             if (names.isEmpty()) return MutationOperator.MVP_OPERATORS.toList()
             val valid = mutableListOf<MutationOperator>()
@@ -499,6 +577,33 @@ abstract class MutationTask
                 ?: File(buildDirFile, "classes/kotlin/jvm/$subDir")
                     .takeIf { it.exists() }
                 ?: File(buildDirFile, "classes/java/$subDir")
+        }
+
+        /**
+         * Walk [classesDir] and return dot-separated class names for every
+         * `.class` file whose computed name matches any pattern in
+         * [generatedPatterns] via [GeneratedClassFilter.shouldExclude].
+         */
+        private fun collectGeneratedClassNames(
+            classesDir: File,
+            generatedPatterns: Set<String>,
+        ): Set<String> {
+            if (!classesDir.isDirectory) return emptySet()
+            val result = mutableSetOf<String>()
+            classesDir.walkTopDown().maxDepth(20).forEach { file ->
+                if (file.isFile && file.extension == "class") {
+                    val relative = file.relativeTo(classesDir).invariantSeparatorsPath
+                    val className =
+                        relative
+                            .removeSuffix(".class")
+                            .replace('/', '.')
+                            .replace('\\', '.')
+                    if (GeneratedClassFilter.shouldExclude(className, generatedPatterns)) {
+                        result.add(className)
+                    }
+                }
+            }
+            return result
         }
 
         private fun generateReports(report: MutationReport) {

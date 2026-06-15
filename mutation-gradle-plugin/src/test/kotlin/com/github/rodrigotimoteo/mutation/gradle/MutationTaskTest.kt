@@ -353,6 +353,129 @@ class MutationTaskInternalMethodsTest {
         @Suppress("UNCHECKED_CAST")
         return method.invoke(task, files, isTestClasses) as File
     }
+
+    private fun invokeExpandAars(
+        task: MutationTask,
+        files: List<File>,
+        tempDir: File,
+    ): List<File> = task.expandAars(files, tempDir)
+}
+
+class MutationTaskExpandAarsTest {
+    @Test
+    fun `expandAars returns the same list when no AARs are present`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val plainJar = tempDir.resolve("lib.jar").toFile().apply { writeText("not real") }
+        val plainDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        val result = invokeExpandAars(task, listOf(plainJar, plainDir), tempDir.toFile())
+        assertEquals(2, result.size)
+        assertEquals(listOf(plainJar, plainDir), result)
+    }
+
+    @Test
+    fun `expandAars returns the same list for empty input`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val result = invokeExpandAars(task, emptyList(), tempDir.toFile())
+        assertEquals(emptyList<File>(), result)
+    }
+
+    @Test
+    fun `expandAars extracts classes_jar from a valid AAR`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val aar = buildFakeAar(tempDir.resolve("fake.aar").toFile(), includeClassesJar = true)
+        val plainJar = tempDir.resolve("plain.jar").toFile().apply { writeText("not real") }
+        val result = invokeExpandAars(task, listOf(aar, plainJar), tempDir.toFile())
+        // AAR replaced with its inner classes.jar + plain jar passed through
+        assertEquals(2, result.size)
+        assertEquals("classes.jar", result[0].name)
+        assertEquals(plainJar, result[1])
+    }
+
+    @Test
+    fun `expandAars drops AAR entries that lack classes_jar and logs a warning`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val emptyAar = buildFakeAar(tempDir.resolve("empty.aar").toFile(), includeClassesJar = false)
+        val plainJar = tempDir.resolve("plain.jar").toFile().apply { writeText("not real") }
+        val result = invokeExpandAars(task, listOf(emptyAar, plainJar), tempDir.toFile())
+        // Empty AAR dropped, plain jar kept
+        assertEquals(1, result.size)
+        assertEquals(plainJar, result[0])
+    }
+
+    @Test
+    fun `expandAars drops AAR entries that are not valid zips`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val garbageAar = tempDir.resolve("garbage.aar").toFile().apply { writeText("not a zip") }
+        val plainJar = tempDir.resolve("plain.jar").toFile().apply { writeText("not real") }
+        val result = invokeExpandAars(task, listOf(garbageAar, plainJar), tempDir.toFile())
+        assertEquals(1, result.size)
+        assertEquals(plainJar, result[0])
+    }
+
+    private fun invokeExpandAars(
+        task: MutationTask,
+        files: List<File>,
+        tempDir: File,
+    ): List<File> = task.expandAars(files, tempDir)
+
+    private fun buildFakeAar(
+        out: File,
+        includeClassesJar: Boolean,
+    ): File {
+        java.util.zip.ZipOutputStream(out.outputStream()).use { zip ->
+            zip.putNextEntry(java.util.zip.ZipEntry("AndroidManifest.xml"))
+            zip.write("<manifest/>".toByteArray())
+            zip.closeEntry()
+            if (includeClassesJar) {
+                zip.putNextEntry(java.util.zip.ZipEntry("classes.jar"))
+                zip.write(byteArrayOf(0x50, 0x4B, 0x03, 0x04))
+                zip.closeEntry()
+            }
+        }
+        return out
+    }
+}
+
+class DiscoverKotlinCompileTasksTest {
+    @Test
+    fun `discoverKotlinCompileTasks returns compileKotlin and compileTestKotlin for pure-JVM`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        project.plugins.apply("org.jetbrains.kotlin.jvm")
+        val (main, test) = MutationPlugin().discoverKotlinCompileTasks(project, isAndroid = false)
+        assertEquals("compileKotlin", main)
+        assertEquals("compileTestKotlin", test)
+    }
+
+    @Test
+    fun `discoverKotlinCompileTasks prefers compileDebugKotlin for Android`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val (main, test) = MutationPlugin().discoverKotlinCompileTasks(project, isAndroid = true)
+        // No real AGP → falls back to debug defaults
+        assertEquals("compileDebugKotlin", main)
+        assertEquals("compileDebugUnitTestKotlin", test)
+    }
 }
 
 class MutationTaskActionTest {
