@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.3.0] - 2026-06-14
+
+### Critical Bug Fixes (4)
+- **@BeforeAll/@AfterAll instance sharing**: Instance-level lifecycle methods created a new instance while tests ran on different instances → state set in `@BeforeAll` was lost. JUnit semantics now preserved.
+- **CoverageAnalyzer stub**: `coveringTests = listOf("covered")` for uncovered classes made `filterByCoverage` keep all mutations. Now returns `emptyList()` so filter works correctly.
+- **EMPTY_RETURNS stack underflow**: `applyEmptyReturn` only handled `List`/`Set`/`Map` interfaces and arrays. Concrete types (`ArrayList`, `HashSet`, `HashMap`, `Collection`) caused verifier errors. Scanner predicate now restricted to interfaces + arrays + `kotlin.collections.*`.
+- **CONSTRUCTOR_CALLS corrupted `this`**: `<init>` super/this() calls were mutated assuming `NEW+DUP` stack layout → POP2 corrupted constructor stack. Guard added to skip constructor methods.
+
+### High Priority Fixes (26)
+- **getCommonSuperClass**: Used wrong ClassLoader (system instead of project), missed `Throwable` (LinkageError). Now uses project classloader + catches `Throwable`.
+- **Data class copy$default**: Scanner created mutations for `copy$default` (`INVOKESTATIC`) but applier only handled `copy()` (`INVOKESPECIAL`). Mutations silently dropped. Applier branch added.
+- **IINC duplicate mutations**: `ARITHMETIC` + `INCREMENTS` both negated IINC → duplicates. Single IINC handler picks one operator.
+- **Mutation applier match guard**: Applier matched only by `lineNumber+opcode`. Methods sharing line/opcode patterns mutated wrong instructions. Added `methodName`/`methodDescriptor` to all 7 visitor match guards.
+- **Cache key collision**: `operator:lineNumber` collided for methods sharing lines. Now `operator:methodName:lineNumber:occurrenceIndex`.
+- **Classloader inner classes**: Excluded classes delegated to parent → unmutated target/test classes leaked. Now throws `ClassNotFoundException`.
+- **Lock striping**: `defineLocks` map grew unbounded. Replaced with 64-stripe lock array.
+- **Target inner classes**: Companion/nested classes broke. Now excluded in `createGroup` and defined in `MutationClassLoader`.
+- **ReflectionTestRunner `invokeWithLifecycle`**: 5x duplicated lifecycle blocks extracted to single helper + `TestInvocationResult` sealed class.
+- **CoverageAnalyzer sealed type**: `execFile!!` could NPE on invalid `CoverageData`. Now sealed `Empty`/`Valid` — invalid state unrepresentable.
+- **Split Mutator 1574 lines → 5 files**: `Mutator` + `MutationScanner` + `MutationApplier` + `MutationHelpers` + `KotlinSyntheticUtils`.
+- **KotlinMetadataParser dedup**: Removed dead parser, `isKotlinSyntheticMethod` now single source of truth.
+- **Occurrence index**: Repeated identical instructions on same line now disambiguated via per-(operator,line) counter in metadata.
+- **Gradle plugin 5 HIGH fixes**: Flattened nested `plugins` block, `outputDir` → `DirectoryProperty` (config cache safe), `maxParallelMutants` convention = 4 (deterministic), `@OutputDirectory mutktDir` declared, KMP `classes/kotlin/jvm/main` fallback added.
+- **Test quality (3 HIGH)**: `latch.await()` bounded to 5s, `Thread.sleep` replaced with injected `Clock` + `FakeClock`, empty `failOnSurvived` test body implemented.
+- **Integration test gating**: `MutationEngineIntegrationTest` marked `@Tag("integration")` + `@Timeout(60)` + `RUN_INTEGRATION` env var.
+
+### Code Quality (102 assertion messages + 24 edge case tests)
+- 102 descriptive failure messages added across 16 test files
+- 24 new edge case tests in `MutatorEdgeCasesTest.kt`
+
+### MEDIUM + LOW Fixes (17)
+- `Mutation.id` now includes `occurrenceIndex`
+- `mutktDir` passed to engine (writes go to build dir)
+- `generateGraph` now actually adds `"graph"` to formats
+- Renamed `failOnCoverageThreshold` → `failOnMutationScoreThreshold` (misnamed)
+- `globToRegex` rewritten with proper escaping (no `**` re-substitution)
+- `testsSkipped` properly counts `@Disabled` (was hardcoded 0)
+- `updateTestStrength` uses filtered test names
+- Removed dead `INVERT_NEGS` enum entry
+- KDoc plugin id `com.github` → `io.github`
+- Default mode `STRICT` → `LENIENT` (aligned with `MutKtTest`)
+- `RETURN_VALS` doc updated to match implementation
+- `KotlinMetadataParser` deleted (dead code)
+- Graph node labels: "test" → "class-under-test"
+- `escapeJson` handles `\b`, `\f`, control chars via `\uXXXX`
+
+### Constants Extracted
+- `DEFAULT_TIMEOUT_MS = 30_000L`
+- `MUTKT_DIR = ".mutkt"`
+- `LOG_PREFIX = "[MutKt]"`
+- `REPORT_WIDTH = 60`
+
+### Test Counts
+- mutation-core: 803+ tests, 0 failures
+- mutation-gradle-plugin: 83 tests, 0 failures
+- All modules build clean
+
 ## [0.2.3] - 2026-06-10
 
 ### Fixed

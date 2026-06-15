@@ -26,7 +26,7 @@ subprojects {
 
 allprojects {
     group = "io.github.rodrigotimoteo"
-    version = "0.2.3"
+    version = "0.3.0"
 
     repositories {
         mavenCentral()
