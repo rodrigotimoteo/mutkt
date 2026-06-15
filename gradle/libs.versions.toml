@@ -6,6 +6,7 @@ detekt = "1.23.8"
 ktlint = "12.1.1"
 dokka = "2.2.0"
 owasp = "12.2.2"
+agp = "8.7.3"
 junit = "5.10.2"
 junit4 = "4.13.2"
 junitPlatform = "1.10.2"
@@ -46,6 +47,9 @@ jacoco-report = { module = "org.jacoco:org.jacoco.report", version.ref = "jacoco
 
 # Mocking
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+
+# Android Gradle Plugin (compileOnly — detection only, not bundled)
+agp = { module = "com.android.tools.build:gradle", version.ref = "agp" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

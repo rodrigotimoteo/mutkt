@@ -304,4 +304,59 @@ open class MutationPluginExtension(project: Project) {
      * Verbose output: show all mutations tested, not just summary.
      */
     val verbose: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    // === Android Support ===
+
+    /**
+     * True when an Android plugin (com.android.application, com.android.library,
+     * com.android.test, etc.) is applied to the project. Set automatically by
+     * the plugin when AGP is detected; can be set manually for advanced cases.
+     */
+    val isAndroid: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+
+    /**
+     * Type of the Android plugin applied: "application", "library", or
+     * "test". Empty string when no Android plugin is detected. Set
+     * automatically by the plugin when AGP is detected.
+     */
+    val androidPluginType: Property<String> = project.objects.property(String::class.java).convention("")
+
+    /**
+     * Android build variant to target (e.g. "debug", "release"). Defaults
+     * to "debug" because unit tests are typically run against the debug
+     * variant in CI.
+     */
+    val androidVariant: Property<String> = project.objects.property(String::class.java).convention("debug")
+
+    /**
+     * Generated classes to exclude from mutation testing. Defaults cover
+     * the most common Android/Kotlin codegen outputs: R, R$*, BuildConfig,
+     * ComposableSingletons$*, databinding, Dagger/Hilt factories, and
+     * Kotlin synthetic helpers.
+     */
+    val excludeGeneratedClasses: SetProperty<String> =
+        project.objects.setProperty(String::class.java).convention(
+            setOf(
+                "**/R",
+                "**/R$*",
+                "**/BuildConfig",
+                "**/ComposableSingletons$*",
+                "**/databinding/**",
+                "**/BR",
+                "**/*_Factory",
+                "**/*_Factory$*",
+                "**/*_MembersInjector",
+                "**/*_HiltModules$*",
+                "**/*_HiltModules",
+                "**/*_GeneratedInjector",
+                "**/Hilt_*",
+                "**/*Module_*",
+                "**/*_Impl",
+                "**/*_Provide*Factory",
+                "**/Dagger*Component*",
+                "**/*\$Lambda\$*",
+                "**/*\$inlined\$*",
+                "**/META-INF/**",
+            ),
+        )
 }

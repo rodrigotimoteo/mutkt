@@ -1,5 +1,7 @@
 package com.github.rodrigotimoteo.mutation.gradle
 
+import com.android.build.gradle.AppPlugin
+import com.android.build.gradle.LibraryPlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.SourceSetContainer
@@ -36,6 +38,23 @@ class MutationPlugin : Plugin<Project> {
                 MutationPluginExtension::class.java,
                 project,
             )
+
+        // Detect Android Gradle Plugin. withType callbacks only fire if AGP is on the
+        // classpath, so this is a no-op for pure-JVM projects. The class literals would
+        // fail to resolve at runtime when AGP is absent (test classpath, pure-JVM users),
+        // so we guard the registration.
+        try {
+            project.plugins.withType(AppPlugin::class.java) {
+                extension.isAndroid.set(true)
+                extension.androidPluginType.set("application")
+            }
+            project.plugins.withType(LibraryPlugin::class.java) {
+                extension.isAndroid.set(true)
+                extension.androidPluginType.set("library")
+            }
+        } catch (_: NoClassDefFoundError) {
+            // AGP not on classpath — pure-JVM project, detection skipped.
+        }
 
         // Register mutation test task with lazy property wiring
         val mutationTask =

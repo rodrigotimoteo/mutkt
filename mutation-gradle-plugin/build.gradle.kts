@@ -4,6 +4,13 @@ plugins {
     `maven-publish`
 }
 
+repositories {
+    // Required for AGP compileOnly dependency (com.android.tools.build:gradle).
+    google()
+    mavenCentral()
+    gradlePluginPortal()
+}
+
 gradlePlugin {
     plugins {
         create("mutation-kotlin") {
@@ -34,6 +41,12 @@ dependencies {
 
     // Gradle API
     implementation(gradleApi())
+
+    // Android Gradle Plugin (compileOnly — only used for plugin type detection).
+    // Also on the test classpath so unit tests can apply the plugin without
+    // NoClassDefFoundError when Gradle inspects the AGP-referencing callbacks.
+    compileOnly(libs.agp)
+    testImplementation(libs.agp)
 
     // Logging
     implementation(libs.slf4j.api)

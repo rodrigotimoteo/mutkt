@@ -185,4 +185,70 @@ class MutationPluginExtensionTest {
         extension.excludedClasses.set(setOf("**/generated/**"))
         assertThat(extension.excludedClasses.get()).contains("**/generated/**")
     }
+
+    // === Android Support ===
+
+    @Test
+    fun `isAndroid defaults to false`() {
+        assertThat(extension.isAndroid.get()).isFalse()
+    }
+
+    @Test
+    fun `androidPluginType defaults to empty string`() {
+        assertThat(extension.androidPluginType.get()).isEmpty()
+    }
+
+    @Test
+    fun `androidVariant defaults to debug`() {
+        assertThat(extension.androidVariant.get()).isEqualTo("debug")
+    }
+
+    @Test
+    fun `excludeGeneratedClasses defaults to expected Android and Kotlin generated patterns`() {
+        val excluded = extension.excludeGeneratedClasses.get()
+        assertThat(excluded).contains(
+            "**/R",
+            "**/R\$*",
+            "**/BuildConfig",
+            "**/ComposableSingletons\$*",
+            "**/databinding/**",
+            "**/BR",
+            "**/*_Factory",
+            "**/*_MembersInjector",
+            "**/*_GeneratedInjector",
+            "**/*\$Lambda\$*",
+            "**/*\$inlined\$*",
+            "**/META-INF/**",
+        )
+    }
+
+    @Test
+    fun `isAndroid can be set to true to simulate Android plugin applied`() {
+        extension.isAndroid.set(true)
+        assertThat(extension.isAndroid.get()).isTrue()
+    }
+
+    @Test
+    fun `androidPluginType can be set to application`() {
+        extension.androidPluginType.set("application")
+        assertThat(extension.androidPluginType.get()).isEqualTo("application")
+    }
+
+    @Test
+    fun `androidPluginType can be set to library`() {
+        extension.androidPluginType.set("library")
+        assertThat(extension.androidPluginType.get()).isEqualTo("library")
+    }
+
+    @Test
+    fun `androidVariant can be set to release`() {
+        extension.androidVariant.set("release")
+        assertThat(extension.androidVariant.get()).isEqualTo("release")
+    }
+
+    @Test
+    fun `excludeGeneratedClasses can be customized`() {
+        extension.excludeGeneratedClasses.set(setOf("**/MyGen*"))
+        assertThat(extension.excludeGeneratedClasses.get()).contains("**/MyGen*")
+    }
 }
