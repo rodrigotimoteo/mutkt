@@ -157,8 +157,8 @@ jobs:
             const body = versionMatch ? versionMatch[0].trim() : `Release ${tag}`;
             
             // Upload JARs as release assets
-            const glob = require('@actions/glob');
-            const globber = await glob.create('dist/**/*.jar');
+            const { create: createGlob } = require('@actions/glob');
+            const globber = await createGlob('dist/**/*.jar');
             const files = await globber.glob();
             
             await github.rest.repos.createRelease({
