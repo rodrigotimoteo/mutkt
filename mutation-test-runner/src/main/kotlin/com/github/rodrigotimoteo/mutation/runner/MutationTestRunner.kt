@@ -41,9 +41,17 @@ class MutationTestRunner(
         val testClassNames = findTestClasses(testClassesDir)
         logger.info("Found ${testClassNames.size} test classes: $testClassNames")
 
-        // Create classloader from classpath so engine can resolve all dependencies
+        // Create classloader from classpath so engine can resolve all dependencies.
+        // Parent is the platform classloader to prevent the test classloader from
+        // inheriting conflicting library versions (e.g. coroutines, dagger) from the
+        // engine's classloader, which would cause LinkageError when the user's
+        // bytecode (compiled against a different version) is linked.
         val urls = classpath.map { it.toURI().toURL() }.toTypedArray()
-        val testClassLoader = java.net.URLClassLoader(urls, javaClass.classLoader)
+        val testClassLoader =
+            java.net.URLClassLoader(
+                urls,
+                ClassLoader.getPlatformClassLoader(),
+            )
 
         return try {
             // Run mutation testing with the test classloader
