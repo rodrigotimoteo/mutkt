@@ -35,6 +35,10 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.13")
     testImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("androidx.test:core:1.5.0")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("io.mockk:mockk-android:1.13.13")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
 
 tasks.withType<Test>().configureEach {

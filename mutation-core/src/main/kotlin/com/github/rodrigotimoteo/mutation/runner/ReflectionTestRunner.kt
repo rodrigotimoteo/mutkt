@@ -1,14 +1,6 @@
 package com.github.rodrigotimoteo.mutation.runner
 
-import org.junit.jupiter.api.AfterAll
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
-import org.junit.jupiter.api.Nested
-import org.junit.jupiter.api.RepeatedTest
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
@@ -88,23 +80,60 @@ class ReflectionTestRunner(
         var testsSkipped = 0
         val failures = mutableListOf<String>()
 
+        // Resolve the JUnit annotation classes from the *test* classloader
+        // rather than the runner's classloader. The engine classloader
+        // (mutation-core) may have a different copy of JUnit than the test
+        // runtime, in which case `isAnnotationPresent` returns false even
+        // though the method carries `@Test` from the test classloader's
+        // copy. Resolve once per test class and reuse below.
+        val junitTestClass = tryGetClass(testClass, "org.junit.Test")
+        val junit5TestClass = tryGetClass(testClass, "org.junit.jupiter.api.Test")
+        val parameterizedTestClass =
+            tryGetClass(testClass, "org.junit.jupiter.params.ParameterizedTest")
+        val repeatedTestClass = tryGetClass(testClass, "org.junit.jupiter.api.RepeatedTest")
+        val disabledClass = tryGetClass(testClass, "org.junit.jupiter.api.Disabled")
+        val beforeEachClass = tryGetClass(testClass, "org.junit.jupiter.api.BeforeEach")
+        val afterEachClass = tryGetClass(testClass, "org.junit.jupiter.api.AfterEach")
+        val beforeClass = tryGetClass(testClass, "org.junit.Before")
+        val afterClass = tryGetClass(testClass, "org.junit.After")
+        val beforeAllClass = tryGetClass(testClass, "org.junit.jupiter.api.BeforeAll")
+        val afterAllClass = tryGetClass(testClass, "org.junit.jupiter.api.AfterAll")
+        val beforeAllJunit4Class = tryGetClass(testClass, "org.junit.BeforeClass")
+        val afterAllJunit4Class = tryGetClass(testClass, "org.junit.AfterClass")
+        val nestedClass = tryGetClass(testClass, "org.junit.jupiter.api.Nested")
+
+        fun java.lang.reflect.Method.isTestAnnotation(): Boolean {
+            if (junitTestClass != null && isAnnotationPresent(junitTestClass)) return true
+            if (junit5TestClass != null && isAnnotationPresent(junit5TestClass)) return true
+            if (parameterizedTestClass != null && isAnnotationPresent(parameterizedTestClass)) return true
+            if (repeatedTestClass != null && isAnnotationPresent(repeatedTestClass)) return true
+            return false
+        }
+
         // Skip disabled classes
-        if (testClass.isAnnotationPresent(Disabled::class.java)) {
+        if (testClass.isAnnotationPresent(Disabled::class.java) ||
+            (disabledClass != null && testClass.isAnnotationPresent(disabledClass))
+        ) {
             return TestClassResult(0, 0, 0, 0, failures)
         }
 
         // Count @Disabled test methods (excluded by filter below) as skipped
         val allDeclaredMethods = testClass.allDeclaredMethods()
         val candidateMethods =
-            allDeclaredMethods.filter { method ->
-                method.isAnnotationPresent(Test::class.java) ||
-                    method.isAnnotationPresent(org.junit.Test::class.java) ||
-                    method.isAnnotationPresent(ParameterizedTest::class.java) ||
-                    method.isAnnotationPresent(RepeatedTest::class.java)
-            }
+            allDeclaredMethods.filter { method -> method.isTestAnnotation() }
         candidateMethods.forEach { method ->
-            if (method.isAnnotationPresent(Disabled::class.java)) {
-                testsSkipped += method.getAnnotation(RepeatedTest::class.java)?.value ?: 1
+            if (disabledClass != null && method.isAnnotationPresent(disabledClass)) {
+                testsSkipped +=
+                    if (repeatedTestClass != null) {
+                        try {
+                            val ann = method.getAnnotation(repeatedTestClass)
+                            (repeatedTestClass.getMethod("value").invoke(ann) as? Int) ?: 1
+                        } catch (_: Exception) {
+                            1
+                        }
+                    } else {
+                        1
+                    }
             }
         }
 
@@ -112,39 +141,33 @@ class ReflectionTestRunner(
         // Support both JUnit 5 (org.junit.jupiter.api.Test) and JUnit 4 (org.junit.Test)
         val testMethods =
             allDeclaredMethods.filter { method ->
-                !method.isAnnotationPresent(Disabled::class.java) &&
-                    (
-                        method.isAnnotationPresent(Test::class.java) ||
-                            method.isAnnotationPresent(org.junit.Test::class.java) ||
-                            method.isAnnotationPresent(ParameterizedTest::class.java) ||
-                            method.isAnnotationPresent(RepeatedTest::class.java)
-                    )
+                (disabledClass == null || !method.isAnnotationPresent(disabledClass)) && method.isTestAnnotation()
             }
 
         // Discover lifecycle methods — walk superclass hierarchy
         // Support both JUnit 5 (@BeforeEach/@AfterEach) and JUnit 4 (@Before/@After)
         val beforeEachMethods =
             testClass.allDeclaredMethods().filter {
-                it.isAnnotationPresent(BeforeEach::class.java) ||
-                    it.isAnnotationPresent(org.junit.Before::class.java)
+                (beforeEachClass != null && it.isAnnotationPresent(beforeEachClass)) ||
+                    (beforeClass != null && it.isAnnotationPresent(beforeClass))
             }
         val afterEachMethods =
             testClass.allDeclaredMethods().filter {
-                it.isAnnotationPresent(AfterEach::class.java) ||
-                    it.isAnnotationPresent(org.junit.After::class.java)
+                (afterEachClass != null && it.isAnnotationPresent(afterEachClass)) ||
+                    (afterClass != null && it.isAnnotationPresent(afterClass))
             }
 
         // Discover @BeforeAll/@AfterAll (static or instance methods)
         // Support both JUnit 5 (@BeforeAll/@AfterAll) and JUnit 4 (@BeforeClass/@AfterClass)
         val beforeAllMethods =
             testClass.allDeclaredMethods().filter {
-                it.isAnnotationPresent(BeforeAll::class.java) ||
-                    it.isAnnotationPresent(org.junit.BeforeClass::class.java)
+                (beforeAllClass != null && it.isAnnotationPresent(beforeAllClass)) ||
+                    (beforeAllJunit4Class != null && it.isAnnotationPresent(beforeAllJunit4Class))
             }
         val afterAllMethods =
             testClass.allDeclaredMethods().filter {
-                it.isAnnotationPresent(AfterAll::class.java) ||
-                    it.isAnnotationPresent(org.junit.AfterClass::class.java)
+                (afterAllClass != null && it.isAnnotationPresent(afterAllClass)) ||
+                    (afterAllJunit4Class != null && it.isAnnotationPresent(afterAllJunit4Class))
             }
 
         // Run @BeforeAll once before all tests — abort on failure
@@ -171,7 +194,7 @@ class ReflectionTestRunner(
 
         // Run each test method
         for (method in testMethods) {
-            if (method.isAnnotationPresent(ParameterizedTest::class.java)) {
+            if (parameterizedTestClass != null && method.isAnnotationPresent(parameterizedTestClass)) {
                 // Handle @ParameterizedTest — invoke multiple times with different arguments
                 val paramResults = runParameterizedTest(testClass, method, beforeEachMethods, afterEachMethods)
                 testsFound += paramResults.testsFound
@@ -180,8 +203,18 @@ class ReflectionTestRunner(
                 failures.addAll(paramResults.failures)
             } else {
                 // Standard @Test or @RepeatedTest
-                val repeatedAnnotation = method.getAnnotation(RepeatedTest::class.java)
-                val repetitions = repeatedAnnotation?.value ?: 1
+                val repetitions =
+                    if (repeatedTestClass != null) {
+                        val repAnnotation = method.getAnnotation(repeatedTestClass)
+                        try {
+                            @Suppress("UNCHECKED_CAST")
+                            (repeatedTestClass.getMethod("value").invoke(repAnnotation) as? Int) ?: 1
+                        } catch (_: Exception) {
+                            1
+                        }
+                    } else {
+                        1
+                    }
                 testsFound += repetitions
                 for (rep in 1..repetitions) {
                     val instance = createInstance(testClass, null)
@@ -206,8 +239,10 @@ class ReflectionTestRunner(
 
         // Handle @Nested inner classes — need outer instance for constructor
         val nestedClasses =
-            testClass.declaredClasses.filter { innerClass ->
-                innerClass.isAnnotationPresent(Nested::class.java)
+            if (nestedClass != null) {
+                testClass.declaredClasses.filter { innerClass -> innerClass.isAnnotationPresent(nestedClass) }
+            } else {
+                emptyList()
             }
 
         if (nestedClasses.isNotEmpty()) {
@@ -395,44 +430,75 @@ class ReflectionTestRunner(
         }
 
         val allDeclaredMethods = testClass.allDeclaredMethods()
+        val junit5TestClass = tryGetClass(testClass, "org.junit.jupiter.api.Test")
+        val parameterizedTestClass = tryGetClass(testClass, "org.junit.jupiter.params.ParameterizedTest")
+        val repeatedTestClass = tryGetClass(testClass, "org.junit.jupiter.api.RepeatedTest")
+        val disabledClass = tryGetClass(testClass, "org.junit.jupiter.api.Disabled")
+        val beforeEachClass = tryGetClass(testClass, "org.junit.jupiter.api.BeforeEach")
+        val afterEachClass = tryGetClass(testClass, "org.junit.jupiter.api.AfterEach")
+        val nestedClass = tryGetClass(testClass, "org.junit.jupiter.api.Nested")
+
+        fun java.lang.reflect.Method.isNestedTestAnnotation(): Boolean {
+            if (junit5TestClass != null && isAnnotationPresent(junit5TestClass)) return true
+            if (repeatedTestClass != null && isAnnotationPresent(repeatedTestClass)) return true
+            if (parameterizedTestClass != null && isAnnotationPresent(parameterizedTestClass)) return true
+            return false
+        }
+
         val candidateMethods =
-            allDeclaredMethods.filter { method ->
-                method.isAnnotationPresent(org.junit.jupiter.api.Test::class.java) ||
-                    method.isAnnotationPresent(RepeatedTest::class.java) ||
-                    method.isAnnotationPresent(ParameterizedTest::class.java)
-            }
+            allDeclaredMethods.filter { method -> method.isNestedTestAnnotation() }
         candidateMethods.forEach { method ->
-            if (method.isAnnotationPresent(Disabled::class.java)) {
-                testsSkipped += method.getAnnotation(RepeatedTest::class.java)?.value ?: 1
+            if (disabledClass != null && method.isAnnotationPresent(disabledClass)) {
+                testsSkipped +=
+                    if (repeatedTestClass != null) {
+                        try {
+                            val ann = method.getAnnotation(repeatedTestClass)
+                            (repeatedTestClass.getMethod("value").invoke(ann) as? Int) ?: 1
+                        } catch (_: Exception) {
+                            1
+                        }
+                    } else {
+                        1
+                    }
             }
         }
 
         val testMethods =
             allDeclaredMethods.filter { method ->
-                !method.isAnnotationPresent(Disabled::class.java) &&
-                    (
-                        method.isAnnotationPresent(org.junit.jupiter.api.Test::class.java) ||
-                            method.isAnnotationPresent(RepeatedTest::class.java) ||
-                            method.isAnnotationPresent(ParameterizedTest::class.java)
-                    )
+                (disabledClass == null || !method.isAnnotationPresent(disabledClass)) && method.isNestedTestAnnotation()
             }
 
         // JUnit 5: @Nested runs parent lifecycle methods too
-        val ownBeforeEach = testClass.allDeclaredMethods().filter { it.isAnnotationPresent(BeforeEach::class.java) }
-        val ownAfterEach = testClass.allDeclaredMethods().filter { it.isAnnotationPresent(AfterEach::class.java) }
+        val ownBeforeEach =
+            testClass.allDeclaredMethods().filter {
+                beforeEachClass != null && it.isAnnotationPresent(beforeEachClass)
+            }
+        val ownAfterEach =
+            testClass.allDeclaredMethods().filter {
+                afterEachClass != null && it.isAnnotationPresent(afterEachClass)
+            }
         val beforeEachMethods = parentBeforeEach + ownBeforeEach
         val afterEachMethods = ownAfterEach + parentAfterEach
 
         for (method in testMethods) {
-            if (method.isAnnotationPresent(ParameterizedTest::class.java)) {
+            if (parameterizedTestClass != null && method.isAnnotationPresent(parameterizedTestClass)) {
                 val paramResults = runParameterizedTest(testClass, method, beforeEachMethods, afterEachMethods, outerInstance)
                 testsFound += paramResults.testsFound
                 testsSucceeded += paramResults.testsSucceeded
                 testsFailed += paramResults.testsFailed
                 failures.addAll(paramResults.failures)
             } else {
-                val repeatedAnnotation = method.getAnnotation(RepeatedTest::class.java)
-                val repetitions = repeatedAnnotation?.value ?: 1
+                val repetitions =
+                    if (repeatedTestClass != null) {
+                        val ann = method.getAnnotation(repeatedTestClass)
+                        try {
+                            (repeatedTestClass.getMethod("value").invoke(ann) as? Int) ?: 1
+                        } catch (_: Exception) {
+                            1
+                        }
+                    } else {
+                        1
+                    }
                 testsFound += repetitions
                 for (rep in 1..repetitions) {
                     val instance = createInstance(testClass, outerInstance)
@@ -456,7 +522,12 @@ class ReflectionTestRunner(
         }
 
         // Recurse into nested classes — pass current instance as outer for deeper nesting
-        val nestedClasses = testClass.declaredClasses.filter { it.isAnnotationPresent(Nested::class.java) }
+        val nestedClasses =
+            if (nestedClass != null) {
+                testClass.declaredClasses.filter { it.isAnnotationPresent(nestedClass) }
+            } else {
+                emptyList()
+            }
         if (nestedClasses.isNotEmpty()) {
             // Create an instance of this nested class to serve as outer for deeper nesting
             val currentInstance = createInstance(testClass, outerInstance)
@@ -593,6 +664,23 @@ class ReflectionTestRunner(
         }
         return methods
     }
+
+    /**
+     * Resolve [name] via the [anchor] class's loader. Used to read JUnit
+     * annotations loaded by the *test* runtime classloader (not the
+     * engine's classloader) so `isAnnotationPresent` returns true when the
+     * test method carries `@org.junit.Test` from the user's JUnit 4 jar.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun tryGetClass(
+        anchor: Class<*>,
+        name: String,
+    ): Class<out Annotation>? =
+        try {
+            Class.forName(name, false, anchor.classLoader) as? Class<out Annotation>
+        } catch (_: ClassNotFoundException) {
+            null
+        }
 
     private data class TestClassResult(
         val testsFound: Int,

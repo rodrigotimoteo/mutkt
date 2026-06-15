@@ -141,6 +141,82 @@ The reflection-based test runner isn't executing your `@Test` methods. Common ca
 
 Your AAR dependencies don't have matching variant attributes. This is rare. Workaround: add the AAR's `classes.jar` to your classpath manually.
 
+## Mocking support (MockK + Mockito)
+
+MutKt's reflection-based test runner does NOT execute JUnit 5 extensions. This means `@ExtendWith(MockKExtension::class)` and `@ExtendWith(MockitoExtension::class)` are **ignored**. You must initialize mocks manually in `@BeforeEach`.
+
+### Compatibility matrix
+
+| Feature | Works? | Notes |
+|---------|--------|-------|
+| **MockK** regular mocks (`mockk<T>()` on interfaces/open classes) | ✅ Yes | Standard ByteBuddy subclass |
+| **MockK** final-class inline mocks | ❌ No | Requires Java agent attach + bootstrap dispatcher; conflicts with MutKt's classloader |
+| **MockK** `mockkStatic()` | ❌ No | Same agent issue + global state leaks across parallel mutations |
+| **MockK** `@MockK` annotation | ⚠️ Manual | Don't use `MockKExtension`; call `MockKAnnotations.init(this)` in `@BeforeEach` |
+| **Mockito** (subclass mock maker) regular mocks | ✅ Yes | Default before Mockito 5 |
+| **Mockito** 5+ (inline mock maker) | ❌ No | `MockMethodDispatcher` bootstrap conflict with MutKt's classloader |
+| **Mockito** `mockStatic()` | ❌ No | Same inline-maker issue |
+| **Mockito** `@Mock` annotation | ⚠️ Manual | Don't use `MockitoExtension`; call `MockitoAnnotations.openMocks(this)` in `@BeforeEach` |
+| **Robolectric** + mocks | ❌ No | `SandboxClassLoader` shadows dispatcher classes |
+
+### MockK — what works
+
+```kotlin
+@RunWith(RobolectricTestRunner::class)
+class UserServiceTest {
+    @Before
+    fun setUp() {
+        // DO use @BeforeEach + manual init, NOT @ExtendWith
+        MockKAnnotations.init(this)
+    }
+    
+    @Test
+    fun `mocks work for interfaces`() {
+        val mockPrefs = mockk<SharedPreferences>()
+        every { mockPrefs.getString("user", null) } returns "alice"
+        assertEquals("alice", mockPrefs.getString("user", null))
+    }
+}
+```
+
+### Mockito — what works
+
+```kotlin
+@RunWith(RobolectricTestRunner::class)
+class UserServiceTest {
+    @Before
+    fun setUp() {
+        // DO use @BeforeEach + manual init, NOT @ExtendWith
+        MockitoAnnotations.openMocks(this)
+    }
+    
+    @Test
+    fun `mocks work for classes`() {
+        val mockPrefs = mock<SharedPreferences>()
+        whenever(mockPrefs.getString("user", null)).thenReturn("bob")
+        assertEquals("bob", mockPrefs.getString("user", null))
+    }
+}
+```
+
+### What doesn't work
+
+Avoid these patterns — they require classloader-level agent support that MutKt doesn't provide:
+
+- `mockkStatic(KotlinXCoroutines::class)` — MockK
+- `Mockito.mockStatic(Files::class)` — Mockito 5+
+- `mockkConstructor(MyClass::class)` — MockK
+- `@ExtendWith(MockKExtension::class)` — JUnit 5 extension
+- `@ExtendWith(MockitoExtension::class)` — JUnit 5 extension
+
+If you need any of these, run `./gradlew test` (the regular JUnit test task) instead of `./gradlew mutationTest`.
+
+### Why limitations exist
+
+MutKt loads test classes in a custom `URLClassLoader` parented to `ClassLoader.getPlatformClassLoader()`. This isolates mutated bytecode from the engine's own dependencies but prevents Java instrumentation agents (used by inline mocking) from installing their dispatchers correctly.
+
+For full mocking support, the next major MutKt release will switch from reflection-based to **JUnit Platform Launcher** based test execution, which has first-class classloader + agent integration.
+
 ## Example
 
 See `mutation-sample-android/` in the MutKt project for a working example with Robolectric.

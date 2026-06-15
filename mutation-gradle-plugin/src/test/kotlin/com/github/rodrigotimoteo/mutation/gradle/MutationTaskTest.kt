@@ -333,6 +333,57 @@ class MutationTaskInternalMethodsTest {
         assertEquals(tempDir.toFile(), result)
     }
 
+    @Test
+    fun `resolveClassesDir prefers androidClassesDir when it exists`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val androidDir = tempDir.resolve("tmp/kotlin-classes/debug").toFile().apply { mkdirs() }
+        File(androidDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val result = invokeResolveClassesDir(task, androidDir, emptySet(), isTestClasses = false)
+        assertEquals(androidDir, result)
+    }
+
+    @Test
+    fun `resolveClassesDir falls through to configured files when androidClassesDir is null`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val classDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val result = invokeResolveClassesDir(task, null, setOf(classDir), isTestClasses = false)
+        assertEquals(classDir, result)
+    }
+
+    @Test
+    fun `resolveClassesDir falls through when androidClassesDir does not exist on disk`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val missingAndroid = tempDir.resolve("does-not-exist").toFile()
+        val classDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val result = invokeResolveClassesDir(task, missingAndroid, setOf(classDir), isTestClasses = false)
+        assertEquals(classDir, result)
+    }
+
+    @Test
+    fun `resolveClassesDir returns JVM fallback when androidClassesDir is null and files empty`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val result = invokeResolveClassesDir(task, null, emptySet(), isTestClasses = true)
+        assertNotNull(result)
+    }
+
     private fun invokeParseOperators(
         task: MutationTask,
         names: Set<String>,
@@ -352,6 +403,24 @@ class MutationTaskInternalMethodsTest {
         method.isAccessible = true
         @Suppress("UNCHECKED_CAST")
         return method.invoke(task, files, isTestClasses) as File
+    }
+
+    private fun invokeResolveClassesDir(
+        task: MutationTask,
+        androidDir: File?,
+        files: Set<File>,
+        isTestClasses: Boolean,
+    ): File {
+        val method =
+            MutationTask::class.java.getDeclaredMethod(
+                "resolveClassesDir",
+                File::class.java,
+                Set::class.java,
+                Boolean::class.java,
+            )
+        method.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        return method.invoke(task, androidDir, files, isTestClasses) as File
     }
 
     private fun invokeExpandAars(

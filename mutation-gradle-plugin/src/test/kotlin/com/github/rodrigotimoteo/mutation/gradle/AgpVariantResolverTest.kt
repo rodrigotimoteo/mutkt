@@ -2,8 +2,11 @@ package com.github.rodrigotimoteo.mutation.gradle
 
 import org.assertj.core.api.Assertions.assertThat
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 
 class AgpVariantResolverTest {
     private val project = ProjectBuilder.builder().build()
@@ -127,10 +130,197 @@ class AgpVariantResolverTest {
         assertThat(ctx.variantName).isEqualTo("debug")
         assertThat(ctx.compileTask).isEqualTo("compileDebugKotlin")
         assertThat(ctx.testCompileTask).isEqualTo("compileDebugUnitTestKotlin")
-        // androidJar is a real File — verify it's a non-null path containing "android.jar"
-        assertThat(ctx.androidJar).isNotNull
-        assertThat(ctx.androidJar.name).isEqualTo("android.jar")
+        // androidJar is nullable — either null (no SDK) or a real File named "android.jar"
+        if (ctx.androidJar != null) {
+            assertThat(ctx.androidJar.name).isEqualTo("android.jar")
+        }
         // runtimeClasspath is non-null (file collection)
         assertThat(ctx.runtimeClasspath).isNotNull
+    }
+
+    @Test
+    fun `findVariantClassesDirs returns null pair when no compile tasks exist`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val (main, test) = r.findVariantClassesDirs(localProject, capture)
+        assertThat(main).isNull()
+        assertThat(test).isNull()
+    }
+
+    @Test
+    fun `findVariantClassesDirs resolves Kotlin compile task destination`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        val mainOut = tempDir.resolve("kotlin-classes/debug").toFile().apply { mkdirs() }
+        val testOut = tempDir.resolve("kotlin-classes/debugUnitTest").toFile().apply { mkdirs() }
+
+        val mainTask =
+            localProject.tasks.register("compileDebugKotlin", JavaCompile::class.java)
+        val testTask =
+            localProject.tasks.register("compileDebugUnitTestKotlin", JavaCompile::class.java)
+        mainTask.get().destinationDirectory.set(mainOut)
+        testTask.get().destinationDirectory.set(testOut)
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = mainTask.get().name,
+                testCompileTask = testTask.get().name,
+            )
+
+        val resolved = r.findVariantClassesDirs(localProject, capture)
+        assertThat(resolved.first).isEqualTo(mainOut)
+        assertThat(resolved.second).isEqualTo(testOut)
+    }
+
+    @Test
+    fun `findVariantClassesDirs falls back to JavaWithJavac when Kotlin task is absent`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        val mainOut = tempDir.resolve("javac/debug/classes").toFile().apply { mkdirs() }
+        val testOut = tempDir.resolve("javac/debugUnitTest/classes").toFile().apply { mkdirs() }
+
+        val mainTask =
+            localProject.tasks.register("compileDebugJavaWithJavac", JavaCompile::class.java)
+        val testTask =
+            localProject.tasks.register("compileDebugUnitTestJavaWithJavac", JavaCompile::class.java)
+        mainTask.get().destinationDirectory.set(mainOut)
+        testTask.get().destinationDirectory.set(testOut)
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+
+        val resolved = r.findVariantClassesDirs(localProject, capture)
+        assertThat(resolved.first).isEqualTo(mainOut)
+        assertThat(resolved.second).isEqualTo(testOut)
+        assertThat(mainTask.get().name).isEqualTo("compileDebugJavaWithJavac")
+        assertThat(testTask.get().name).isEqualTo("compileDebugUnitTestJavaWithJavac")
+    }
+
+    @Test
+    fun `findVariantClassesDirs prefers Kotlin task over JavaWithJavac when both exist`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        val kotlinOut = tempDir.resolve("kotlin-classes/debug").toFile().apply { mkdirs() }
+        val javacOut = tempDir.resolve("javac/debug/classes").toFile().apply { mkdirs() }
+
+        val kotlinTask =
+            localProject.tasks.register("compileDebugKotlin", JavaCompile::class.java)
+        val javacTask =
+            localProject.tasks.register("compileDebugJavaWithJavac", JavaCompile::class.java)
+        kotlinTask.get().destinationDirectory.set(kotlinOut)
+        javacTask.get().destinationDirectory.set(javacOut)
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+
+        val resolved = r.findVariantClassesDirs(localProject, capture)
+        assertThat(resolved.first).isEqualTo(kotlinOut)
+    }
+
+    @Test
+    fun `findVariantClassesDirs handles release variant with capitalized name`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        val mainOut = tempDir.resolve("release/classes").toFile().apply { mkdirs() }
+        val releaseTask =
+            localProject.tasks.register("compileReleaseKotlin", JavaCompile::class.java)
+        releaseTask.get().destinationDirectory.set(mainOut)
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "release",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileReleaseKotlin",
+                testCompileTask = "compileReleaseUnitTestKotlin",
+            )
+
+        val resolved = r.findVariantClassesDirs(localProject, capture)
+        assertThat(resolved.first).isEqualTo(mainOut)
+        assertThat(resolved.second).isNull()
+    }
+
+    @Test
+    fun `findVariantClassesDirs returns null when task is not a JavaCompile`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        // Register a non-JavaCompile task that has no destinationDirectory property
+        localProject.tasks.register("compileDebugKotlin")
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+
+        val resolved = r.findVariantClassesDirs(localProject, capture)
+        assertThat(resolved.first).isNull()
+        assertThat(resolved.second).isNull()
+    }
+
+    @Test
+    fun `buildContext populates mainClassesDir and testClassesDir from compile tasks`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        val mainOut = tempDir.resolve("kotlin-classes/debug").toFile().apply { mkdirs() }
+        val testOut = tempDir.resolve("kotlin-classes/debugUnitTest").toFile().apply { mkdirs() }
+
+        val mainTask =
+            localProject.tasks.register("compileDebugKotlin", JavaCompile::class.java)
+        val testTask =
+            localProject.tasks.register("compileDebugUnitTestKotlin", JavaCompile::class.java)
+        mainTask.get().destinationDirectory.set(mainOut)
+        testTask.get().destinationDirectory.set(testOut)
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val ctx = r.buildContext(localProject, capture)
+        assertThat(ctx.mainClassesDir).isEqualTo(mainOut)
+        assertThat(ctx.testClassesDir).isEqualTo(testOut)
     }
 }

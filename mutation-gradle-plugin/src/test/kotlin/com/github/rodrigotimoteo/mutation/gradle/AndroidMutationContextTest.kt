@@ -14,12 +14,16 @@ class AndroidMutationContextTest {
         val classes = objects.fileCollection().from(File("classes"))
         val testClasses = objects.fileCollection().from(File("test-classes"))
         val androidJar = File("android.jar")
+        val mainDir = File("build/tmp/kotlin-classes/debug")
+        val testDir = File("build/tmp/kotlin-classes/debugUnitTest")
         val ctx =
             AndroidMutationContext(
                 variantName = "debug",
                 runtimeClasspath = runtimeCp,
                 classesDirs = classes,
                 testClassesDirs = testClasses,
+                mainClassesDir = mainDir,
+                testClassesDir = testDir,
                 androidJar = androidJar,
                 compileTask = "compileDebugKotlin",
                 testCompileTask = "compileDebugUnitTestKotlin",
@@ -28,6 +32,8 @@ class AndroidMutationContextTest {
         assertThat(ctx.runtimeClasspath).isSameAs(runtimeCp)
         assertThat(ctx.classesDirs).isSameAs(classes)
         assertThat(ctx.testClassesDirs).isSameAs(testClasses)
+        assertThat(ctx.mainClassesDir).isEqualTo(mainDir)
+        assertThat(ctx.testClassesDir).isEqualTo(testDir)
         assertThat(ctx.androidJar).isEqualTo(androidJar)
         assertThat(ctx.compileTask).isEqualTo("compileDebugKotlin")
         assertThat(ctx.testCompileTask).isEqualTo("compileDebugUnitTestKotlin")
@@ -75,6 +81,8 @@ class AndroidMutationContextTest {
             runtimeClasspath = objects.fileCollection(),
             classesDirs = objects.fileCollection(),
             testClassesDirs = objects.fileCollection(),
+            mainClassesDir = null,
+            testClassesDir = null,
             androidJar = androidJar,
             compileTask = compileTask,
             testCompileTask = testCompileTask,

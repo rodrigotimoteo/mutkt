@@ -270,14 +270,34 @@ abstract class MutationTask
             logger.lifecycle("  Kotlin Mutation Testing - PITest-style")
             logger.lifecycle("=".repeat(REPORT_WIDTH))
 
-            // Find classes directories from file collections
-            val classesDir = findClassesDir(targetClasses.files)
-            val testClassesDir = findClassesDir(testClasses.files, isTestClasses = true)
+            // Find classes directories from file collections. When an
+            // Android variant is active, prefer the AGP-reported dirs
+            // (e.g. build/tmp/kotlin-classes/debug) before the JVM
+            // fallback, since AGP does not emit to build/classes/java/main.
             val androidCtx = androidContext.getOrNull()
+            val classesDir =
+                resolveClassesDir(
+                    androidCtx?.mainClassesDir,
+                    targetClasses.files,
+                    isTestClasses = false,
+                )
+            val testClassesDir =
+                resolveClassesDir(
+                    androidCtx?.testClassesDir,
+                    testClasses.files,
+                    isTestClasses = true,
+                )
             val rawClasspathFiles =
                 if (androidCtx != null) {
                     logger.lifecycle("Using Android variant '${androidCtx.variantName}' runtime classpath")
-                    androidCtx.runtimeClasspath.files.toList()
+                    val base = androidCtx.runtimeClasspath.files.toList()
+                    val androidJar = androidCtx.androidJar
+                    if (androidJar != null && androidJar.exists()) {
+                        logger.lifecycle("Adding auto-detected android.jar to classpath: $androidJar")
+                        base + androidJar
+                    } else {
+                        base
+                    }
                 } else {
                     classpath.files.toList()
                 }
@@ -577,6 +597,31 @@ abstract class MutationTask
                 ?: File(buildDirFile, "classes/kotlin/jvm/$subDir")
                     .takeIf { it.exists() }
                 ?: File(buildDirFile, "classes/java/$subDir")
+        }
+
+        /**
+         * Pick the classes directory to use at execution time.
+         *
+         * Order of precedence:
+         * 1. AGP-reported dir from [AndroidMutationContext] when it points
+         *    to an existing location — this is the canonical Android
+         *    output (e.g. `build/tmp/kotlin-classes/debug`) and is
+         *    required because AGP does not emit to the JVM default
+         *    `build/classes/java/main`.
+         * 2. First populated directory in the user's `targetClasses` /
+         *    `testClasses` file collection (existing behavior for
+         *    manually-wired projects).
+         * 3. JVM fallback search (kotlin/main, kotlin/jvm/main, java/main).
+         */
+        private fun resolveClassesDir(
+            androidDir: File?,
+            configuredFiles: Set<File>,
+            isTestClasses: Boolean,
+        ): File {
+            if (androidDir != null && androidDir.exists()) {
+                return androidDir
+            }
+            return findClassesDir(configuredFiles, isTestClasses)
         }
 
         /**

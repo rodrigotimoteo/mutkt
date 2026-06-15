@@ -109,6 +109,12 @@ class MutationEngine(
     // Store class files for cache lookups
     private var classFilesMap: Map<String, ByteArray> = emptyMap()
 
+    // Test class bytecode indexed by slashed class name. Populated by
+    // `runMutationTesting` so `runMutants` can hand the bytes to the
+    // mutation classloader when defining test classes (the classpath
+    // does NOT include the compiled test .class files).
+    private var allTestClassBytes: Map<String, ByteArray> = emptyMap()
+
     /**
      * Runs mutation testing on the given classpath.
      */
@@ -121,6 +127,12 @@ class MutationEngine(
     ): MutationReport {
         // Store class files for cache lookups
         classFilesMap = classFiles
+        // Stash the test class bytes so `runMutants` can map test class
+        // names to their bytecode (the prior implementation filtered
+        // `classFiles` (main classes) and left test bytes unreachable,
+        // making every test `ClassNotFoundException` and collapsing all
+        // mutations to NO_COVERAGE).
+        allTestClassBytes = testClassBytes
 
         val startTime = System.currentTimeMillis()
         val scanStart = System.currentTimeMillis()
@@ -520,8 +532,15 @@ class MutationEngine(
         MutantClassLoaderFactory.resetCache()
 
         val parentLoader = testClassLoader ?: this.javaClass.classLoader
+        // Filter the test class bytes (not the main classFiles) so the
+        // mutation classloader defines test classes from the testClassesDir
+        // bytes. Previously this filtered `classFiles` (main classes only),
+        // leaving testClassByteMap empty and forcing the parent URLClassLoader
+        // to try to resolve compiled test .class files that are NOT on the
+        // classpath — resulting in ClassNotFoundException and `testsFound=0`
+        // (i.e. all mutations reported as NO_COVERAGE).
         val testClassByteMap =
-            classFiles.filterKeys { key ->
+            allTestClassBytes.filterKeys { key ->
                 testClassNames.any { it.replace('.', '/') == key }
             }
 
