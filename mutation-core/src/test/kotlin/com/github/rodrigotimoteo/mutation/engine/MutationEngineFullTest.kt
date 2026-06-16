@@ -107,6 +107,120 @@ class MutationEngineFullTest {
         method.invoke(engine, emptyList<MutationResult>())
     }
 
+    @Test
+    fun `cached results are persisted to baseline file`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.toFile()
+        val classBytes = buildClassWithArithmetic()
+        val hash = MutKtCache(projectDir).computeClassHash(classBytes)
+
+        // Pre-seed cache with ARITHMETIC:1=KILLED
+        val cacheFile = File(projectDir, ".mutkt/cache/${hash.take(8)}/$hash.cache")
+        cacheFile.parentFile.mkdirs()
+        cacheFile.writeText("ARITHMETIC:1=KILLED")
+
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                enableCache = true,
+                projectDir = projectDir,
+            )
+        engine.runMutationTesting(
+            classFiles = mapOf("com/example/Calc" to classBytes),
+            testClassNames = listOf("com.example.CalcTest"),
+            testClassBytes = mapOf("com/example/CalcTest" to buildTestAssertingAdd(5, 3, 8)),
+        )
+
+        val baselineFile = File(projectDir, ".mutkt/baseline")
+        assertTrue(
+            baselineFile.exists(),
+            "baseline file should exist after run, got: ${projectDir.walkTopDown().filter { it.isFile }.toList()}",
+        )
+        val baselineContent = baselineFile.readText()
+        assertTrue(
+            baselineContent.contains("KILLED"),
+            "baseline should contain the cached KILLED status, got: $baselineContent",
+        )
+    }
+
+    @Test
+    fun `report totalMutations includes cached hits`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.toFile()
+        val classBytes = buildClassWithArithmetic()
+        val hash = MutKtCache(projectDir).computeClassHash(classBytes)
+
+        // Pre-seed cache: every ARITHMETIC mutation on line 1 is already KILLED
+        val cacheFile = File(projectDir, ".mutkt/cache/${hash.take(8)}/$hash.cache")
+        cacheFile.parentFile.mkdirs()
+        cacheFile.writeText("ARITHMETIC:1=KILLED")
+
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                enableCache = true,
+                projectDir = projectDir,
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                testClassNames = listOf("com.example.CalcTest"),
+                testClassBytes = mapOf("com/example/CalcTest" to buildTestAssertingAdd(5, 3, 8)),
+            )
+
+        // totalMutations must count both fresh + cached results, not just fresh
+        assertEquals(
+            report.results.size,
+            report.totalMutations,
+            "totalMutations should equal results.size (fresh + cached)",
+        )
+        assertTrue(
+            report.killedMutations >= 1,
+            "killedMutations should include cached KILLED, got: ${report.killedMutations}",
+        )
+    }
+
+    @Test
+    fun `cached and fresh results combine in single report`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.toFile()
+        val classBytes = buildClassWithArithmetic()
+        val hash = MutKtCache(projectDir).computeClassHash(classBytes)
+
+        // Pre-seed: mark the mutation as KILLED in the cache
+        val cacheFile = File(projectDir, ".mutkt/cache/${hash.take(8)}/$hash.cache")
+        cacheFile.parentFile.mkdirs()
+        cacheFile.writeText("ARITHMETIC:1=KILLED")
+
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                enableCache = true,
+                projectDir = projectDir,
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                testClassNames = listOf("com.example.CalcTest"),
+                testClassBytes = mapOf("com/example/CalcTest" to buildTestAssertingAdd(5, 3, 8)),
+            )
+
+        // Verify the cached mutation appears with KILLED status (proving merge happened)
+        val cachedMutation = report.results.firstOrNull { it.status == MutationStatus.KILLED }
+        assertNotNull(
+            cachedMutation,
+            "expected at least one KILLED result (from cache merge), got: ${report.results.map { it.status }}",
+        )
+        // Verify the test ran (so we know both fresh + cached paths were active)
+        assertTrue(
+            report.totalMutations > 0,
+            "totalMutations should be > 0, got: ${report.totalMutations}",
+        )
+    }
+
     // ==================== COVERAGE FILTERING ====================
 
     @Test

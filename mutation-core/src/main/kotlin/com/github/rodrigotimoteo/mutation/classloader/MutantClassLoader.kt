@@ -4,26 +4,27 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.Mutator
 import java.util.concurrent.ConcurrentHashMap
 
-private const val STRIPE_COUNT = 64
-private const val STRIPE_MASK = STRIPE_COUNT - 1
-
 /**
  * Loads non-target project classes. Shared across all mutations of the same target class.
  * Excludes the target class so child [MutationClassLoader] can intercept it.
  *
  * Successful [defineClass] calls are cached by the JVM. LinkageError classes are
  * cached in [failedClassCache] to skip expensive verification on subsequent loads.
+ *
+ * Concurrency: uses [getClassLoadingLock] (the standard ClassLoader per-name
+ * interned lock) instead of a custom striped lock array. The interned lock
+ * preserves the JVM's classloader deadlock guarantee: if thread T1 holds the
+ * lock for class A and triggers loading of class B (held by thread T2), the
+ * JVM detects the cycle and resolves it correctly. Custom stripes break this
+ * guarantee because two threads loading the same class can take different
+ * stripes depending on hash collisions, allowing partial-order deadlocks.
  */
 class BaseProjectClassLoader(
     parent: ClassLoader,
     private val classBytes: Map<String, ByteArray>,
     private val excludedClasses: Set<String>,
-    private val failedClassCache: MutableSet<String>,
+    val failedClassCache: MutableSet<String>,
 ) : ClassLoader(parent) {
-    private val lockStripes: Array<Any> = Array(STRIPE_COUNT) { Any() }
-
-    private fun lockFor(name: String): Any = lockStripes[name.hashCode() and STRIPE_MASK]
-
     override fun loadClass(
         name: String,
         resolve: Boolean,
@@ -45,7 +46,7 @@ class BaseProjectClassLoader(
 
         // Serialize concurrent defineClass attempts for the same class name to avoid
         // duplicate class definition LinkageError under concurrent loadClass calls.
-        synchronized(lockFor(binaryName)) {
+        synchronized(getClassLoadingLock(binaryName)) {
             findLoadedClass(binaryName)?.let { return it }
 
             val bytes = classBytes[slashedName]
@@ -79,12 +80,8 @@ class MutationClassLoader(
     private val targetBytes: ByteArray,
     private val testClassBytes: Map<String, ByteArray>,
     private val allClassBytes: Map<String, ByteArray>,
-    private val failedClassCache: MutableSet<String>,
+    val failedClassCache: MutableSet<String>,
 ) : ClassLoader(baseLoader) {
-    private val lockStripes: Array<Any> = Array(STRIPE_COUNT) { Any() }
-
-    private fun lockFor(name: String): Any = lockStripes[name.hashCode() and STRIPE_MASK]
-
     override fun loadClass(
         name: String,
         resolve: Boolean,
@@ -97,7 +94,7 @@ class MutationClassLoader(
 
         // Serialize concurrent defineClass attempts for the same class name to avoid
         // duplicate class definition LinkageError under concurrent loadClass calls.
-        synchronized(lockFor(binaryName)) {
+        synchronized(getClassLoadingLock(binaryName)) {
             // Re-check after acquiring lock — another thread may have defined it.
             findLoadedClass(binaryName)?.let { return it }
 
@@ -171,26 +168,40 @@ class MutationClassLoader(
 /**
  * Factory for creating classloader hierarchies per target class.
  *
+ * The failed-class cache is created fresh per [createGroup] call (per
+ * [BaseProjectClassLoader] instance). Concurrent engine runs no longer race
+ * on a shared singleton set — each group owns its own cache and failures in
+ * one group cannot poison another.
+ *
  * Usage per mutation run:
  * ```kotlin
- * MutantClassLoaderFactory.resetCache()
- * val group = MutantClassLoaderFactory.createGroup(parent, classFiles, testClassBytes)
+ * val group = MutantClassLoaderFactory.createGroup(parent, classFiles, testClassBytes, target)
  * // For each mutation targeting className:
- * val loader = group.createClassLoader(targetClassName, mutatedTargetBytes)
+ * val loader = MutantClassLoaderFactory.createMutationLoader(group, target, mutatedBytes, ...)
  * // ... run tests ...
- * group.close()
  * ```
  */
 object MutantClassLoaderFactory {
-    private val sharedFailedClassCache: MutableSet<String> = ConcurrentHashMap.newKeySet()
-
+    /**
+     * No-op retained for backward compatibility. Caches are now per-group;
+     * there is no singleton state to clear. New code should not depend on it.
+     */
+    @Deprecated(
+        "Failed-class cache is now scoped per BaseProjectClassLoader instance. " +
+            "This method is a no-op and will be removed in a future release.",
+        ReplaceWith("Unit"),
+    )
     fun resetCache() {
-        sharedFailedClassCache.clear()
+        // intentional no-op
     }
 
     /**
      * Creates a [BaseProjectClassLoader] for a target class, excluding it
      * (and test classes) from the base so child loaders can intercept them.
+     *
+     * Each call creates a fresh, isolated failed-class cache. The cache is
+     * shared with the [MutationClassLoader]s produced by [createMutationLoader]
+     * for the same group, but never with other groups.
      */
     fun createGroup(
         parent: ClassLoader,
@@ -205,12 +216,15 @@ object MutantClassLoaderFactory {
         excludedClasses.addAll(classFiles.keys.filter { it.startsWith(targetInnerPrefix) })
         // Also exclude test classes so they're loaded by MutationClassLoader.
         excludedClasses.addAll(testClassBytes.keys)
-        return BaseProjectClassLoader(parent, classFiles, excludedClasses, sharedFailedClassCache)
+        val failedCache: MutableSet<String> = ConcurrentHashMap.newKeySet()
+        return BaseProjectClassLoader(parent, classFiles, excludedClasses, failedCache)
     }
 
     /**
      * Creates a [MutationClassLoader] that loads the mutated target + test classes,
-     * delegating everything else to [baseLoader].
+     * delegating everything else to [baseLoader]. The failed-class cache is
+     * inherited from [baseLoader] so both loaders in the same group see the
+     * same LinkageError cache.
      */
     fun createMutationLoader(
         baseLoader: BaseProjectClassLoader,
@@ -225,12 +239,13 @@ object MutantClassLoaderFactory {
             targetBytes,
             testClassBytes,
             allClassBytes,
-            sharedFailedClassCache,
+            baseLoader.failedClassCache,
         )
     }
 
     /**
      * Legacy API: creates a flat [MutantClassLoader] (for tests and backward compatibility).
+     * The failed-class cache is created fresh per call.
      */
     fun create(
         parent: ClassLoader,
@@ -245,7 +260,6 @@ object MutantClassLoaderFactory {
             targetMutation,
             mutator,
             preMutatedBytes,
-            sharedFailedClassCache,
         )
     }
 }
@@ -263,9 +277,6 @@ class MutantClassLoader(
     private val failedClassCache: MutableSet<String> = ConcurrentHashMap.newKeySet(),
 ) : ClassLoader(parent) {
     private val targetClassName: String = targetMutation.className.replace('.', '/')
-    private val lockStripes: Array<Any> = Array(STRIPE_COUNT) { Any() }
-
-    private fun lockFor(name: String): Any = lockStripes[name.hashCode() and STRIPE_MASK]
 
     override fun loadClass(
         name: String,
@@ -279,7 +290,7 @@ class MutantClassLoader(
 
         // Serialize concurrent defineClass attempts for the same class name to avoid
         // duplicate class definition LinkageError under concurrent loadClass calls.
-        synchronized(lockFor(binaryName)) {
+        synchronized(getClassLoadingLock(binaryName)) {
             findLoadedClass(binaryName)?.let { return it }
 
             val classBytes = originalClassBytes[slashedName]

@@ -10,6 +10,13 @@ import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
+ * Sentinel value for [MutationCoverage.coveringTests] when per-test probe
+ * mapping is unavailable. Signals "treat this mutation as potentially covered
+ * by every test in the suite". Distinct from a real test class name.
+ */
+const val ALL_TESTS_COVERED = "all"
+
+/**
  * Analyzes coverage data for coverage-guided mutation testing.
  *
  * Parses JaCoCo .exec files to determine line-level coverage.
@@ -194,7 +201,12 @@ class CoverageAnalyzer {
 
         return mutations.map { mutation ->
             if (mutation.lineNumber in coveredLines) {
-                MutationCoverage(mutation, listOf("covered"))
+                // Per-test probe mapping requires an instrumented test runner
+                // mapping each test to its probe range. Without that, fall
+                // back to a sentinel meaning "any test in the suite may
+                // cover this mutation" so downstream weak-mutation filters
+                // are conservative rather than silently wrong.
+                MutationCoverage(mutation, listOf(ALL_TESTS_COVERED))
             } else {
                 MutationCoverage(mutation, emptyList())
             }

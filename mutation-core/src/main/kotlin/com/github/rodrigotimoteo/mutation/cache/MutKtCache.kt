@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutation.cache
 import com.github.rodrigotimoteo.mutation.MUTKT_DIR
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import java.io.File
+import java.io.RandomAccessFile
 import java.security.MessageDigest
 
 /**
@@ -59,16 +60,17 @@ class MutKtCache(private val projectDir: File) {
         methodName: String,
         lineNumber: Int,
         occurrenceIndex: Int = 0,
-    ): MutationStatus? {
-        val cacheFile = getCacheFile(classHash)
-        if (!cacheFile.exists()) return null
+    ): MutationStatus? =
+        withFileLock(getCacheFile(classHash)) {
+            val cacheFile = getCacheFile(classHash)
+            if (!cacheFile.exists()) return@withFileLock null
 
-        val key = "$operator:$methodName:$lineNumber:$occurrenceIndex"
-        return cacheFile.readLines()
-            .firstOrNull { it.startsWith("$key=") }
-            ?.substringAfter("=")
-            ?.let { runCatching { MutationStatus.valueOf(it) }.getOrNull() }
-    }
+            val key = "$operator:$methodName:$lineNumber:$occurrenceIndex"
+            cacheFile.readLines()
+                .firstOrNull { it.startsWith("$key=") }
+                ?.substringAfter("=")
+                ?.let { runCatching { MutationStatus.valueOf(it) }.getOrNull() }
+        }
 
     /**
      * Store mutation result in cache.
@@ -89,17 +91,19 @@ class MutKtCache(private val projectDir: File) {
         status: MutationStatus,
     ) {
         val cacheFile = getCacheFile(classHash)
-        val key = "$operator:$methodName:$lineNumber:$occurrenceIndex"
-        val entry = "$key=$status"
+        withFileLock(cacheFile) {
+            val key = "$operator:$methodName:$lineNumber:$occurrenceIndex"
+            val entry = "$key=$status"
 
-        val lines =
-            if (cacheFile.exists()) {
-                cacheFile.readLines().filter { !it.startsWith("$key=") }
-            } else {
-                emptyList()
-            }
+            val lines =
+                if (cacheFile.exists()) {
+                    cacheFile.readLines().filter { !it.startsWith("$key=") }
+                } else {
+                    emptyList()
+                }
 
-        cacheFile.writeText((lines + entry).joinToString("\n"))
+            cacheFile.writeText((lines + entry).joinToString("\n"))
+        }
     }
 
     /**
@@ -127,5 +131,23 @@ class MutKtCache(private val projectDir: File) {
         val dir = File(cacheDir, prefix)
         dir.mkdirs()
         return File(dir, "$classHash.cache")
+    }
+
+    /**
+     * Run [block] while holding an exclusive OS file lock on `file.lock`.
+     * Prevents concurrent Gradle workers from corrupting cache files.
+     */
+    private inline fun <T> withFileLock(
+        file: File,
+        block: () -> T,
+    ): T {
+        val parent = file.parentFile
+        if (parent != null) parent.mkdirs()
+        val lockFile = File(parent, "${file.name}.lock")
+        RandomAccessFile(lockFile, "rw").channel.use { channel ->
+            channel.lock().use {
+                return block()
+            }
+        }
     }
 }

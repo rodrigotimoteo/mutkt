@@ -27,14 +27,16 @@ object GeneratedClassFilter {
         className: String,
         patterns: Set<String>,
     ): Boolean {
+        val slashed = className.replace('.', '/')
         return patterns.any { pattern ->
+            val normalized = pattern.removePrefix("**/")
             when {
-                pattern.endsWith("\$*") -> className.contains(pattern.dropLast(2) + "\$")
-                pattern.startsWith("*") && pattern.endsWith("*") ->
-                    className.contains(pattern.drop(1).dropLast(1))
-                pattern.endsWith("*") -> className.startsWith(pattern.dropLast(1))
-                pattern.startsWith("*") -> className.endsWith(pattern.drop(1))
-                else -> className == pattern
+                normalized.endsWith("\$*") -> slashed.contains(normalized.removeSuffix("*"))
+                normalized.startsWith("*") && normalized.endsWith("*") ->
+                    slashed.contains(normalized.drop(1).dropLast(1))
+                normalized.endsWith("*") -> slashed.startsWith(normalized.dropLast(1))
+                normalized.startsWith("*") -> slashed.endsWith(normalized.drop(1))
+                else -> slashed == normalized || className == normalized
             }
         }
     }

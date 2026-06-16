@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutation.LOG_PREFIX
 import com.github.rodrigotimoteo.mutation.MUTKT_DIR
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import java.io.File
+import java.io.RandomAccessFile
 
 /**
  * Baseline storage for tracking mutation results across runs.
@@ -38,13 +39,15 @@ class BaselineStorage(private val projectDir: File) {
      * @param results Map of className to (operator, lineNumber, status)
      */
     fun save(results: Map<String, List<Triple<String, Int, MutationStatus>>>) {
-        val lines = mutableListOf<String>()
-        for ((className, mutations) in results) {
-            for ((operator, line, status) in mutations) {
-                lines.add("$className|$operator|$line|$status")
+        withFileLock(baselineFile) {
+            val lines = mutableListOf<String>()
+            for ((className, mutations) in results) {
+                for ((operator, line, status) in mutations) {
+                    lines.add("$className|$operator|$line|$status")
+                }
             }
+            baselineFile.writeText(lines.joinToString("\n"))
         }
-        baselineFile.writeText(lines.joinToString("\n"))
     }
 
     /**
@@ -69,21 +72,23 @@ class BaselineStorage(private val projectDir: File) {
     fun load(): Map<String, List<Triple<String, Int, MutationStatus>>> {
         if (!baselineFile.exists()) return emptyMap()
 
-        val results = mutableMapOf<String, MutableList<Triple<String, Int, MutationStatus>>>()
+        return withFileLock(baselineFile) {
+            val results = mutableMapOf<String, MutableList<Triple<String, Int, MutationStatus>>>()
 
-        for (line in baselineFile.readLines()) {
-            if (line.isBlank()) continue
-            val parts = line.split("|")
-            if (parts.size == 4) {
-                val className = parts[0]
-                val operator = parts[1]
-                val lineNumber = parts[2].toIntOrNull() ?: continue
-                val status = runCatching { MutationStatus.valueOf(parts[3]) }.getOrNull() ?: continue
-                results.getOrPut(className) { mutableListOf() }.add(Triple(operator, lineNumber, status))
+            for (line in baselineFile.readLines()) {
+                if (line.isBlank()) continue
+                val parts = line.split("|")
+                if (parts.size == 4) {
+                    val className = parts[0]
+                    val operator = parts[1]
+                    val lineNumber = parts[2].toIntOrNull() ?: continue
+                    val status = runCatching { MutationStatus.valueOf(parts[3]) }.getOrNull() ?: continue
+                    results.getOrPut(className) { mutableListOf() }.add(Triple(operator, lineNumber, status))
+                }
             }
-        }
 
-        return results.mapValues { it.value.toList() }
+            results.mapValues { it.value.toList() }
+        }
     }
 
     /**
@@ -174,6 +179,24 @@ class BaselineStorage(private val projectDir: File) {
      */
     fun clear() {
         baselineFile.delete()
+    }
+
+    /**
+     * Run [block] while holding an exclusive OS file lock on `file.lock`.
+     * Prevents concurrent Gradle workers from corrupting baseline files.
+     */
+    private inline fun <T> withFileLock(
+        file: File,
+        block: () -> T,
+    ): T {
+        val parent = file.parentFile
+        if (parent != null) parent.mkdirs()
+        val lockFile = File(parent, "${file.name}.lock")
+        RandomAccessFile(lockFile, "rw").channel.use { channel ->
+            channel.lock().use {
+                return block()
+            }
+        }
     }
 }
 

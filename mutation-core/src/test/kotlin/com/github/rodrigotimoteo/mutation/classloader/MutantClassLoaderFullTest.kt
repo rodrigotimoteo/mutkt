@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -749,6 +750,121 @@ class MutantClassLoaderFullTest {
         assertEquals("com.example.FactoryMutOther", clazz.name)
         // Non-target → handled by base → loaded by base, not mutation loader.
         assertSame(base, clazz.classLoader)
+    }
+
+    // ---------- Cache isolation (per-group failed-class cache) ----------
+
+    @Test
+    fun `createGroup produces independent failed caches across groups`() {
+        val targetA = "com/example/IsoTargetA"
+        val targetB = "com/example/IsoTargetB"
+        val badA = "com/example/IsoBadA"
+        val badB = "com/example/IsoBadB"
+        val badBytesA = buildClassWithInvalidSuperclass(badA)
+        val badBytesB = buildClassWithInvalidSuperclass(badB)
+
+        val baseA =
+            MutantClassLoaderFactory.createGroup(
+                parentClassLoader,
+                classFiles = mapOf(badA to badBytesA, badB to badBytesB),
+                testClassBytes = emptyMap(),
+                targetClassName = targetA,
+            )
+        val baseB =
+            MutantClassLoaderFactory.createGroup(
+                parentClassLoader,
+                classFiles = mapOf(badA to badBytesA, badB to badBytesB),
+                testClassBytes = emptyMap(),
+                targetClassName = targetB,
+            )
+
+        // Populate baseA's cache with both bad names.
+        assertFailsWith<LinkageError> { baseA.loadClass("com.example.IsoBadA") }
+        assertFailsWith<LinkageError> { baseA.loadClass("com.example.IsoBadB") }
+        assertTrue(badA in baseA.failedClassCache)
+        assertTrue(badB in baseA.failedClassCache)
+
+        // baseB's cache must be untouched — both names should still attempt defineClass.
+        assertNotSame(baseA.failedClassCache, baseB.failedClassCache)
+        assertTrue(baseB.failedClassCache.isEmpty(), "baseB's cache must start empty")
+        assertFailsWith<LinkageError> { baseB.loadClass("com.example.IsoBadA") }
+        assertFailsWith<LinkageError> { baseB.loadClass("com.example.IsoBadB") }
+    }
+
+    @Test
+    fun `createMutationLoader shares the base loader failed cache`() {
+        val target = "com/example/ShareTarget"
+        val badName = "com/example/ShareBad"
+        val badBytes = buildClassWithInvalidSuperclass(badName)
+        val targetBytes = buildClassWithMethod(target)
+
+        val base =
+            MutantClassLoaderFactory.createGroup(
+                parentClassLoader,
+                classFiles = mapOf(target to targetBytes, badName to badBytes),
+                testClassBytes = emptyMap(),
+                targetClassName = target,
+            )
+        val mutationLoader =
+            MutantClassLoaderFactory.createMutationLoader(
+                base,
+                target,
+                targetBytes,
+                testClassBytes = emptyMap(),
+                allClassBytes = mapOf(badName to badBytes),
+            )
+
+        // Populate the cache via the base loader.
+        assertFailsWith<LinkageError> { base.loadClass("com.example.ShareBad") }
+        assertTrue(badName in base.failedClassCache)
+
+        // The mutation loader must observe the same cache instance.
+        assertSame(base.failedClassCache, mutationLoader.failedClassCache)
+        // First call after population: cache short-circuit kicks in, parent delegation
+        // returns ClassNotFoundException (the bad name is not on the parent classpath).
+        assertFailsWith<ClassNotFoundException> {
+            mutationLoader.loadClass("com.example.ShareBad")
+        }
+    }
+
+    @Test
+    fun `concurrent createGroup calls produce independent caches`() {
+        val threadCount = 16
+        val target = "com/example/ConcTarget"
+        val bad = "com/example/ConcBad"
+        val badBytes = buildClassWithInvalidSuperclass(bad)
+
+        val baseLoaders =
+            (0 until threadCount).map { _ ->
+                MutantClassLoaderFactory.createGroup(
+                    parentClassLoader,
+                    classFiles = mapOf(target to buildClassWithMethod(target), bad to badBytes),
+                    testClassBytes = emptyMap(),
+                    targetClassName = target,
+                )
+            }
+
+        // Every base must hold a distinct cache instance. Identity check — empty
+        // Sets compare equal regardless of backing map, so content equality would
+        // collapse 16 distinct instances into 1.
+        val caches = baseLoaders.map { it.failedClassCache }
+        val uniqueByIdentity = java.util.IdentityHashMap<MutableSet<String>, Unit>()
+        caches.forEach { uniqueByIdentity[it] = Unit }
+        assertEquals(
+            threadCount,
+            uniqueByIdentity.size,
+            "Each createGroup call must produce a distinct failedClassCache instance",
+        )
+
+        // Triggering a failure in one group must not mark the name in any other group.
+        assertFailsWith<LinkageError> { baseLoaders[0].loadClass("com.example.ConcBad") }
+        assertTrue(bad in baseLoaders[0].failedClassCache)
+        for (i in 1 until threadCount) {
+            assertTrue(
+                baseLoaders[i].failedClassCache.isEmpty(),
+                "Group $i cache must remain untouched by group 0's failure",
+            )
+        }
     }
 
     // ---------- helpers ----------

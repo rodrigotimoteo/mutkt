@@ -63,8 +63,8 @@ class CoverageAnalyzerFullTest {
             )
 
         assertEquals(3, result.size)
-        assertEquals(listOf("covered"), result[0].coveringTests)
-        assertEquals(listOf("covered"), result[1].coveringTests)
+        assertEquals(listOf(ALL_TESTS_COVERED), result[0].coveringTests)
+        assertEquals(listOf(ALL_TESTS_COVERED), result[1].coveringTests)
         assertEquals(emptyList(), result[2].coveringTests)
 
         io.mockk.unmockkAll()
@@ -313,7 +313,7 @@ class CoverageAnalyzerFullTest {
         val uncovered = result.find { it.mutation == uncoveredMutation }
         assertNotNull(covered)
         assertNotNull(uncovered)
-        assertEquals(listOf("covered"), covered.coveringTests)
+        assertEquals(listOf(ALL_TESTS_COVERED), covered.coveringTests)
         assertEquals(emptyList(), uncovered.coveringTests)
 
         io.mockk.unmockkAll()

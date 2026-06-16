@@ -259,6 +259,9 @@ class MutationEngine(
             "$LOG_PREFIX Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
         )
 
+        // Merge cached results into final results so cache hits are reported
+        val allResults = results + cachedResults
+
         // Update cache with new results
         if (enableCache && cache != null) {
             updateCache(results)
@@ -281,12 +284,12 @@ class MutationEngine(
 
         // Post-hoc subsumption analysis (identify redundant mutations after testing)
         val finalResults =
-            if (enableSubsumption && results.size > 10) {
-                val mutations = results.map { it.mutation }
+            if (enableSubsumption && allResults.size > 10) {
+                val mutations = allResults.map { it.mutation }
                 val (essential, subsumed) = subsumptionAnalyzer.analyze(mutations, killSets)
                 if (subsumed.isNotEmpty()) {
                     System.err.println("$LOG_PREFIX Subsumption: ${subsumed.size} redundant mutations identified")
-                    results.map { result ->
+                    allResults.map { result ->
                         if (result.mutation.id in subsumed) {
                             result.copy(status = MutationStatus.SUBSUMED)
                         } else {
@@ -294,10 +297,10 @@ class MutationEngine(
                         }
                     }
                 } else {
-                    results
+                    allResults
                 }
             } else {
-                results
+                allResults
             }
 
         // Save baseline for future comparison (merge on incremental runs to avoid data loss)

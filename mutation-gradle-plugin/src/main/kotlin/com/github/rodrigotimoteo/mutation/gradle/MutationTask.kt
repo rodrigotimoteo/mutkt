@@ -453,7 +453,7 @@ abstract class MutationTask
                     enableCache = enableCache.get(),
                     enableSubsumption = enableSubsumption.get(),
                     enableWeakMutation = enableWeakMutation.get(),
-                    projectDir = mutktDir.asFile.get(),
+                    projectDir = projectDirectory.asFile,
                     excludedMethods = excludedMethods.getOrElse(emptySet()),
                     maxMutationsPerClass = maxMutationsPerClass.get(),
                     targetTestPatterns = targetTestPatterns.getOrElse(emptySet()).toList(),
@@ -470,6 +470,14 @@ abstract class MutationTask
                     coverageExecFile = coverageFile,
                 )
 
+            // Auto-add graph to report formats if generateGraph is set
+            if (generateGraph.get()) {
+                val currentFormats = reportFormats.getOrElse(emptySet()).toMutableSet()
+                currentFormats.add("graph")
+                reportFormats.set(currentFormats)
+                logger.lifecycle("$LOG_PREFIX Graph report enabled via generateGraph option")
+            }
+
             // Generate reports
             generateReports(report)
 
@@ -478,14 +486,6 @@ abstract class MutationTask
 
             // Fail build if configured
             checkFailConditions(report)
-
-            // Auto-add graph to report formats if generateGraph is set
-            if (generateGraph.get()) {
-                val currentFormats = reportFormats.getOrElse(emptySet()).toMutableSet()
-                currentFormats.add("graph")
-                reportFormats.set(currentFormats)
-                logger.lifecycle("$LOG_PREFIX Graph report enabled via generateGraph option")
-            }
         }
 
         /**
@@ -516,14 +516,34 @@ abstract class MutationTask
             }
         }
 
-        private fun globToRegex(glob: String): String {
-            return glob
-                .replace("\\", "\\\\")
-                .replace(".", "\\.")
-                .replace("**", " ")
-                .replace("*", "[^/]*")
-                .replace(" ", ".*")
-                .replace("?", ".")
+        private fun globToRegex(pattern: String): String {
+            val stripped = pattern.removePrefix("**/")
+            val regex = StringBuilder("^")
+            var i = 0
+            while (i < stripped.length) {
+                val c = stripped[i]
+                when {
+                    c == '*' && i + 1 < stripped.length && stripped[i + 1] == '*' -> {
+                        regex.append(".*")
+                        i += 2
+                        if (i < stripped.length && stripped[i] == '/') i++
+                    }
+                    c == '*' -> {
+                        regex.append("[^/]*")
+                        i++
+                    }
+                    c == '?' -> {
+                        regex.append(".")
+                        i++
+                    }
+                    else -> {
+                        regex.append(Regex.escape(c.toString()))
+                        i++
+                    }
+                }
+            }
+            regex.append("$")
+            return regex.toString()
         }
 
         /**

@@ -185,6 +185,12 @@ private val COLLECTION_INTERFACES =
         "java.util.List",
         "java.util.Set",
         "java.util.Map",
+        "kotlin.collections.List",
+        "kotlin.collections.Set",
+        "kotlin.collections.Map",
+        "kotlin.collections.MutableList",
+        "kotlin.collections.MutableSet",
+        "kotlin.collections.MutableMap",
     )
 
 internal object ReturnValueMutator {
@@ -192,12 +198,10 @@ internal object ReturnValueMutator {
         if (type.sort == Type.ARRAY) return true
         val cn = type.className
         // Type.className returns dotted form (java.util.List), not slashed.
-        // Restrict to interfaces + arrays to keep scanner aligned with what
-        // applyEmptyReturn can safely produce.
-        return cn in COLLECTION_INTERFACES ||
-            cn.startsWith("java.util.List") ||
-            cn.startsWith("java.util.Set") ||
-            cn.startsWith("java.util.Map") ||
-            cn.startsWith("kotlin.collections.")
+        // Restrict to exact known interfaces + arrays to keep scanner aligned
+        // with what applyEmptyReturn can safely produce. Subtypes like
+        // ArrayList/HashSet fall through to the applier's else branch and
+        // would otherwise emit ARETURN with empty stack.
+        return cn in COLLECTION_INTERFACES
     }
 }
