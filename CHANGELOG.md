@@ -1,68 +1,97 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2026-06-15
 
-### Added
-- **Android support** — Full Android support via Robolectric. Plugin auto-detects AGP, extracts AARs, injects android.jar, filters generated classes. See [docs/ANDROID.md](docs/ANDROID.md).
-- `mutation-sample-android` module — Working example with Robolectric tests for SharedPreferences + Resources.
-- 22 new test cases for Android variant resolution + generated class filter.
+### Android Support (6 phases, 33 new tests)
+- **Auto-detect AGP** — Plugin detects `com.android.application`/`com.android.library` via `withType(AppPlugin/LibraryPlugin)` with compileOnly AGP dependency
+- **Variant resolver** — `AgpVariantResolver` resolves runtime classpath, classes dirs, test classes dirs from AGP variant tasks
+- **AAR extraction** — `AarExtractor` extracts `classes.jar` from `.aar` files; `expandAars()` runs on all classpaths automatically
+- **Android classes dir** — `findVariantClassesDirs()` reads from `compile<Variant>Kotlin` task `destinationDirectory` (not hardcoded JVM path)
+- **auto android.jar** — `AndroidJarLocator` searches `$ANDROID_HOME`, `$ANDROID_SDK_ROOT`, `local.properties`, `~/.android-sdk` (5 priority paths)
+- **Generated class filter** — Excludes `R`, `R$*`, `BuildConfig`, `ComposableSingletons$*`, `*_Impl`, `*_Factory`, `*Hilt*` + 14 more patterns; `**/` prefix stripped
+- **Kotlin compile task discovery** — Uses `withType(KotlinCompile)` instead of hardcoded `compileKotlin`; picks `compileDebugKotlin`/`compileDebugUnitTestKotlin` on Android
+- **mutation-sample-android** — Working example with Robolectric, MockK, Mockito tests
+- **docs/ANDROID.md** — Quick start, how-it-works, DSL config, troubleshooting, MockK/Mockito compatibility matrix
 
-## [0.3.0] - 2026-06-14
+### JUnit Platform Launcher (replaced reflection runner)
+- **ReflectionTestRunner.kt** — 698 → 215 lines (-69%). Now uses `LauncherFactory.create()` + `LauncherDiscoveryRequestBuilder`
+- **JUnit Vintage support** — `junit-vintage-engine` added so JUnit 4 tests keep working
+- **Engine filter configurable** — `engineIds` constructor parameter (default: jupiter + vintage)
+- **What now works**: MockK final-class inline, MockK `mockkStatic()`, Mockito 5+ inline, `@TestFactory` dynamic tests, `@EnabledIf` annotations, custom test execution order
+- **What requires user config**: `@ExtendWith` needs JUnit Jupiter on user classpath
 
-### Critical Bug Fixes (4)
-- **@BeforeAll/@AfterAll instance sharing**: Instance-level lifecycle methods created a new instance while tests ran on different instances → state set in `@BeforeAll` was lost. JUnit semantics now preserved.
-- **CoverageAnalyzer stub**: `coveringTests = listOf("covered")` for uncovered classes made `filterByCoverage` keep all mutations. Now returns `emptyList()` so filter works correctly.
-- **EMPTY_RETURNS stack underflow**: `applyEmptyReturn` only handled `List`/`Set`/`Map` interfaces and arrays. Concrete types (`ArrayList`, `HashSet`, `HashMap`, `Collection`) caused verifier errors. Scanner predicate now restricted to interfaces + arrays + `kotlin.collections.*`.
-- **CONSTRUCTOR_CALLS corrupted `this`**: `<init>` super/this() calls were mutated assuming `NEW+DUP` stack layout → POP2 corrupted constructor stack. Guard added to skip constructor methods.
+### Critical Bug Fixes (14)
+- **cachedResults never merged** — Cache hits vanished from report/strength/baseline. Now merged into `allResults`
+- **Cache/baseline no locking** — Concurrent workers corrupted state. Added `withFileLock()` using `FileChannel.lock()`
+- **Classloader deadlock guarantee** — Custom striped locks broke JVM guarantee. Replaced with `getClassLoadingLock()`
+- **sharedFailedClassCache race** — Singleton cache corrupted concurrent runs. Now fresh `ConcurrentHashMap.newKeySet()` per group
+- **EMPTY_RETURNS invalid bytecode** — `startsWith` matching included concrete subtypes. Now exact-match only
+- **CoverageAnalyzer placeholder** — `listOf("covered")` never real test names. Added `ALL_TESTS_COVERED` sentinel
+- **globToRegex corrupts patterns** — `replace("", ".*")` inserted `.*` between every char. Rewritten as proper parser
+- **GeneratedClassFilter broken** — FQCN matching never worked for Android classes. Normalizes to slashed form
+- **generateGraph dead** — Flag checked after `generateReports` ran. Moved before
+- **mutktDir nesting** — Passed `mutktDir` as `projectDir` → `.mutkt/.mutkt/`. Fixed to `projectDirectory.asFile`
+- **@BeforeAll/@AfterAll instance sharing** — Lifecycle methods on wrong instance. JUnit semantics preserved
+- **CONSTRUCTOR_CALLS corrupted `this`** — Guard added for `NEW+DUP` pattern
+- **autoDetectJaCoCo** — Set `@InputFile` before JaCoCo runs. Now only sets when file exists
+- **autoRunJaCoCo** — Never wired JaCoCo agent. Now depends on `jacocoTestReport`
 
-### High Priority Fixes (26)
-- **getCommonSuperClass**: Used wrong ClassLoader (system instead of project), missed `Throwable` (LinkageError). Now uses project classloader + catches `Throwable`.
-- **Data class copy$default**: Scanner created mutations for `copy$default` (`INVOKESTATIC`) but applier only handled `copy()` (`INVOKESPECIAL`). Mutations silently dropped. Applier branch added.
-- **IINC duplicate mutations**: `ARITHMETIC` + `INCREMENTS` both negated IINC → duplicates. Single IINC handler picks one operator.
-- **Mutation applier match guard**: Applier matched only by `lineNumber+opcode`. Methods sharing line/opcode patterns mutated wrong instructions. Added `methodName`/`methodDescriptor` to all 7 visitor match guards.
-- **Cache key collision**: `operator:lineNumber` collided for methods sharing lines. Now `operator:methodName:lineNumber:occurrenceIndex`.
-- **Classloader inner classes**: Excluded classes delegated to parent → unmutated target/test classes leaked. Now throws `ClassNotFoundException`.
-- **Lock striping**: `defineLocks` map grew unbounded. Replaced with 64-stripe lock array.
-- **Target inner classes**: Companion/nested classes broke. Now excluded in `createGroup` and defined in `MutationClassLoader`.
-- **ReflectionTestRunner `invokeWithLifecycle`**: 5x duplicated lifecycle blocks extracted to single helper + `TestInvocationResult` sealed class.
-- **CoverageAnalyzer sealed type**: `execFile!!` could NPE on invalid `CoverageData`. Now sealed `Empty`/`Valid` — invalid state unrepresentable.
-- **Split Mutator 1574 lines → 5 files**: `Mutator` + `MutationScanner` + `MutationApplier` + `MutationHelpers` + `KotlinSyntheticUtils`.
-- **KotlinMetadataParser dedup**: Removed dead parser, `isKotlinSyntheticMethod` now single source of truth.
-- **Occurrence index**: Repeated identical instructions on same line now disambiguated via per-(operator,line) counter in metadata.
-- **Gradle plugin 5 HIGH fixes**: Flattened nested `plugins` block, `outputDir` → `DirectoryProperty` (config cache safe), `maxParallelMutants` convention = 4 (deterministic), `@OutputDirectory mutktDir` declared, KMP `classes/kotlin/jvm/main` fallback added.
-- **Test quality (3 HIGH)**: `latch.await()` bounded to 5s, `Thread.sleep` replaced with injected `Clock` + `FakeClock`, empty `failOnSurvived` test body implemented.
-- **Integration test gating**: `MutationEngineIntegrationTest` marked `@Tag("integration")` + `@Timeout(60)` + `RUN_INTEGRATION` env var.
+### High Priority Fixes (27)
+- **getCommonSuperClass** — Full hierarchy walking with class caching
+- **Data class copy$default** — Applier branch for `INVOKESTATIC copy$default`
+- **IINC duplicate** — Single handler picks one operator
+- **Mutation applier match guard** — Added `methodName`/`methodDescriptor` to all 7 guards
+- **Cache key collision** — Now `operator:methodName:lineNumber:occurrenceIndex`
+- **Classloader inner classes** — Throws `ClassNotFoundException` for excluded classes
+- **Lock striping** — 64-stripe lock array for classloader
+- **Target inner classes** — Excluded in `createGroup`, defined in `MutationClassLoader`
+- **TRUE_RETURNS/FALSE_RETURNS** — Track `previousOpcode` in applier
+- **CONSTRUCTOR_CALLS DUP detection** — Refuse mutation when DUP not present
+- **@SuppressMutations** — Presence suppresses ALL (not just listed operators)
+- **WeakMutation line=-1** — Treat as conservatively reachable
+- **TestStrengthOrdering** — JSON parser + thread-safety + strength-based ordering
+- **KillSetStorage** — JSON format + atomic writes
+- **InlinedFinallyDetector** — Wired into public API
+- **ReflectionTestRunner** — Configurable engine filter, robust disabled detection
+- **MutationTestRunnerFactory** — `MutationRunnerConfig` data class (was 15 params)
+- **Test class discovery** — ASM bytecode scan for `@Test` annotations
+- **Inner class detection** — ASM `InnerClasses` attribute (not `$` substring)
+- **Engine: mutable state** — `classFilesMap`/`allTestClassBytes` removed, passed as params
+- **Engine: lazy classloaders** — `ConcurrentHashMap.computeIfAbsent`
+- **Engine: classLoader.close()** — After each mutant with `runCatching`
+- **Engine: pattern validation** — Throws on invalid regex at construction
+- **Engine: parallel scan** — `ForkJoinPool` for `generateAllMutations`
+- **Engine: sourceDirs** — Constructor parameter (was hardcoded)
+- **Engine: Charsets.UTF_8** — For `findSourceCode`
+- **Engine: logger** — Replaced all `System.err.println` with SLF4J
 
-### Code Quality (102 assertion messages + 24 edge case tests)
-- 102 descriptive failure messages added across 16 test files
-- 24 new edge case tests in `MutatorEdgeCasesTest.kt`
+### MEDIUM Fixes (49)
+- **Gradle**: `@LocalState mutktDir`, Android inputs flattened as `@InputFiles`, `parseOperators` fail-fast, `failOnScoreThreshold` deprecated, `mutantTimeoutMs` deprecated, sample plugin removed
+- **Reports**: `escapeJson` complete, D3 SRI hash, `escapeHtml` single quote/backtick, `escapeCsv` `\r`, TTY detection for ANSI, `showClassScores` wired, GraphGenerator labels
+- **Baseline**: `MutationBaseline` data class, per-key merge in `saveMerged`, configurable source prefixes
+- **Filter**: `compileRegex` with clear error messages
+- **Tests**: 10 quality improvements (try/catch removed, @After added, boundary cases, @Tag integration, specific assertions)
+- **Docs**: README version 0.3.0, annotation example, defaults aligned, property names corrected
+- **CI**: artifact paths, dokka command, token names
 
-### MEDIUM + LOW Fixes (17)
-- `Mutation.id` now includes `occurrenceIndex`
-- `mutktDir` passed to engine (writes go to build dir)
-- `generateGraph` now actually adds `"graph"` to formats
-- Renamed `failOnCoverageThreshold` → `failOnMutationScoreThreshold` (misnamed)
-- `globToRegex` rewritten with proper escaping (no `**` re-substitution)
-- `testsSkipped` properly counts `@Disabled` (was hardcoded 0)
-- `updateTestStrength` uses filtered test names
-- Removed dead `INVERT_NEGS` enum entry
-- KDoc plugin id `com.github` → `io.github`
-- Default mode `STRICT` → `LENIENT` (aligned with `MutKtTest`)
-- `RETURN_VALS` doc updated to match implementation
-- `KotlinMetadataParser` deleted (dead code)
-- Graph node labels: "test" → "class-under-test"
-- `escapeJson` handles `\b`, `\f`, control chars via `\uXXXX`
+### LOW Fixes (46)
+- **Model**: `Mutation.kt` bytecode fields documented, `MutationResult.kt` `getClassScores` cached
+- **Registry**: Empty set cleanup, `withCleanup` helper
+- **ClassLoader**: `testClassPrefixes` O(1) lookup
+- **Reports**: Badge URL validation, GraphGenerator legend
+- **Tests**: 16 test quality improvements
+- **Docs**: 7 documentation improvements (MIGRATION, ARCHITECTURE, MOCKING, README)
 
 ### Constants Extracted
-- `DEFAULT_TIMEOUT_MS = 30_000L`
-- `MUTKT_DIR = ".mutkt"`
-- `LOG_PREFIX = "[MutKt]"`
-- `REPORT_WIDTH = 60`
+- `DEFAULT_TIMEOUT_MS`, `MUTKT_DIR`, `LOG_PREFIX`, `REPORT_WIDTH`, `ALL_TESTS_COVERED`
 
 ### Test Counts
-- mutation-core: 803+ tests, 0 failures
-- mutation-gradle-plugin: 83 tests, 0 failures
-- All modules build clean
+- mutation-core: 822+ tests
+- mutation-gradle-plugin: 158 tests
+- mutation-report: 28 tests
+- mutation-sample-android: 14 tests
+- mutation-test-runner: 10 tests
+- **Total: 1032+ tests, BUILD SUCCESSFUL**
 
 ## [0.2.3] - 2026-06-10
 

@@ -149,6 +149,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const tag = context.ref.replace('refs/tags/', '');
             
             // Read changelog for this version
@@ -156,10 +157,23 @@ jobs:
             const versionMatch = changelog.match(/## \[${tag.replace('v', '')}\] - [\s\S]*?(?=## \[|$)/);
             const body = versionMatch ? versionMatch[0].trim() : `Release ${tag}`;
             
-            // Upload JARs as release assets
-            const { create: createGlob } = require('@actions/glob');
-            const globber = await createGlob('dist/**/*.jar');
-            const files = await globber.glob();
+            // Find JAR files using fs
+            function findJars(dir) {
+              const results = [];
+              const items = fs.readdirSync(dir, { withFileTypes: true });
+              for (const item of items) {
+                const fullPath = path.join(dir, item.name);
+                if (item.isDirectory()) {
+                  results.push(...findJars(fullPath));
+                } else if (item.name.endsWith('.jar')) {
+                  results.push(fullPath);
+                }
+              }
+              return results;
+            }
+            
+            const files = fs.existsSync('dist') ? findJars('dist') : [];
+            console.log(`Found ${files.length} JAR files`);
             
             await github.rest.repos.createRelease({
               owner: context.repo.owner,
@@ -172,17 +186,19 @@ jobs:
             });
             
             // Upload assets
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: tag
+            });
+            
             for (const file of files) {
-              const name = file.split('/').pop();
+              const name = path.basename(file);
               console.log(`Uploading ${name}...`);
               await github.rest.repos.uploadReleaseAsset({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                release_id: (await github.rest.repos.getReleaseByTag({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  tag: tag
-                })).data.id,
+                release_id: release.data.id,
                 name: name,
                 data: fs.readFileSync(file)
               });
