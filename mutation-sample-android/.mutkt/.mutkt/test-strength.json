@@ -1,0 +1,26 @@
+{
+  "com.github.rodrigotimoteo.mutation.sample.android.WithInlineMocksTest": {
+    "totalKills": 18,
+    "totalRuns": 46,
+    "totalMutations": 46,
+    "lastRun": 1781566669564
+  },
+  "com.github.rodrigotimoteo.mutation.sample.android.ResourceHelperTest": {
+    "totalKills": 46,
+    "totalRuns": 46,
+    "totalMutations": 46,
+    "lastRun": 1781566669564
+  },
+  "com.github.rodrigotimoteo.mutation.sample.android.WithMocksTest": {
+    "totalKills": 46,
+    "totalRuns": 46,
+    "totalMutations": 46,
+    "lastRun": 1781566669564
+  },
+  "com.github.rodrigotimoteo.mutation.sample.android.SharedPreferencesManagerTest": {
+    "totalKills": 46,
+    "totalRuns": 46,
+    "totalMutations": 46,
+    "lastRun": 1781566669564
+  }
+}

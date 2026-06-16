@@ -20,6 +20,8 @@ dependencies {
 
     // JUnit Platform Launcher for native JUnit 5 support
     implementation(libs.junit.platform.launcher)
+    // JUnit Vintage Engine so the launcher can run JUnit 4 tests as well
+    implementation(libs.junit.vintage.engine)
 
     // Testing
     testImplementation(libs.kotlin.test)
