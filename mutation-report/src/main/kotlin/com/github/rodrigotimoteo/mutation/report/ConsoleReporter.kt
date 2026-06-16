@@ -147,7 +147,31 @@ class ConsoleReporter {
     /**
      * Clear current line (for progress updates).
      *
+     * Emits an ANSI clear-line escape only when stdout is a real TTY.
+     * When output is being captured (CI logs, piped through `tee`, IDE
+     * test runners) the escape sequence is meaningless and pollutes the
+     * captured text with control characters, so we return a plain `\r`
+     * in that case.
+     *
      * @return Escape sequence to clear line
      */
-    fun clearLine(): String = "\r\u001B[K"
+    fun clearLine(): String = if (isStdoutTty()) "\r\u001B[K" else "\r"
+
+    companion object {
+        /**
+         * Detects whether stdout is connected to a terminal. Cached at
+         * class load time — TTY status does not change during a JVM
+         * lifetime, so caching avoids repeated `System.console()` calls
+         * (which acquires a lock on some platforms).
+         */
+        private val stdoutIsTty: Boolean by lazy {
+            // System.console() returns null when stdout is redirected
+            // (file, pipe, IDE test runner). The TERM env var suppresses
+            // ANSI when set to "dumb" (e.g. some CI environments).
+            System.console() != null && System.getenv("TERM") != "dumb"
+        }
+
+        @JvmStatic
+        fun isStdoutTty(): Boolean = stdoutIsTty
+    }
 }

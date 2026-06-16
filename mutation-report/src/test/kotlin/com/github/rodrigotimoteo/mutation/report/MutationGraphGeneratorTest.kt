@@ -152,16 +152,28 @@ class MutationGraphGeneratorTest {
     }
 
     @Test
-    fun `generated HTML escapes class names with special chars`(
+    fun `generated HTML escapes special characters in graph nodes`(
         @TempDir tempDir: Path,
     ) {
-        val mutation = createMutation(id = "m<1>", className = "com.foo&bar")
+        val mutation = createMutation(id = "m<1>", className = "com.foo</script>bar")
         val result = MutationResult(mutation, MutationStatus.KILLED, 50L)
         val report = MutationReport(listOf(result), 1, 1, 0, 0, 0, 0, 50L)
         val file = MutationGraphGenerator.generate(report, tempDir.toFile())
         val content = file.readText()
-        // We don't necessarily assert escaping — just that it doesn't crash
-        assertTrue(content.contains("m"), "expected graph content for special-char class, got: ${content.take(200)}")
+        // The graph generator escapes </ to <\/ to prevent breaking out
+        // of the inline <script> block.
+        assertTrue(
+            content.contains("<\\/script>"),
+            "expected </script> to be escaped to <\\/script> in graph output",
+        )
+        // Raw </script> must not appear inside the graph data block.
+        val dataStart = content.indexOf("const nodesData = [")
+        val dataEnd = content.indexOf("];", dataStart)
+        val dataBlock = content.substring(dataStart, dataEnd)
+        assertTrue(
+            !dataBlock.contains("</script>"),
+            "raw </script> must not appear in graph data block, got: $dataBlock",
+        )
     }
 
     private fun createReport(): MutationReport {

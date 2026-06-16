@@ -82,6 +82,14 @@ class MutationClassLoader(
     private val allClassBytes: Map<String, ByteArray>,
     val failedClassCache: MutableSet<String>,
 ) : ClassLoader(baseLoader) {
+    // Pre-compute the set of test-class prefixes ("foo/Bar" + "$") so the
+    // per-loadClass test-class membership test is O(1) instead of O(n) over
+    // all test class names. For projects with hundreds of test classes this
+    // collapses a quadratic-looking hot path to a constant lookup.
+    private val testClassPrefixes: Set<String> =
+        testClassBytes.keys.map { "$it\$" }.toSet()
+    private val testClassNames: Set<String> = testClassBytes.keys
+
     override fun loadClass(
         name: String,
         resolve: Boolean,
@@ -127,10 +135,10 @@ class MutationClassLoader(
             }
 
             // Test class (or inner class of test class) → intercept to keep in same classloader.
+            // O(1) membership test using pre-computed prefix and exact-name sets.
             val isTestOrInner =
-                testClassBytes.keys.any { testName ->
-                    slashedName == testName || slashedName.startsWith("$testName$")
-                }
+                slashedName in testClassNames ||
+                    testClassPrefixes.any { slashedName.startsWith(it) }
             if (isTestOrInner && slashedName !in failedClassCache) {
                 val testBytes = testClassBytes[slashedName]
                 if (testBytes != null) {

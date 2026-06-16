@@ -229,9 +229,9 @@ class MutationEngineFullTest {
     ) {
         val classBytes = buildClassWithArithmetic()
         val execFile = tempDir.resolve("coverage.exec").toFile()
-        // Exec with no probes matching any instruction → coverage filter path
-        // runs and finds no covering tests for any mutation. We verify the engine
-        // handles this without throwing and produces a well-formed report.
+        // Exec with no probes matching any instruction -> coverage filter path
+        // runs and finds no covering tests for any mutation. Mutations are
+        // either dropped (no results) or marked NO_COVERAGE.
         createExecFileWithCoverageForLine(execFile, "com/example/Calc", classBytes, coveredLines = emptySet())
 
         val engine = MutationEngine(enabledOperators = setOf(MutationOperator.ARITHMETIC))
@@ -242,9 +242,10 @@ class MutationEngineFullTest {
                 testClassBytes = emptyMap(),
                 coverageExecFile = execFile,
             )
-        // Path executed cleanly; report is well-formed
-        assertNotNull(report)
-        assertTrue(report.totalMutations >= 0)
+        assertTrue(
+            report.results.isEmpty() || report.results.all { it.status == MutationStatus.NO_COVERAGE },
+            "expected coverage filter to drop or NO_COVERAGE-flag every mutation, got: ${report.results.map { it.status }}",
+        )
     }
 
     @Test
@@ -564,17 +565,14 @@ class MutationEngineFullTest {
     }
 
     @Test
-    fun `runMutants interruption exception`() {
-        // Cannot easily interrupt engine directly. Verify runMutants returns gracefully on empty.
+    fun `runMutants with empty input returns empty report without throwing`() {
         val engine = MutationEngine()
         val report = engine.runMutationTesting(emptyMap(), emptyList(), emptyMap())
         assertEquals(0, report.results.size)
     }
 
     @Test
-    fun `runMutants unexpected generic exception via mockk`() {
-        // Mock the future inside runMutants via mockk is too deep. Use a smaller target:
-        // exercise the public API path to ensure the catch block does not propagate.
+    fun `runMutants with no enabled operators returns empty report without throwing`() {
         val engine = MutationEngine(enabledOperators = emptySet())
         val report = engine.runMutationTesting(emptyMap(), emptyList(), emptyMap())
         assertEquals(0, report.results.size)

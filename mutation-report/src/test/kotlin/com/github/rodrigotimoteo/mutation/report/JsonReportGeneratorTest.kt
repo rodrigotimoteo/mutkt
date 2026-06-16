@@ -156,9 +156,17 @@ class JsonReportGeneratorTest {
         val file = JsonReportGenerator.generate(report, tempDir.toFile())
         val content = file.readText()
 
-        // Backslash, quote, and control chars should be escaped
-        assertContains(content, "\\\"")
-        assertContains(content, "\\\\")
+        // Assert the fully-escaped JSON form of the field values.
+        // "Foo" -> \"Foo\" (quote escaped); \Bar -> \\Bar (backslash escaped).
+        assertTrue(
+            content.contains("\"className\": \"com.\\\"Foo\\\"\\\\Bar\""),
+            "expected fully-escaped className in JSON output, got: $content",
+        )
+        // Newline/CR/tab in the description must be escaped to \n, \r, \t.
+        assertTrue(
+            content.contains("\"description\": \"Line1\\nLine2\\rTab\\there\""),
+            "expected fully-escaped control chars in description, got: $content",
+        )
     }
 
     @Test

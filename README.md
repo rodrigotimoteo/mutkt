@@ -208,9 +208,9 @@ class Service {
 
 ### Tests not discovered
 
-1. **JUnit dependency missing** — JUnit Jupiter 5.x must be on the test runtime classpath
+1. **JUnit dependency missing** — JUnit Jupiter 5.x or JUnit 4 must be on the test runtime classpath
 2. **Non-public test classes** — Test classes must be public
-3. **Test patterns mismatch** — Check `targetTestPatterns` and `excludeTestPatterns`
+3. **Test patterns mismatch** — Test classes must match the naming convention `*Test`, `*Tests`, `Test*`, or `*Spec` (e.g. `MyServiceTest`, `TestRunner`, `UserSpec`). Check `targetTestPatterns` and `excludeTestPatterns`.
 4. **Meta-annotations** — Only `@Test`, `@ParameterizedTest`, and `@RepeatedTest` are discovered. Custom composed annotations are not supported.
 
 ### Plugin not found
@@ -287,7 +287,7 @@ mutationTest {
 ```
 
 ### Custom Mutators
-MutKt supports custom mutation operators via the `MutationOperator` enum.
+MutKt ships 16 built-in mutation operators grouped into MVP, Kotlin-specific, and Quick Win categories. Custom operator support is not currently implemented — operators are defined by the `MutationOperator` enum in the core module.
 
 ## Architecture
 

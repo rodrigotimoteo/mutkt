@@ -29,11 +29,17 @@ class HtmlReportGenerator {
      *
      * @param report Mutation report to format
      * @param outputDir Directory to write report
+     * @param showClassScores When false, skip the per-class breakdown
+     *                        section. Defaults to true so existing
+     *                        callers keep their behaviour; the Gradle
+     *                        task wires its `showClassScores` extension
+     *                        flag through here.
      * @return Generated HTML file
      */
     fun generate(
         report: MutationReport,
         outputDir: File,
+        showClassScores: Boolean = true,
     ): File {
         outputDir.mkdirs()
         val outputFile = File(outputDir, "mutation-report.html")
@@ -56,7 +62,7 @@ class HtmlReportGenerator {
                 appendLine("      <h1>MutKt Mutation Report</h1>")
                 appendLine("      <p class=\"subtitle\">")
                 appendLine(
-                    "        <img src=\"${report.scoreBadgeUrl}\" alt=\"Mutation Score\">",
+                    "        <img src=\"${safeBadgeSrc(report.scoreBadgeUrl)}\" alt=\"Mutation Score\">",
                 )
                 appendLine("      </p>")
                 appendLine("    </header>")
@@ -99,7 +105,7 @@ class HtmlReportGenerator {
                 appendLine()
 
                 // Per-class breakdown
-                val classScores = report.getClassScores()
+                val classScores = if (showClassScores) report.getClassScores() else emptyList()
                 if (classScores.isNotEmpty()) {
                     appendLine("    <section class=\"class-breakdown\">")
                     appendLine("      <h2>Per-Class Breakdown</h2>")
@@ -241,4 +247,17 @@ class HtmlReportGenerator {
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
+            .replace("'", "&#39;")
+            .replace("`", "&#96;")
+
+    /**
+     * Only allow the badge URL to be used as an `<img src>` when it is an
+     * HTTPS URL to the shields.io host. Defensive guard against a future
+     * change to [MutationReport.scoreBadgeUrl] accidentally letting an
+     * untrusted string reach an HTML attribute (which would be an XSS
+     * surface). Falls back to an empty src so the alt text is still shown.
+     */
+    private fun safeBadgeSrc(url: String): String {
+        return if (url.startsWith("https://img.shields.io/")) url else ""
+    }
 }

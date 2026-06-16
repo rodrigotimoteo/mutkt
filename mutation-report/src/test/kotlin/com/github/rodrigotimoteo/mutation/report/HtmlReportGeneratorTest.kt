@@ -114,8 +114,16 @@ class HtmlReportGeneratorTest {
         assertTrue(outputFile.exists(), "expected HTML file for empty report")
 
         val content = outputFile.readText()
-        assertTrue(content.contains("Total Mutations"), "expected 'Total Mutations' label")
-        assertTrue(content.contains("0"), "expected '0' for empty totals")
+        // Assert the specific statistic label with its value — not a bare "0" substring
+        // that could match CSS, opacity values, or any other zero in the document.
+        assertTrue(
+            content.contains("""<div class="stat-label">Total Mutations</div>"""),
+            "expected 'Total Mutations' stat label, got: ${content.take(500)}",
+        )
+        assertTrue(
+            content.contains("""<div class="stat-value">0</div>"""),
+            "expected stat-value of 0 for empty totals, got: ${content.take(500)}",
+        )
     }
 
     @Test

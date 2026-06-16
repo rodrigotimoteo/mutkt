@@ -128,8 +128,7 @@ mutationTest {
         "ARITHMETIC",
         "RETURN_VALS",
         "NULL_RETURNS",
-        "EMPTY_RETURNS",
-        "INVERT_NEGS"
+        "EMPTY_RETURNS"
     )
     timeoutMs.set(30000)
     maxParallelMutants.set(4)

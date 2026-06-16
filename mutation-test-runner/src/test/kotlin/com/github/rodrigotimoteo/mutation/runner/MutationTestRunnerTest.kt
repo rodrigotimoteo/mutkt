@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutation.runner
 import com.github.rodrigotimoteo.mutation.engine.MutationEngine
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -123,8 +124,26 @@ class MutationTestRunnerTest {
         val testDir = tempDir.resolve("test").toFile()
         testDir.mkdirs()
         runner.run(classesDir, testDir, classpath = emptyList())
-        // Verify engine was called
-        verify { mockEngine.runMutationTesting(any<Map<String, ByteArray>>(), any(), any(), any(), any()) }
+
+        // Capture the actual arguments the runner passes through to the engine
+        val classFiles = slot<Map<String, ByteArray>>()
+        val testClassNames = slot<List<String>>()
+        val testClassBytes = slot<Map<String, ByteArray>>()
+
+        verify {
+            mockEngine.runMutationTesting(
+                capture(classFiles),
+                capture(testClassNames),
+                capture(testClassBytes),
+                null,
+                any(),
+            )
+        }
+
+        // Empty dirs -> empty maps/lists
+        assertEquals(0, classFiles.captured.size)
+        assertEquals(0, testClassNames.captured.size)
+        assertEquals(0, testClassBytes.captured.size)
     }
 
     @Test

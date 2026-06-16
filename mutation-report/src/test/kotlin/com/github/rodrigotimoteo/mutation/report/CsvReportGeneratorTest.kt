@@ -148,10 +148,14 @@ class CsvReportGeneratorTest {
         val file = CsvReportGenerator.generateSummary(report, tempDir.toFile())
         val content = file.readText()
 
+        // Parse CSV — assert column values, not exact string match
+        val dataRows = content.trim().split("\n").drop(1).map { it.split(",") }
+        val rowA = dataRows.single { it[0] == "com.A" }
+        val rowB = dataRows.single { it[0] == "com.B" }
         // com.A: 1 killed, 1 survived → score 50
+        assertEquals(listOf("com.A", "2", "1", "1", "50"), rowA)
         // com.B: 2 killed, 0 survived → score 100
-        assertContains(content, "com.A,2,1,1,50")
-        assertContains(content, "com.B,2,2,0,100")
+        assertEquals(listOf("com.B", "2", "2", "0", "100"), rowB)
     }
 
     @Test

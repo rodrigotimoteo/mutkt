@@ -119,13 +119,17 @@ class MutationPluginTest {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("java")
         project.plugins.apply(MutationPlugin::class.java)
-        // Force evaluation via afterEvaluate
-        project.afterEvaluate {
-            // Source sets should be auto-detected (no exception)
-        }
-        // Source sets should be auto-detected (no exception)
+        (project as org.gradle.api.internal.project.ProjectInternal).evaluate()
         val ext = project.extensions.getByType(MutationPluginExtension::class.java)
         assertNotNull(ext)
+        assertTrue(
+            ext.targetClasses.files.isNotEmpty(),
+            "expected targetClasses to be auto-populated from main source set, got empty: ${ext.targetClasses.files}",
+        )
+        assertTrue(
+            ext.testClasses.files.isNotEmpty(),
+            "expected testClasses to be auto-populated from test source set, got empty: ${ext.testClasses.files}",
+        )
     }
 
     @Test
@@ -133,9 +137,10 @@ class MutationPluginTest {
         val project = ProjectBuilder.builder().build()
         // No java plugin applied
         project.plugins.apply(MutationPlugin::class.java)
-        project.afterEvaluate {
-            // Should not throw
-        }
-        // Should not throw
+        (project as org.gradle.api.internal.project.ProjectInternal).evaluate()
+        val ext = project.extensions.findByType(MutationPluginExtension::class.java)
+        assertNotNull(ext, "expected 'mutationTest' extension to be registered on non-JVM project")
+        val task = project.tasks.findByName("mutationTest")
+        assertNotNull(task, "expected 'mutationTest' task to be registered on non-JVM project")
     }
 }

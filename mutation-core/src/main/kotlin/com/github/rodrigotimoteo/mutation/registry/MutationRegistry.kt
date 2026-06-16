@@ -162,11 +162,40 @@ object MutationRegistry {
 
     /**
      * Clean up state for the current thread.
+     *
+     * Removes the current thread from [threads] and from every
+     * [classThreads] set. After the remove, prunes any
+     * [classThreads] entry that has become empty so the registry does
+     * not retain an unbounded set of empty `MutableSet` instances for
+     * test classes that will never run again.
      */
     fun cleanup() {
         val threadId = Thread.currentThread().id
         threads.remove(threadId)
-        // Also remove from classThreads sets
-        classThreads.values.forEach { it.remove(threadId) }
+        // Remove from every class set, then drop any set that is now
+        // empty. Removing the empty sets prevents a slow leak in
+        // long-running JVMs that run many test classes.
+        val emptyKeys = mutableListOf<String>()
+        for ((className, set) in classThreads) {
+            set.remove(threadId)
+            if (set.isEmpty()) emptyKeys.add(className)
+        }
+        for (key in emptyKeys) {
+            classThreads.remove(key, emptySet())
+        }
+    }
+
+    /**
+     * Run [block] and guarantee that the current thread's [cleanup]
+     * runs even if [block] throws. Use this at every site that creates
+     * a thread to handle a mutation so the registry's thread state
+     * does not leak when the worker is killed by a timeout or error.
+     */
+    fun <T> withCleanup(block: () -> T): T {
+        return try {
+            block()
+        } finally {
+            cleanup()
+        }
     }
 }

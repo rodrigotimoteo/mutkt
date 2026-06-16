@@ -20,6 +20,7 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.LocalState
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
@@ -255,6 +256,20 @@ abstract class MutationTask
         val excludeGeneratedClasses: SetProperty<String> =
             objectFactory.setProperty(String::class.java).convention(emptySet())
 
+        /**
+         * Local scratch directory used to hold `classes.jar` files
+         * extracted from AAR dependencies so the URL classloader can
+         * consume them. Declared as [LocalState] (not [OutputDirectory])
+         * because it is purely a side-effect of classpath preparation
+         * and the task has no semantic output to declare for it — making
+         * it a real output would force Gradle to wipe the dir on every
+         * up-to-date check, defeating the caching benefit.
+         */
+        @LocalState
+        val aarExtractDir: DirectoryProperty =
+            objectFactory.directoryProperty()
+                .convention(projectLayout.buildDirectory.dir("mutkt-aars"))
+
         @TaskAction
         fun runMutationTests() {
             // CI mode: ensure console report is enabled
@@ -307,7 +322,7 @@ abstract class MutationTask
             // Android resolver failed so users with manually-wired
             // debugUnitTestRuntimeClasspath still get working classpath.
             val aarTempDir =
-                File(buildDirectory.asFile.get(), "mutkt-aars").apply { mkdirs() }
+                aarExtractDir.asFile.get().apply { mkdirs() }
             val classpathFiles = expandAars(rawClasspathFiles, aarTempDir)
 
             // Find coverage file
@@ -563,11 +578,15 @@ abstract class MutationTask
             classpath: List<File>,
             tempDir: File,
         ): List<File> {
-            if (classpath.none { it.extension == "aar" }) return classpath
+            // Compare extension case-insensitively — Linux filenames are
+            // case-sensitive but real-world classpaths contain AARs from
+            // Windows-built pipelines (uppercase .AAR) and from Gradle
+            // dependency caches that occasionally emit mixed case.
+            if (classpath.none { it.extension.equals("aar", ignoreCase = true) }) return classpath
             val aarExtractor = AarExtractor(tempDir)
             val expanded = mutableListOf<File>()
             for (file in classpath) {
-                if (file.extension == "aar") {
+                if (file.extension.equals("aar", ignoreCase = true)) {
                     try {
                         expanded.add(aarExtractor.extractClassesJar(file))
                     } catch (e: Exception) {
@@ -655,9 +674,32 @@ abstract class MutationTask
         ): Set<String> {
             if (!classesDir.isDirectory) return emptySet()
             val result = mutableSetOf<String>()
+            // Resolve symlinks so `relativeTo` below does not throw
+            // IllegalArgumentException when the walked file lives under
+            // a symlinked path that points outside classesDir. We use the
+            // canonical path only for the relative-path computation; the
+            // class bytes we walk are still the originals.
+            val canonicalRoot = runCatching { classesDir.canonicalPath }.getOrNull()
             classesDir.walkTopDown().maxDepth(20).forEach { file ->
                 if (file.isFile && file.extension == "class") {
-                    val relative = file.relativeTo(classesDir).invariantSeparatorsPath
+                    val relative =
+                        try {
+                            file.relativeTo(classesDir).invariantSeparatorsPath
+                        } catch (e: IllegalArgumentException) {
+                            // File is on a different drive / symlinked out
+                            // of classesDir. Fall back to the canonical
+                            // path; if that doesn't help either, skip it.
+                            if (canonicalRoot != null) {
+                                val canonical =
+                                    runCatching { file.canonicalPath }
+                                        .getOrNull() ?: return@forEach
+                                canonical.removePrefix(canonicalRoot)
+                                    .trimStart(File.separatorChar, '/', '\\')
+                                    .replace(File.separatorChar, '/')
+                            } else {
+                                return@forEach
+                            }
+                        }
                     val className =
                         relative
                             .removeSuffix(".class")
@@ -680,7 +722,9 @@ abstract class MutationTask
             for (format in formats) {
                 when (format.lowercase()) {
                     "html" -> {
-                        val htmlReport = com.github.rodrigotimoteo.mutation.report.HtmlReportGenerator().generate(report, outputDirFile)
+                        val htmlReport =
+                            com.github.rodrigotimoteo.mutation.report.HtmlReportGenerator()
+                                .generate(report, outputDirFile, showClassScores.get())
                         logger.lifecycle("HTML report: $htmlReport")
                     }
                     "console" -> {

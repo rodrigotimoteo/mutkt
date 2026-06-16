@@ -60,6 +60,15 @@ data class MutationReport(
     /** Mutation score (percentage of mutations killed). */
     val mutationScore: Int get() = killedPercentage
 
+    /**
+     * Cached per-class score breakdown, computed lazily on the first
+     * [getClassScores] call. `null` is the sentinel for "not yet
+     * computed"; subsequent calls short-circuit and return the same list
+     * because the report is treated as immutable.
+     */
+    @Volatile
+    private var classScoresCache: List<ClassMutationScore>? = null
+
     /** shields.io badge URL for mutation coverage. */
     val scoreBadgeUrl: String
         get() {
@@ -79,18 +88,26 @@ data class MutationReport(
 
     /**
      * Get per-class mutation scores.
+     *
+     * Result is computed once and cached: the report is an immutable
+     * snapshot, so re-computing on every call wasted CPU in the HTML
+     * and graph generators that read it multiple times.
      */
     fun getClassScores(): List<ClassMutationScore> {
-        return results
-            .groupBy { it.mutation.className }
-            .map { (className, classResults) ->
-                ClassMutationScore(
-                    className = className,
-                    totalMutations = classResults.size,
-                    killedMutations = classResults.count { it.isKilled },
-                    survivedMutations = classResults.count { it.isSurvived },
-                )
-            }
-            .sortedByDescending { it.score }
+        val cached = classScoresCache
+        if (cached != null) return cached
+        val computed =
+            results
+                .groupBy { it.mutation.className }
+                .map { (className, classResults) ->
+                    ClassMutationScore(
+                        className = className,
+                        totalMutations = classResults.size,
+                        killedMutations = classResults.count { it.isKilled },
+                        survivedMutations = classResults.count { it.isSurvived },
+                    )
+                }.sortedByDescending { it.score }
+        classScoresCache = computed
+        return computed
     }
 }

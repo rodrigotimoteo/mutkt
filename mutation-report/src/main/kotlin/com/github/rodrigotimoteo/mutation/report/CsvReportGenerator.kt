@@ -97,7 +97,9 @@ object CsvReportGenerator {
             buildString {
                 appendLine("class,total_mutations,killed,survived,score")
                 for (cs in classScores) {
-                    appendLine("${cs.className},${cs.total},${cs.killed},${cs.survived},${cs.score}")
+                    appendLine(
+                        "${escapeCsv(cs.className)},${cs.total},${cs.killed},${cs.survived},${cs.score}",
+                    )
                 }
             }
 
@@ -108,7 +110,12 @@ object CsvReportGenerator {
     }
 
     private fun escapeCsv(text: String): String {
-        return if (text.contains(",") || text.contains("\"") || text.contains("\n")) {
+        return if (
+            text.contains(",") ||
+            text.contains("\"") ||
+            text.contains("\n") ||
+            text.contains("\r")
+        ) {
             "\"${text.replace("\"", "\"\"")}\""
         } else {
             text

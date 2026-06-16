@@ -166,7 +166,7 @@ MutKt's reflection-based test runner does NOT execute JUnit 5 extensions. This m
 class UserServiceTest {
     @Before
     fun setUp() {
-        // DO use @BeforeEach + manual init, NOT @ExtendWith
+        // DO use @Before (JUnit 4) + manual init, NOT @ExtendWith
         MockKAnnotations.init(this)
     }
     
@@ -186,7 +186,7 @@ class UserServiceTest {
 class UserServiceTest {
     @Before
     fun setUp() {
-        // DO use @BeforeEach + manual init, NOT @ExtendWith
+        // DO use @Before (JUnit 4) + manual init, NOT @ExtendWith
         MockitoAnnotations.openMocks(this)
     }
     

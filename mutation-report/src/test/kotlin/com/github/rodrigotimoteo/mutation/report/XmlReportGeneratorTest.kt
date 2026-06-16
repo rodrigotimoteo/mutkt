@@ -172,12 +172,14 @@ class XmlReportGeneratorTest {
         val file = XmlReportGenerator.generate(report, tempDir.toFile())
         val content = file.readText()
 
-        // XML-escaped forms should appear
-        assertContains(content, "&lt;")
-        assertContains(content, "&gt;")
-        assertContains(content, "&amp;")
-        assertContains(content, "&quot;")
-        assertContains(content, "&apos;")
+        // Assert the fully-escaped forms appear inside element text
+        assertContains(content, "<className>com.&lt;Foo&gt;&amp;Bar</className>")
+        assertContains(content, "<id>id&lt;&gt;&amp;&quot;&apos;</id>")
+        assertContains(content, "<methodName>test &quot;quoted&quot; method</methodName>")
+        assertContains(
+            content,
+            "<description>desc with &lt;tags&gt; &amp; &quot;quotes&quot; &amp; &apos;single&apos;</description>",
+        )
     }
 
     @Test

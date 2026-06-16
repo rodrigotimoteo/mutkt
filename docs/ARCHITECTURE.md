@@ -8,11 +8,13 @@ The Kotlin Mutation Testing library is designed as a modular, extensible system 
 
 ```
 mutationKotlin/
-├── mutation-core/           # Core mutation engine
-├── mutation-test-runner/    # JUnit Platform integration
-├── mutation-gradle-plugin/  # Gradle plugin
-├── mutation-sample/         # Example project
-└── docs/                    # Documentation
+├── mutation-core/                # Core mutation engine
+├── mutation-test-runner/         # JUnit Platform integration
+├── mutation-gradle-plugin/       # Gradle plugin
+├── mutation-report/              # HTML/JSON/XML/CSV/console/graph reports
+├── mutation-sample/              # JVM example project
+├── mutation-sample-android/      # Android (Robolectric) example project
+└── docs/                         # Documentation
 ```
 
 ### Module Dependencies
@@ -69,8 +71,6 @@ The test runner module provides JUnit Platform integration.
 #### Key Classes
 
 - **`MutationTestRunner`**: Main entry point for running mutation tests
-- **`MutationTestRunnerFactory`**: Factory for creating test runners
-- **`MutantTestTask`**: Task for testing individual mutants
 
 #### Features
 
@@ -116,9 +116,8 @@ Used for different mutation operators:
 
 ### 3. Factory Pattern
 
-Used for creating test runners and reporters:
+Used for creating reporters:
 
-- `MutationTestRunnerFactory` creates appropriate runners
 - Report generators are selected based on configuration
 
 ### 4. Observer Pattern

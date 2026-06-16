@@ -4,7 +4,7 @@ Quick reference for MockK and Mockito usage with MutKt's mutation test runner.
 
 ## TL;DR
 
-- ✅ Use **manual init** in `@BeforeEach` — `@ExtendWith(MockKExtension::class)` and `@ExtendWith(MockitoExtension::class)` are **ignored**
+- ✅ Use **manual init** in `@BeforeEach` (JUnit 5) or `@Before` (JUnit 4 / Robolectric) — `@ExtendWith(MockKExtension::class)` and `@ExtendWith(MockitoExtension::class)` are **ignored**
 - ✅ Regular mocks work (interfaces, open classes, subclass mock maker)
 - ❌ Inline mocks (`mockkStatic`, `mockkConstructor`, Mockito 5+ inline) don't work — classloader conflict
 - ❌ Robolectric + inline mocks — `SandboxClassLoader` shadows dispatcher classes
@@ -16,11 +16,11 @@ Quick reference for MockK and Mockito usage with MutKt's mutation test runner.
 | MockK regular mocks (`mockk<T>()`) | ✅ | Standard ByteBuddy subclass |
 | MockK final-class inline | ❌ | Agent attach + bootstrap dispatcher conflict |
 | MockK `mockkStatic()` | ❌ | Same agent issue + state leaks across mutations |
-| MockK `@MockK` annotation | ⚠️ Manual | Call `MockKAnnotations.init(this)` in `@BeforeEach` |
+| MockK `@MockK` annotation | ⚠️ Manual | Call `MockKAnnotations.init(this)` in `@BeforeEach` / `@Before` |
 | Mockito subclass mock maker | ✅ | Default before Mockito 5 |
 | Mockito 5+ inline mock maker | ❌ | `MockMethodDispatcher` bootstrap conflict |
 | Mockito `mockStatic()` | ❌ | Same inline-maker issue |
-| Mockito `@Mock` annotation | ⚠️ Manual | Call `MockitoAnnotations.openMocks(this)` in `@BeforeEach` |
+| Mockito `@Mock` annotation | ⚠️ Manual | Call `MockitoAnnotations.openMocks(this)` in `@BeforeEach` / `@Before` |
 | Robolectric + mocks | ❌ | `SandboxClassLoader` shadows dispatcher classes |
 
 ## MockK patterns

@@ -50,7 +50,7 @@ object MutationGraphGenerator {
                 <div class="container">
                     <h1>Mutation Test Graph</h1>
                     <div class="legend">
-                        <div class="legend-item"><span class="legend-color" style="background: #4CAF50;"></span>Test</div>
+                        <div class="legend-item"><span class="legend-color" style="background: #4CAF50;"></span>Target Class</div>
                         <div class="legend-item"><span class="legend-color" style="background: #f44336;"></span>Killed</div>
                         <div class="legend-item"><span class="legend-color" style="background: #FF9800;"></span>Survived</div>
                         <div class="legend-item"><span class="legend-color" style="background: #FFEB3B;"></span>Weak</div>
@@ -147,10 +147,12 @@ object MutationGraphGenerator {
     private fun buildNodes(report: MutationReport): String {
         val nodes = mutableListOf<String>()
 
-        // Add test nodes
-        val testClasses = report.results.map { it.mutation.className }.distinct()
-        for (testClass in testClasses) {
-            nodes.add("""{"id": "${escapeJson(testClass)}", "type": "test"}""")
+        // Add target-class nodes (the class the mutation belongs to — NOT
+        // the JUnit test class, despite the legacy `type: "test"` label
+        // that the d3 styling still keys on).
+        val targetClasses = report.results.map { it.mutation.className }.distinct()
+        for (targetClass in targetClasses) {
+            nodes.add("""{"id": "${escapeJson(targetClass)}", "type": "test"}""")
         }
 
         // Add mutation nodes

@@ -17,8 +17,12 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
  * @property lineNumber Source line number (0 if unknown)
  * @property sourceFile Relative path to source file (null if unavailable)
  * @property sourceCode Source code snippet at mutation point (null if unavailable)
- * @property originalBytecode Original class bytecode before mutation
- * @property mutatedBytecode Class bytecode after mutation
+ * @property originalBytecode Original class bytecode before mutation. Engine
+ *           tooling only — not consulted by equals/hashCode/copy; do not
+ *           rely on it for identity checks. Left as a `val` (not `private
+ *           val`) so the named-argument call sites in tests still compile.
+ * @property mutatedBytecode Class bytecode after mutation. Engine tooling
+ *           only — not consulted by equals/hashCode/copy.
  * @property description Human-readable description of the mutation
  */
 data class Mutation(

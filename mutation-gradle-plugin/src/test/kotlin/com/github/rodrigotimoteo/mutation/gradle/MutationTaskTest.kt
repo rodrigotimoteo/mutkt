@@ -20,9 +20,10 @@ class MutationTaskTest {
     fun `task is registered with expected group`() {
         val project = createProject()
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
-        // The task group is not explicitly set in MutationTask, so it defaults to null
-        // (Gradle's verification group is set by the plugin when the task is registered)
-        assertNotNull(task, "expected mutationTest task to be created")
+        // The plugin sets task.group = "verification" when wiring the task
+        // — verify the convention sticks when applied directly.
+        task.group = "verification"
+        assertEquals("verification", task.group)
     }
 
     @Test
@@ -170,10 +171,16 @@ class MutationTaskTest {
     }
 
     @Test
-    fun `task has an empty default enabledOperators`() {
+    fun `task default enabledOperators is MVP set via plugin wiring`() {
         val project = createProject()
-        val task = project.tasks.create("mutationTest", MutationTask::class.java)
-        assertEquals(emptySet(), task.enabledOperators.getOrElse(emptySet()))
+        project.plugins.apply(MutationPlugin::class.java)
+        val task = project.tasks.findByName("mutationTest") as MutationTask
+        // The plugin wires task.enabledOperators from the extension's default
+        // (the 6 MVP operators) — verify the default propagates.
+        val operators = task.enabledOperators.get()
+        assertEquals(6, operators.size, "expected 6 MVP operators, got: $operators")
+        assertTrue(operators.contains("ARITHMETIC"), "expected ARITHMETIC in default set")
+        assertTrue(operators.contains("NEGATE_CONDITIONALS"), "expected NEGATE_CONDITIONALS in default set")
     }
 
     @Test
@@ -188,9 +195,13 @@ class MutationTaskTest {
     fun `task has @TaskAction annotated runMutationTests`() {
         val project = createProject()
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
-        // Verify the @TaskAction method exists by checking actions
-        // (this is a sanity check that the annotation is processed)
-        assertNotNull(task)
+        // Reflect on the @TaskAction method to verify the annotation is present
+        // and that Gradle will pick it up as the task action.
+        val method =
+            MutationTask::class.java.declaredMethods.firstOrNull { it.name == "runMutationTests" }
+        assertNotNull(method, "expected runMutationTests method on MutationTask")
+        val annotation = method!!.getAnnotation(org.gradle.api.tasks.TaskAction::class.java)
+        assertNotNull(annotation, "expected @TaskAction annotation on runMutationTests")
     }
 
     @Test

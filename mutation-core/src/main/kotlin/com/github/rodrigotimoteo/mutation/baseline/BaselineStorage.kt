@@ -95,9 +95,16 @@ class BaselineStorage(private val projectDir: File) {
      * Detect changed classes using git diff.
      * Compares working tree against HEAD (works on initial commits, detached HEAD, etc.).
      *
+     * @param sourceDirs Source directory prefixes to strip when converting
+     *                   a path to a class name. Each entry is matched as a
+     *                   `startsWith` check, so callers can use
+     *                   `src/main/kotlin`, `src/main/java`,
+     *                   `src/commonMain/kotlin`, or any custom layout. Files
+     *                   outside every prefix are dropped (no class name can
+     *                   be derived from them).
      * @return Set of changed class names (dotted format)
      */
-    fun detectChanges(): Set<String> {
+    fun detectChanges(sourceDirs: List<String> = DEFAULT_SOURCE_DIRS): Set<String> {
         return try {
             val process =
                 ProcessBuilder("git", "diff", "--name-only", "HEAD")
@@ -115,18 +122,37 @@ class BaselineStorage(private val projectDir: File) {
 
             output.lines()
                 .filter { it.endsWith(".kt") || it.endsWith(".java") }
-                .map { path ->
-                    path.removeSuffix(".kt").removeSuffix(".java")
-                        .replace("/", ".")
-                        .replace("src.main.kotlin.", "")
-                        .replace("src.main.java.", "")
-                        .replace("src.main.", "")
-                }
+                .mapNotNull { path -> fileToClassName(path, sourceDirs) }
                 .toSet()
         } catch (e: Exception) {
             System.err.println("$LOG_PREFIX git not available: ${e.message}, running all mutations (no filtering)")
             emptySet()
         }
+    }
+
+    /**
+     * Convert a `src/.../Class.kt`-style path into a dotted class name by
+     * stripping the first [sourceDirs] prefix that matches. Returns null
+     * for files that do not live under any configured source root, so
+     * callers can filter unknown layouts (e.g. generated resources) out
+     * of the result.
+     */
+    private fun fileToClassName(
+        path: String,
+        sourceDirs: List<String>,
+    ): String? {
+        for (sourceDir in sourceDirs) {
+            if (path.startsWith("$sourceDir/")) {
+                val relative = path.removePrefix("$sourceDir/")
+                val className =
+                    relative
+                        .removeSuffix(".kt")
+                        .removeSuffix(".java")
+                        .replace("/", ".")
+                if (className.isNotEmpty()) return className
+            }
+        }
+        return null
     }
 
     /**
@@ -197,6 +223,21 @@ class BaselineStorage(private val projectDir: File) {
                 return block()
             }
         }
+    }
+
+    companion object {
+        /**
+         * Default source directory prefixes for the [detectChanges]
+         * `src/main` → `src/main` mapping. The slashed form (not the
+         * dotted form) is required because git reports paths with
+         * forward slashes regardless of platform.
+         */
+        private val DEFAULT_SOURCE_DIRS: List<String> =
+            listOf(
+                "src/main/kotlin",
+                "src/main/java",
+                "src/commonMain/kotlin",
+            )
     }
 }
 
