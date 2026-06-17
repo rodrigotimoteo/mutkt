@@ -32,12 +32,12 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.13")
-    testImplementation("androidx.test.ext:junit:1.2.1")
-    testImplementation("androidx.test:core:1.5.0")
-    testImplementation("io.mockk:mockk:1.13.13")
-    testImplementation("io.mockk:mockk-android:1.13.13")
-    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    testImplementation("androidx.test.ext:junit:1.3.0")
+    testImplementation("androidx.test:core:1.7.0")
+    testImplementation("io.mockk:mockk:1.14.11")
+    testImplementation("io.mockk:mockk-android:1.14.11")
+    testImplementation("org.mockito:mockito-core:5.23.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
 
