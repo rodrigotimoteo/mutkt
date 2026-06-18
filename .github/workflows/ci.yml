@@ -45,7 +45,7 @@ jobs:
         run: ./gradlew :mutation-self-test:test
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: build/reports/kover/report.xml
@@ -112,7 +112,7 @@ jobs:
         run: ./gradlew koverXmlReport
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: |
             **/build/reports/kover/report.xml
