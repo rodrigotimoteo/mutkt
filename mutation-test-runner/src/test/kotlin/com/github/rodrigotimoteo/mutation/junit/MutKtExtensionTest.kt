@@ -122,40 +122,33 @@ class MutKtExtensionTest {
     }
 
     @Test
-    fun `interceptBeforeAllMethod with no annotation calls proceed and returns`() {
+    fun `beforeAll with no annotation does not enable registry`() {
         val ctx = makeContext(PlainTest::class.java)
-        val inv = makeInvocation()
-        extension.interceptBeforeAllMethod(inv, makeInvocationContext(), ctx)
-        assertTrue(inv.proceeded)
+        extension.beforeAll(ctx)
         assertFalse(MutationRegistry.isActive())
     }
 
     @Test
-    fun `interceptBeforeAllMethod with LENIENT annotation enables registry`() {
+    fun `beforeAll with LENIENT annotation enables registry`() {
         val ctx = makeContext(SampleAnnotated::class.java)
-        val inv = makeInvocation()
-        extension.interceptBeforeAllMethod(inv, makeInvocationContext(), ctx)
-        assertTrue(inv.proceeded)
+        extension.beforeAll(ctx)
         assertTrue(MutationRegistry.isActive())
         assertEquals(30_000L, MutationRegistry.getTimeoutMs())
     }
 
     @Test
-    fun `interceptAfterAllMethod with inactive registry proceeds and returns`() {
+    fun `afterAll with inactive registry returns early`() {
         MutationRegistry.disable()
         val ctx = makeContext(PlainTest::class.java)
-        val inv = makeInvocation()
-        extension.interceptAfterAllMethod(inv, makeInvocationContext(), ctx)
-        assertTrue(inv.proceeded)
+        // Should not throw — returns early when inactive
+        extension.afterAll(ctx)
     }
 
     @Test
-    fun `interceptAfterAllMethod with active registry disables and resets`() {
+    fun `afterAll with active registry disables and resets`() {
         MutationRegistry.enable()
         val ctx = makeContext(SampleAnnotated::class.java)
-        val inv = makeInvocation()
-        extension.interceptAfterAllMethod(inv, makeInvocationContext(), ctx)
-        assertTrue(inv.proceeded)
+        extension.afterAll(ctx)
         assertFalse(MutationRegistry.isActive())
     }
 

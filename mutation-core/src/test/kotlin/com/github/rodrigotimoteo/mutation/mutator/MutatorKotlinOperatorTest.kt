@@ -400,7 +400,7 @@ class MutatorKotlinOperatorTest {
     }
 
     @Test
-    fun `NULL_SAFETY IFNULL mutation sets mutatedOpcode to GOTO`() {
+    fun `NULL_SAFETY IFNULL mutation flips to IFNONNULL`() {
         val bytes =
             buildKotlinClass { mv ->
                 mv.visitVarInsn(Opcodes.ALOAD, 0)
@@ -412,11 +412,11 @@ class MutatorKotlinOperatorTest {
         val mutations = Mutator(setOf(MutationOperator.NULL_SAFETY)).scanMutations(bytes)
         val ifnullMutation = mutations.find { it.originalOpcode == Opcodes.IFNULL }
         assertNotNull(ifnullMutation)
-        assertEquals(Opcodes.NOP, ifnullMutation.mutatedOpcode, "IFNULL should mutate to NOP")
+        assertEquals(Opcodes.IFNONNULL, ifnullMutation.mutatedOpcode, "IFNULL should flip to IFNONNULL")
     }
 
     @Test
-    fun `NULL_SAFETY IFNONNULL mutation sets mutatedOpcode to GOTO`() {
+    fun `NULL_SAFETY IFNONNULL mutation flips to IFNULL`() {
         val bytes =
             buildKotlinClass { mv ->
                 mv.visitVarInsn(Opcodes.ALOAD, 0)
@@ -429,7 +429,7 @@ class MutatorKotlinOperatorTest {
         val mutations = Mutator(setOf(MutationOperator.NULL_SAFETY)).scanMutations(bytes)
         val ifnonnullMutation = mutations.find { it.originalOpcode == Opcodes.IFNONNULL }
         assertNotNull(ifnonnullMutation)
-        assertEquals(Opcodes.NOP, ifnonnullMutation.mutatedOpcode, "IFNONNULL should mutate to NOP")
+        assertEquals(Opcodes.IFNULL, ifnonnullMutation.mutatedOpcode, "IFNONNULL should flip to IFNULL")
     }
 
     @Test

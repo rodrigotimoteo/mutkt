@@ -160,4 +160,4 @@ Robolectric compounds the issue with its own `SandboxClassLoader` that shadows t
 
 ## Roadmap
 
-The next major MutKt release (1.0) will switch from reflection-based to **JUnit Platform Launcher** based test execution. This API has first-class classloader + agent integration, which will unblock all inline mocking patterns and Robolectric integration.
+Future MutKt releases will continue to improve the **JUnit Platform Launcher** based test execution. This API has first-class classloader + agent integration, which is the foundation for unblocking all inline mocking patterns and Robolectric integration.

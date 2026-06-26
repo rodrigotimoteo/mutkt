@@ -27,3 +27,10 @@ Thumbs.db
 # Project files (not for distribution)
 plan.md
 *.original.md
+
+# MutKt runtime state (cache, baseline, kill sets, etc.)
+.mutkt/
+
+# Local configuration
+local.properties
+.env

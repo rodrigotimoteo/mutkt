@@ -22,7 +22,7 @@ MutKt fully supports Android unit tests via Robolectric. See [docs/ANDROID.md](d
 // build.gradle.kts
 plugins {
     kotlin("jvm") version "2.1.10"
-    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.2.2"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.3.0"
 }
 ```
 
@@ -42,7 +42,7 @@ For explicit control over which code blocks are mutated:
 
 ```kotlin
 dependencies {
-    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.2.2")
+    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.3.0")
 }
 
 @ExtendWith(MutKtExtension::class)
@@ -109,8 +109,8 @@ Test:        assertEquals(4, add(2, 2))  → FAILS → Mutant KILLED ✓
 ```kotlin
 mutationTest {
     // Auto-detected by default. Override if needed:
-    // targetClasses.setFrom("build/classes/kotlin/main")
-    // testClasses.setFrom("build/classes/kotlin/test")
+    // targetClasses.from("build/classes/kotlin/main")
+    // testClasses.from("build/classes/kotlin/test")
     
     // Report formats
     reportFormats.set(setOf("html", "console"))
@@ -123,11 +123,11 @@ mutationTest {
     enableCache.set(true)            // Cache results for faster re-runs
     
     // Thresholds
-    failOnScoreThreshold.set(70)     // Fail if score < 70%
+    failOnMutationScoreThreshold.set(70)  // Fail if score < 70%
     
     // Class filtering (regex patterns)
-    targetClassPatterns.set(listOf("com\\.example\\..*"))
-    excludeClassPatterns.set(listOf("com\\.example\\.generated\\..*"))
+    targetClassPatterns.set(setOf("com\\.example\\..*"))
+    excludeClassPatterns.set(setOf("com\\.example\\.generated\\..*"))
 }
 ```
 
@@ -169,33 +169,47 @@ class Service {
 |----------|------|---------|-------------|
 | `targetClasses` | `ConfigurableFileCollection` | auto-detected | Compiled class directories |
 | `testClasses` | `ConfigurableFileCollection` | auto-detected | Test class directories |
-| `reportFormats` | `Set<String>` | `["html", "console"]` | Report types: `html`, `console`, `csv`, `xml`, `json`, `graph` |
-| `reportDir` | `DirectoryProperty` | `build/reports/mutation` | Output directory for reports |
+| `classpath` | `ConfigurableFileCollection` | auto-detected | Test runtime classpath |
+| `coverageExecFile` | `RegularFileProperty` | auto-detected | JaCoCo execution data file |
+| `enabledOperators` | `SetProperty<String>` | MVP_OPERATORS | Mutation operator names to enable |
+| `timeoutMs` | `Property<Long>` | `30000` | Per-mutant timeout in ms |
+| `maxParallelMutants` | `Property<Int>` | `4` | Number of parallel mutant executions |
+| `outputDir` | `DirectoryProperty` | `build/reports/mutation` | Output directory for reports |
+| `failOnSurvived` | `Property<Boolean>` | `false` | Fail build if any mutants survive |
+| `excludedClasses` | `SetProperty<String>` | 15 patterns | Glob patterns for classes to skip |
+| `excludedMethods` | `SetProperty<String>` | 6 method names | Method names to skip |
+| `maxMutationsPerClass` | `Property<Int>` | `0` | Limit mutations per class (`0` = no limit) |
+| `enableIncrementalAnalysis` | `Property<Boolean>` | `true` | Only test changed classes |
+| `reportFormats` | `SetProperty<String>` | `["html"]` | Report types: `html`, `console`, `csv`, `xml`, `json`, `graph` |
+| `showClassScores` | `Property<Boolean>` | `true` | Per-class breakdown in reports |
+| `enableCache` | `Property<Boolean>` | `false` | Cache results for faster re-runs |
+| `targetClassPatterns` | `SetProperty<String>` | empty | Regex patterns to include classes |
+| `targetTestPatterns` | `SetProperty<String>` | empty | Regex patterns to include test classes |
+| `excludeClassPatterns` | `SetProperty<String>` | empty | Regex patterns to exclude classes |
+| `excludeTestPatterns` | `SetProperty<String>` | empty | Regex patterns to exclude test classes |
+| `targetPackages` | `SetProperty<String>` | empty | Packages to include (e.g. `com.example.service`) |
+| `excludePackages` | `SetProperty<String>` | empty | Packages to exclude |
 | `enableSubsumption` | `Property<Boolean>` | `true` | Skip subsumed mutations |
 | `enableWeakMutation` | `Property<Boolean>` | `true` | Skip unreachable mutations |
 | `enableInlinedFinally` | `Property<Boolean>` | `true` | Detect inlined finally blocks |
 | `enableTestOrdering` | `Property<Boolean>` | `true` | Run strongest tests first |
-| `enableCache` | `Property<Boolean>` | `false` | Cache results for faster re-runs |
-| `enableIncrementalAnalysis` | `Property<Boolean>` | `false` | Only test changed classes |
-| `failOnScoreThreshold` | `Property<Int>` | `0` | Fail build if score below threshold |
-| `failOnMutationScoreThreshold` | `Property<Int>` | `0` | Fail build if mutation score below threshold (formerly `failOnCoverageThreshold`) |
-| `targetClassPatterns` | `SetProperty<String>` | empty | Regex patterns to include classes |
-| `excludeClassPatterns` | `SetProperty<String>` | empty | Regex patterns to exclude classes |
-| `targetPackages` | `SetProperty<String>` | empty | Packages to include (e.g., `com.example.service`) |
-| `excludePackages` | `SetProperty<String>` | empty | Packages to exclude |
-| `includePatterns` | `SetProperty<String>` | empty | File patterns to include |
-| `excludePatterns` | `SetProperty<String>` | empty | File patterns to exclude |
-| `excludedMethods` | `SetProperty<String>` | empty | Method names or substrings to exclude |
-| `maxMutationsPerClass` | `Property<Int>` | `0` | Limit mutations per class (`0` = no limit) |
-| `targetTestPatterns` | `SetProperty<String>` | empty | Regex patterns for test classes |
-| `excludeTestPatterns` | `SetProperty<String>` | empty | Regex patterns to exclude test classes |
-| `maxWorkers` | `Property<Int>` | `0` | Parallelism (`0` = CPU count) |
-| `mutantTimeoutMs` | `Property<Long>` | `30000` | Per-mutant timeout in ms |
 | `ciMode` | `Property<Boolean>` | `false` | Console + XML reports for CI |
-| `verbose` | `Property<Boolean>` | `false` | Show all mutations tested |
-| `showClassScores` | `Property<Boolean>` | `true` | Per-class breakdown in reports |
-| `generateGraph` | `Property<Boolean>` | `false` | Generate D3.js graph report |
-| `autoRunJaCoCo` | `Property<Boolean>` | `false` | Auto-run JaCoCo for coverage |
+| `failOnMutationScoreThreshold` | `Property<Int>` | `0` | Fail build if mutation score below threshold |
+| `isAndroid` | `Property<Boolean>` | auto-detected | True if AGP is on the classpath |
+| `androidPluginType` | `Property<String>` | auto-detected | `"application"` or `"library"` |
+| `androidVariant` | `Property<String>` | `"debug"` | Which Android build variant to test |
+| `excludeGeneratedClasses` | `SetProperty<String>` | 20 patterns | Generated classes (R, BuildConfig, Hilt) to skip |
+| `androidContext` | `Property<AndroidMutationContext>` | auto-detected | Resolved AGP variant context (internal) |
+
+#### Deprecated properties
+
+| Property | Replacement | Reason |
+|----------|-------------|--------|
+| `failOnScoreThreshold` | `failOnMutationScoreThreshold` | Name was misleading — always compared the mutation score |
+| `mutantTimeoutMs` | `timeoutMs` | Duplicated the same setting with confusing precedence |
+| `generateGraph` | `reportFormats.add("graph")` | Graph is one of the available report formats |
+| `autoRunJaCoCo` | — | Not yet implemented; reserved for future JaCoCo agent auto-run |
+| `verbose` | — | Not yet implemented; reserved for future verbose logging mode |
 
 ## Troubleshooting
 
@@ -220,7 +234,7 @@ class Service {
 buildscript {
     repositories { mavenCentral() }
     dependencies {
-        classpath("io.github.rodrigotimoteo:mutation-gradle-plugin:0.2.2")
+        classpath("io.github.rodrigotimoteo:mutation-gradle-plugin:0.3.0")
     }
 }
 apply(plugin = "io.github.rodrigotimoteo.mutation-kotlin")
@@ -287,7 +301,7 @@ mutationTest {
 ```
 
 ### Custom Mutators
-MutKt ships 16 built-in mutation operators grouped into MVP, Kotlin-specific, and Quick Win categories. Custom operator support is not currently implemented — operators are defined by the `MutationOperator` enum in the core module.
+MutKt ships 17 built-in mutation operators grouped into MVP, Kotlin-specific, and Quick Win categories. Custom operator support is not currently implemented — operators are defined by the `MutationOperator` enum in the core module.
 
 ## Architecture
 

@@ -43,7 +43,6 @@ object MutationRegistry {
     private var clock: Clock = Clock.systemUTC()
 
     class ThreadState {
-        val mutationsEnabled = AtomicBoolean(true)
         val startTimeMs = AtomicLong(0)
         val triggeredMutations = ConcurrentHashMap.newKeySet<String>()
     }
@@ -180,8 +179,16 @@ object MutationRegistry {
             set.remove(threadId)
             if (set.isEmpty()) emptyKeys.add(className)
         }
+        // Unconditional remove: `classThreads.remove(key, emptySet())` is
+        // a no-op because the stored value is the actual
+        // `ConcurrentHashMap.KeySetView`, not a freshly-allocated
+        // `emptySet()` singleton. Reference comparison fails and the
+        // empty set leaks. Use the single-arg `remove(key)` and accept
+        // a benign lost-update race: between the `isEmpty()` check and
+        // the remove, another thread could re-add itself to the set;
+        // we tolerate that and let the next cleanup re-prune.
         for (key in emptyKeys) {
-            classThreads.remove(key, emptySet())
+            classThreads.remove(key)
         }
     }
 

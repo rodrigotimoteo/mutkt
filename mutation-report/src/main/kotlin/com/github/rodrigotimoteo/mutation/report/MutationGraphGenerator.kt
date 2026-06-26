@@ -40,6 +40,10 @@ object MutationGraphGenerator {
                     .link { stroke: #999; stroke-opacity: 0.6; }
                     .link.killed { stroke: #f44336; stroke-width: 2px; }
                     .link.survived { stroke: #FF9800; stroke-width: 1px; stroke-dasharray: 5,5; }
+                    .link.weak { stroke: #8BC34A; stroke-width: 1px; }
+                    .link.error { stroke: #f44336; stroke-width: 1px; stroke-dasharray: 2,2; }
+                    .link.timeout { stroke: #FF9800; stroke-width: 1px; stroke-dasharray: 1,3; }
+                    .link.no_coverage { stroke: #9E9E9E; stroke-width: 1px; }
                     .tooltip { position: absolute; background: white; border: 1px solid #ccc; padding: 10px; border-radius: 4px; pointer-events: none; }
                     .legend { margin: 20px 0; }
                     .legend-item { display: inline-block; margin-right: 20px; }
@@ -99,8 +103,13 @@ object MutationGraphGenerator {
 
                     node.on("mouseover", function(event, d) {
                         tooltip.transition().duration(200).style("opacity", .9);
-                        tooltip.html("<strong>" + d.id + "</strong><br/>Type: " + d.type + "<br/>Status: " + (d.status || "N/A"))
-                            .style("left", (event.pageX + 10) + "px")
+                        tooltip.text("");
+                        tooltip.append("strong").text(d.id);
+                        tooltip.append("br");
+                        tooltip.append("text").text("Type: " + d.type);
+                        tooltip.append("br");
+                        tooltip.append("text").text("Status: " + (d.status || "N/A"));
+                        tooltip.style("left", (event.pageX + 10) + "px")
                             .style("top", (event.pageY - 10) + "px");
                     })
                     .on("mouseout", function(d) {
@@ -173,7 +182,23 @@ object MutationGraphGenerator {
         val edges = mutableListOf<String>()
 
         for (result in report.results) {
-            val status = if (result.isKilled) "killed" else "survived"
+            // Map every MutationStatus to a CSS class consumed by the
+            // .link.<status> rules in the embedded stylesheet. The
+            // mapping mirrors the legend so every bucket has a
+            // distinct visual: killed=red, survived=orange (dashed),
+            // weak=light-green, error=red (dotted), timeout=orange
+            // (densely dotted), no_coverage=gray. Subsumed shares
+            // killed's class — it IS a kill, just redundant.
+            val status =
+                when (result.status) {
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.KILLED -> "killed"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.SUBSUMED -> "killed"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.WEAK_KILLED -> "weak"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.SURVIVED -> "survived"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.ERROR -> "error"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.TIMEOUT -> "timeout"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.NO_COVERAGE -> "no_coverage"
+                }
             edges.add(
                 """{"source": "${escapeJson(
                     result.mutation.className,

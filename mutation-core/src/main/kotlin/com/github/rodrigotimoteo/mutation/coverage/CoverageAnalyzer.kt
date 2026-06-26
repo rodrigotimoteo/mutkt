@@ -147,13 +147,15 @@ class CoverageAnalyzer {
         classBytes: ByteArray,
     ): Set<Int> {
         return try {
+            // JaCoCo uses slashed class names internally (e.g., com/example/Foo)
+            val slashedName = normalizeClassName(className)
             val coverageBuilder = CoverageBuilder()
             val analyzer = Analyzer(valid.executionDataStore, coverageBuilder)
-            analyzer.analyzeAll(classBytes.inputStream(), className)
+            analyzer.analyzeAll(classBytes.inputStream(), slashedName)
 
             var coveredLines = emptySet<Int>()
             for (classCoverage in coverageBuilder.getClasses()) {
-                if (classCoverage.getName() == className) {
+                if (classCoverage.getName() == slashedName) {
                     val firstLine = classCoverage.getFirstLine()
                     val lastLine = classCoverage.getLastLine()
                     if (firstLine > 0 && lastLine > 0) {
@@ -191,7 +193,7 @@ class CoverageAnalyzer {
         val coveredLines =
             getCoveredLinesForClass(
                 coverageData.execFile,
-                className,
+                normalizeClassName(className),
                 classBytes,
             )
 
@@ -234,6 +236,8 @@ class CoverageAnalyzer {
      * represented as [CoverageData.Empty] rather than nullable fields,
      * so callers can exhaustively pattern-match on the type.
      */
+    private fun normalizeClassName(name: String): String = name.replace('.', '/')
+
     sealed interface CoverageData {
         data object Empty : CoverageData
 

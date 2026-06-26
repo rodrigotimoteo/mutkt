@@ -150,12 +150,6 @@ class MutationRegistryTest {
     }
 
     @Test
-    fun `ThreadState mutationsEnabled defaults to true`() {
-        val state = MutationRegistry.current()
-        assertTrue(state.mutationsEnabled.get())
-    }
-
-    @Test
     fun `ThreadState startTimeMs defaults to 0`() {
         val state = MutationRegistry.current()
         assertEquals(0L, state.startTimeMs.get())

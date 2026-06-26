@@ -25,6 +25,7 @@ object XmlReportGenerator {
                 appendLine("    <noCoverage>${report.noCoverageMutations}</noCoverage>")
                 appendLine("    <timeout>${report.timeoutMutations}</timeout>")
                 appendLine("    <error>${report.errorMutations}</error>")
+                appendLine("    <subsumed>${report.subsumedMutations}</subsumed>")
                 appendLine("    <killedPercentage>${report.killedPercentage}</killedPercentage>")
                 appendLine("  </statistics>")
                 appendLine("  <mutations>")

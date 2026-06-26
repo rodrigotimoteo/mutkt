@@ -120,9 +120,16 @@ class MutKtCache(private val projectDir: File) {
 
     /**
      * Clear all cached data.
+     *
+     * Also sweeps any leftover `.lock` sidecar files from a previous
+     * crash. Normal runs delete the lock in `withFileLock`'s `finally`
+     * block, but a JVM kill mid-write can leave orphans; the next
+     * `clear()` (or the next successful run) reclaims them.
      */
     fun clear() {
-        cacheDir.walkTopDown().filter { it.isFile && it.extension == "cache" }.forEach { it.delete() }
+        cacheDir.walkTopDown()
+            .filter { it.isFile && (it.extension == "cache" || it.name.endsWith(".lock")) }
+            .forEach { it.delete() }
     }
 
     private fun getCacheFile(classHash: String): File {
@@ -136,6 +143,13 @@ class MutKtCache(private val projectDir: File) {
     /**
      * Run [block] while holding an exclusive OS file lock on `file.lock`.
      * Prevents concurrent Gradle workers from corrupting cache files.
+     *
+     * The `.lock` sidecar file is removed in `finally` so the file does
+     * not accumulate in `.mutkt/cache/` over many runs. Removal is best-
+     * effort: a crash mid-block may leave the lock behind, but a stale
+     * `RandomAccessFile` lock is the actual correctness guarantee — the
+     * sidecar file is only a placeholder. (`clear()` also sweeps any
+     * leftovers from prior crashes.)
      */
     private inline fun <T> withFileLock(
         file: File,
@@ -144,10 +158,14 @@ class MutKtCache(private val projectDir: File) {
         val parent = file.parentFile
         if (parent != null) parent.mkdirs()
         val lockFile = File(parent, "${file.name}.lock")
-        RandomAccessFile(lockFile, "rw").channel.use { channel ->
-            channel.lock().use {
-                return block()
+        try {
+            RandomAccessFile(lockFile, "rw").channel.use { channel ->
+                channel.lock().use {
+                    return block()
+                }
             }
+        } finally {
+            lockFile.delete()
         }
     }
 }

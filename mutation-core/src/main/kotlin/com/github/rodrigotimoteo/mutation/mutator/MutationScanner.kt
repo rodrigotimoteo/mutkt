@@ -496,7 +496,7 @@ internal class MutationScannerMethodVisitor(
             when (opcode) {
                 Opcodes.IFNULL -> {
                     // ?.safe call: ifnull skips the non-null path
-                    // Mutation: replace ifnull with nop (fall through to call → NPE if null)
+                    // Mutation: flip ifnull to ifnonnull (always takes non-null path → NPE if null)
                     tryAddMutation(
                         MutationInfo(
                             operator = MutationOperator.NULL_SAFETY,
@@ -504,15 +504,15 @@ internal class MutationScannerMethodVisitor(
                             methodName = methodName,
                             methodDescriptor = methodDescriptor,
                             lineNumber = currentLineNumber,
-                            description = "Remove null check: ?.",
+                            description = "Flip null check: ?.",
                             originalOpcode = Opcodes.IFNULL,
-                            mutatedOpcode = Opcodes.NOP,
+                            mutatedOpcode = Opcodes.IFNONNULL,
                         ),
                     )
                 }
                 Opcodes.IFNONNULL -> {
                     // ?: elvis: ifnonnull skips the default value path
-                    // Mutation: replace ifnonnull with nop (fall through to default → ignores value)
+                    // Mutation: flip ifnonnull to ifnull (always takes default → ignores non-null value)
                     tryAddMutation(
                         MutationInfo(
                             operator = MutationOperator.NULL_SAFETY,
@@ -520,9 +520,9 @@ internal class MutationScannerMethodVisitor(
                             methodName = methodName,
                             methodDescriptor = methodDescriptor,
                             lineNumber = currentLineNumber,
-                            description = "Remove null check: ?:",
+                            description = "Flip null check: ?:",
                             originalOpcode = Opcodes.IFNONNULL,
-                            mutatedOpcode = Opcodes.NOP,
+                            mutatedOpcode = Opcodes.IFNULL,
                         ),
                     )
                 }

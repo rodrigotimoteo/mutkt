@@ -230,13 +230,8 @@ internal class MutationApplierMethodVisitor(
             opcode == targetMutation.originalOpcode &&
             checkAndCountOccurrence(isJumpInsnCandidate(opcode))
         ) {
-            // NULL_SAFETY: replace IFNULL/IFNONNULL with POP+NOP (consume stack value + remove branch)
-            if (targetMutation.operator == MutationOperator.NULL_SAFETY) {
-                super.visitInsn(Opcodes.POP) // consume the reference IFNULL/IFNONNULL would pop
-                super.visitInsn(Opcodes.NOP)
-                applied = true
-                return
-            }
+            // NULL_SAFETY mutations use the general jump mutation path
+            // to flip IFNULL↔IFNONNULL (handled by getMutatedOpcode below).
             val mutatedOpcode = getMutatedOpcode(opcode)
             if (mutatedOpcode != opcode) {
                 super.visitJumpInsn(mutatedOpcode, label)

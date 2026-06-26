@@ -68,6 +68,7 @@ class ConsoleReporter {
         sb.appendLine("║  No Coverage:        ${report.noCoverageMutations}")
         sb.appendLine("║  Errors:             ${report.errorMutations}")
         sb.appendLine("║  Timeouts:           ${report.timeoutMutations}")
+        sb.appendLine("║  Subsumed:           ${report.subsumedMutations} (${report.subsumedPercentage}%)")
         sb.appendLine("║")
         sb.appendLine("║  Execution Time:     ${report.totalExecutionTimeMs / 1000.0}s")
 
@@ -159,19 +160,18 @@ class ConsoleReporter {
 
     companion object {
         /**
-         * Detects whether stdout is connected to a terminal. Cached at
-         * class load time — TTY status does not change during a JVM
-         * lifetime, so caching avoids repeated `System.console()` calls
-         * (which acquires a lock on some platforms).
+         * Detects whether stdout is connected to a terminal.
+         *
+         * Re-checked on every call: long-running Gradle daemon sessions
+         * can outlive a TTY attachment (e.g. tests run in a daemon that
+         * was started from a terminal but is now being logged by an IDE),
+         * so caching at class load time would leave a stale answer.
+         *
+         * `System.console()` returns null when stdout is redirected
+         * (file, pipe, IDE test runner). The TERM env var suppresses
+         * ANSI when set to "dumb" (e.g. some CI environments).
          */
-        private val stdoutIsTty: Boolean by lazy {
-            // System.console() returns null when stdout is redirected
-            // (file, pipe, IDE test runner). The TERM env var suppresses
-            // ANSI when set to "dumb" (e.g. some CI environments).
-            System.console() != null && System.getenv("TERM") != "dumb"
-        }
-
         @JvmStatic
-        fun isStdoutTty(): Boolean = stdoutIsTty
+        fun isStdoutTty(): Boolean = System.console() != null && System.getenv("TERM") != "dumb"
     }
 }

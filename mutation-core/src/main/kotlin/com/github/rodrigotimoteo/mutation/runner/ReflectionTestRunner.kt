@@ -22,11 +22,31 @@ import org.slf4j.LoggerFactory
  * Public API kept stable: callers construct
  * `ReflectionTestRunner(classLoader).runTests(classNames)` and consume
  * [TestResults] the same way as the previous reflection-based runner.
+ *
+ * The no-arg constructor exists so callers that need to run the same
+ * runner against multiple classloaders (e.g. the mutation engine) can
+ * pass a per-call classloader via [runTests]'s `classLoader` parameter
+ * while the underlying [org.junit.platform.launcher.Launcher] is reused
+ * across calls. [LauncherFactory.create] is expensive — engine workers
+ * process dozens of mutants per thread, and creating a new launcher per
+ * mutant dominated the per-mutant overhead.
  */
 class ReflectionTestRunner(
-    private val classLoader: ClassLoader,
+    private val classLoader: ClassLoader? = null,
 ) {
     private val logger = LoggerFactory.getLogger(ReflectionTestRunner::class.java)
+
+    /**
+     * Per-thread JUnit Launcher cache. Each worker thread gets one
+     * launcher that is reused across all `runTests` calls it makes.
+     *
+     * Trade-off: the launcher is not formally documented as thread-safe,
+     * so we cannot share a single instance across worker threads. A
+     * ThreadLocal gives us "one launcher per worker, reused for all
+     * mutants that worker processes" — collapsing N launcher creations
+     * (one per mutant) to P (one per worker thread, where P << N).
+     */
+    private val launcherCache = ThreadLocal.withInitial { LauncherFactory.create() }
 
     data class TestResults(
         val testsFound: Int,
@@ -41,22 +61,34 @@ class ReflectionTestRunner(
         val hasFailures: Boolean get() = testsFailed > 0
     }
 
-    fun runTests(testClassNames: List<String>): TestResults {
+    fun runTests(
+        testClassNames: List<String>,
+        classLoader: ClassLoader? = null,
+    ): TestResults {
+        val effectiveLoader = classLoader ?: this.classLoader
+        if (effectiveLoader == null) {
+            throw IllegalStateException(
+                "No ClassLoader available: pass one to runTests or to the constructor",
+            )
+        }
         if (testClassNames.isEmpty()) {
             return TestResults(0, 0, 0, 0, emptyList(), emptySet())
         }
 
         val previous = Thread.currentThread().contextClassLoader
-        Thread.currentThread().contextClassLoader = classLoader
+        Thread.currentThread().contextClassLoader = effectiveLoader
         try {
-            val launcher = LauncherFactory.create()
+            val launcher = launcherCache.get()
             val listener = MutKtListener()
-            launcher.registerTestExecutionListeners(listener)
-
+            // Pass the listener per-execute() call. The Launcher interface
+            // also has a registerTestExecutionListeners + execute() form,
+            // but JUnit 1.10.2 provides no unregister counterpart, so
+            // using a fresh listener per execute() is the only way to
+            // avoid accumulating N listeners per worker thread.
             for (testClassName in testClassNames) {
                 val testClass: Class<*> =
                     try {
-                        classLoader.loadClass(testClassName)
+                        effectiveLoader.loadClass(testClassName)
                     } catch (e: Exception) {
                         val cause =
                             if (e is java.lang.reflect.InvocationTargetException) {
@@ -75,7 +107,7 @@ class ReflectionTestRunner(
                         .filters(EngineFilter.includeEngines("junit-jupiter", "junit-vintage"))
                         .build()
                 val testPlan = launcher.discover(request)
-                launcher.execute(testPlan)
+                launcher.execute(testPlan, listener)
             }
 
             return listener.toResults()

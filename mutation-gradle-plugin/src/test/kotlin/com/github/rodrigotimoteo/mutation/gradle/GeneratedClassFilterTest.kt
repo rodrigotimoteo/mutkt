@@ -94,4 +94,51 @@ class GeneratedClassFilterTest {
         assertThat(GeneratedClassFilter.shouldExclude("MyDto", patterns)).isFalse()
         assertThat(GeneratedClassFilter.shouldExclude("MyMapper", patterns)).isFalse()
     }
+
+    @Test
+    fun `double-star prefix matches simple class name in any package`() {
+        val patterns = setOf("**/R")
+        assertThat(GeneratedClassFilter.shouldExclude("R", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.R", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.example.R", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.example.inner.R", patterns)).isTrue()
+        // Nested / suffixed forms do not match the simple-name `R` pattern.
+        assertThat(GeneratedClassFilter.shouldExclude("R\$drawable", patterns)).isFalse()
+        assertThat(GeneratedClassFilter.shouldExclude("com.R\$drawable", patterns)).isFalse()
+        assertThat(GeneratedClassFilter.shouldExclude("Rx", patterns)).isFalse()
+    }
+
+    @Test
+    fun `double-star prefix with dollar suffix matches nested names in any package`() {
+        val patterns = setOf("**/R\$*")
+        assertThat(GeneratedClassFilter.shouldExclude("R\$drawable", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.R\$drawable", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.example.R\$id", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("R", patterns)).isFalse()
+        assertThat(GeneratedClassFilter.shouldExclude("com.R", patterns)).isFalse()
+    }
+
+    @Test
+    fun `double-star with middle path segment matches any package prefix`() {
+        val patterns = setOf("**/databinding/**")
+        assertThat(GeneratedClassFilter.shouldExclude("databinding.Foo", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.databinding.Foo", patterns)).isTrue()
+        assertThat(
+            GeneratedClassFilter.shouldExclude(
+                "com.example.databinding.Bar",
+                patterns,
+            ),
+        ).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.example.Foo", patterns)).isFalse()
+    }
+
+    @Test
+    fun `double-star prefix with single-star wildcards combines path-agnostic and segment wildcards`() {
+        val patterns = setOf("**/*_Impl")
+        assertThat(GeneratedClassFilter.shouldExclude("MyClass_Impl", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.MyClass_Impl", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("com.example.MyClass_Impl", patterns)).isTrue()
+        assertThat(GeneratedClassFilter.shouldExclude("Impl", patterns)).isFalse()
+        assertThat(GeneratedClassFilter.shouldExclude("com.Impl", patterns)).isFalse()
+    }
 }

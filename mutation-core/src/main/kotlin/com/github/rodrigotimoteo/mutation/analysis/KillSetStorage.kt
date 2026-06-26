@@ -1,7 +1,7 @@
 package com.github.rodrigotimoteo.mutation.analysis
 
-import com.github.rodrigotimoteo.mutation.LOG_PREFIX
 import com.github.rodrigotimoteo.mutation.MUTKT_DIR
+import org.slf4j.LoggerFactory
 import java.io.File
 
 /**
@@ -14,6 +14,7 @@ import java.io.File
  * One line per mutation: `mutationId=test1,test2,test3`
  */
 class KillSetStorage(private val projectDir: File) {
+    private val logger = LoggerFactory.getLogger(KillSetStorage::class.java)
     private val storageDir = File(projectDir, MUTKT_DIR)
     private val storageFile = File(storageDir, "kill-sets.txt")
 
@@ -39,7 +40,7 @@ class KillSetStorage(private val projectDir: File) {
                     id to tests
                 }
         } catch (e: Exception) {
-            System.err.println("$LOG_PREFIX Warning: failed to load kill sets: ${e.message}")
+            logger.warn("Failed to load kill sets: ${e.message}")
             emptyMap()
         }
     }
@@ -59,7 +60,7 @@ class KillSetStorage(private val projectDir: File) {
                     },
             )
         } catch (e: Exception) {
-            System.err.println("$LOG_PREFIX Warning: failed to save kill sets: ${e.message}")
+            logger.warn("Failed to save kill sets: ${e.message}")
         }
     }
 

@@ -23,12 +23,13 @@ class MutantClassLoaderFullTest {
 
     @BeforeEach
     fun setUp() {
-        MutantClassLoaderFactory.resetCache()
+        // No-op: the per-group failed-class cache is created fresh by
+        // `createGroup`; no singleton state needs clearing anymore.
     }
 
     @AfterEach
     fun tearDown() {
-        MutantClassLoaderFactory.resetCache()
+        // No-op: see setUp.
     }
 
     // ---------- BaseProjectClassLoader ----------
@@ -637,32 +638,37 @@ class MutantClassLoaderFullTest {
     // ---------- MutantClassLoaderFactory ----------
 
     @Test
-    fun `MutantClassLoaderFactory resetCache clears shared failed cache`() {
+    fun `MutantClassLoaderFactory createGroup isolates failed cache per group`() {
+        // `resetCache()` was a no-op for the deprecated shared singleton
+        // cache. The new contract is per-group isolation: a LinkageError
+        // in group A must not poison group B's cache. Verify that.
         val targetName = "com/example/FactoryResetTarget"
         val badName = "com/example/FactoryReset"
         val badBytes = buildClassWithInvalidSuperclass(badName)
-        val base =
+
+        val groupA =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 classFiles = mapOf(badName to badBytes),
                 testClassBytes = emptyMap(),
                 targetClassName = targetName,
             )
-        // Trigger a LinkageError to populate the shared failed cache.
-        assertFailsWith<LinkageError> { base.loadClass("com.example.FactoryReset") }
+        // Trigger a LinkageError in group A to populate its cache.
+        assertFailsWith<LinkageError> { groupA.loadClass("com.example.FactoryReset") }
+        assertTrue(badName in groupA.failedClassCache, "Group A must cache the failure")
 
-        MutantClassLoaderFactory.resetCache()
-
-        // After reset, a fresh group referencing the cleared shared set must
-        // re-cache the failure on first call (proving the set was actually cleared).
-        val freshGroup =
+        // Group B starts with a fresh cache and is unaware of group A's failure.
+        val groupB =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 classFiles = mapOf(badName to badBytes),
                 testClassBytes = emptyMap(),
                 targetClassName = targetName,
             )
-        assertFailsWith<LinkageError> { freshGroup.loadClass("com.example.FactoryReset") }
+        assertTrue(
+            groupB.failedClassCache.isEmpty(),
+            "Group B must start with an empty failed-class cache",
+        )
     }
 
     @Test

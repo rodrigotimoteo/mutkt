@@ -5,6 +5,8 @@ import com.github.rodrigotimoteo.mutation.annotation.MutKtConfiguration
 import com.github.rodrigotimoteo.mutation.annotation.MutKtTest
 import com.github.rodrigotimoteo.mutation.annotation.VerificationMode
 import com.github.rodrigotimoteo.mutation.registry.MutationRegistry
+import org.junit.jupiter.api.extension.AfterAllCallback
+import org.junit.jupiter.api.extension.BeforeAllCallback
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.api.extension.InvocationInterceptor
 import org.junit.jupiter.api.extension.ReflectiveInvocationContext
@@ -42,7 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * @see MutKt for test scoping API
  * @see MutationRegistry for state management
  */
-class MutKtExtension : InvocationInterceptor {
+class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationInterceptor {
     private val logger = LoggerFactory.getLogger(MutKtExtension::class.java)
 
     companion object {
@@ -50,23 +52,17 @@ class MutKtExtension : InvocationInterceptor {
         private val enableCount = AtomicInteger(0)
     }
 
-    override fun interceptBeforeAllMethod(
-        invocation: InvocationInterceptor.Invocation<Void>,
-        invocationContext: ReflectiveInvocationContext<Method>,
-        extensionContext: ExtensionContext,
-    ) {
-        val annotation = getAnnotation(extensionContext)
+    override fun beforeAll(context: ExtensionContext) {
+        val annotation = getAnnotation(context)
         val config = buildConfig(annotation)
 
         if (config.mode == VerificationMode.DISABLED) {
             logger.info("Mutation testing: DISABLED")
-            invocation.proceed()
             return
         }
 
         if (isRunningSingleTest() && config.skipInIDE) {
             logger.info("Mutation testing: SKIPPED (single test/IDE)")
-            invocation.proceed()
             return
         }
 
@@ -75,21 +71,14 @@ class MutKtExtension : InvocationInterceptor {
             MutationRegistry.enable()
         }
         MutationRegistry.setTimeoutMs(config.timeoutMs)
-
-        invocation.proceed()
     }
 
-    override fun interceptAfterAllMethod(
-        invocation: InvocationInterceptor.Invocation<Void>,
-        invocationContext: ReflectiveInvocationContext<Method>,
-        extensionContext: ExtensionContext,
-    ) {
+    override fun afterAll(context: ExtensionContext) {
         if (!MutationRegistry.isActive()) {
-            invocation.proceed()
             return
         }
 
-        val annotation = getAnnotation(extensionContext)
+        val annotation = getAnnotation(context)
         val config = buildConfig(annotation)
 
         try {
@@ -107,7 +96,7 @@ class MutKtExtension : InvocationInterceptor {
             }
         } finally {
             // Clean up this class's thread state
-            val className = extensionContext.testClass.orElse(null)?.name
+            val className = context.testClass.orElse(null)?.name
             if (className != null) {
                 MutationRegistry.resetClass(className)
             }
@@ -117,8 +106,6 @@ class MutKtExtension : InvocationInterceptor {
                 MutationRegistry.disable()
             }
         }
-
-        invocation.proceed()
     }
 
     override fun interceptTestMethod(

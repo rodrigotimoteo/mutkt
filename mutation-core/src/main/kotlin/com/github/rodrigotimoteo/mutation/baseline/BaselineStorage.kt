@@ -1,8 +1,8 @@
 package com.github.rodrigotimoteo.mutation.baseline
 
-import com.github.rodrigotimoteo.mutation.LOG_PREFIX
 import com.github.rodrigotimoteo.mutation.MUTKT_DIR
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.RandomAccessFile
 
@@ -26,6 +26,7 @@ import java.io.RandomAccessFile
  * ```
  */
 class BaselineStorage(private val projectDir: File) {
+    private val logger = LoggerFactory.getLogger(BaselineStorage::class.java)
     private val baselineDir = File(projectDir, MUTKT_DIR)
     private val baselineFile = File(baselineDir, "baseline")
 
@@ -116,7 +117,7 @@ class BaselineStorage(private val projectDir: File) {
             val exitCode = process.waitFor()
 
             if (exitCode != 0) {
-                System.err.println("$LOG_PREFIX git diff failed (exit code $exitCode), no incremental filtering applied")
+                logger.warn("git diff failed (exit code $exitCode), no incremental filtering applied")
                 return emptySet()
             }
 
@@ -125,7 +126,7 @@ class BaselineStorage(private val projectDir: File) {
                 .mapNotNull { path -> fileToClassName(path, sourceDirs) }
                 .toSet()
         } catch (e: Exception) {
-            System.err.println("$LOG_PREFIX git not available: ${e.message}, running all mutations (no filtering)")
+            logger.warn("git not available: ${e.message}, running all mutations (no filtering)")
             emptySet()
         }
     }
@@ -205,11 +206,21 @@ class BaselineStorage(private val projectDir: File) {
      */
     fun clear() {
         baselineFile.delete()
+        // Sweep the .lock sidecar left over from `withFileLock` (deleted
+        // on the happy path; this catches a crash mid-write). The lock
+        // file lives next to baselineFile in `.mutkt/`.
+        baselineFile.parentFile
+            ?.listFiles { f -> f.name == "${baselineFile.name}.lock" }
+            ?.forEach { it.delete() }
     }
 
     /**
      * Run [block] while holding an exclusive OS file lock on `file.lock`.
      * Prevents concurrent Gradle workers from corrupting baseline files.
+     *
+     * The `.lock` sidecar is removed in `finally` so it does not
+     * accumulate in `.mutkt/` across runs. (`clear()` also sweeps any
+     * orphans from a previous crash.)
      */
     private inline fun <T> withFileLock(
         file: File,
@@ -218,10 +229,14 @@ class BaselineStorage(private val projectDir: File) {
         val parent = file.parentFile
         if (parent != null) parent.mkdirs()
         val lockFile = File(parent, "${file.name}.lock")
-        RandomAccessFile(lockFile, "rw").channel.use { channel ->
-            channel.lock().use {
-                return block()
+        try {
+            RandomAccessFile(lockFile, "rw").channel.use { channel ->
+                channel.lock().use {
+                    return block()
+                }
             }
+        } finally {
+            lockFile.delete()
         }
     }
 

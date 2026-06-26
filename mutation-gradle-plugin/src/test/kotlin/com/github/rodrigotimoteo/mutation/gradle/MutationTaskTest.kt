@@ -548,13 +548,34 @@ class DiscoverKotlinCompileTasksTest {
     }
 
     @Test
-    fun `discoverKotlinCompileTasks prefers compileDebugKotlin for Android`() {
+    fun `discoverKotlinCompileTasks returns empty pair for Android without AGP variant capture`() {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("java")
+        // No real AGP and no variant captures → empty pair so the caller
+        // can skip wiring (avoids depending on compileDebugKotlin which
+        // may not exist in release-only or custom variant configurations).
         val (main, test) = MutationPlugin().discoverKotlinCompileTasks(project, isAndroid = true)
-        // No real AGP → falls back to debug defaults
-        assertEquals("compileDebugKotlin", main)
-        assertEquals("compileDebugUnitTestKotlin", test)
+        assertEquals("", main)
+        assertEquals("", test)
+    }
+
+    @Test
+    fun `discoverKotlinCompileTasks uses captured AGP variant task names when present`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "release",
+                runtimeConfiguration =
+                    project.objects.fileCollection(),
+                compileTask = "compileReleaseKotlin",
+                testCompileTask = "compileReleaseUnitTestKotlin",
+            )
+        val (main, test) =
+            MutationPlugin()
+                .discoverKotlinCompileTasks(project, isAndroid = true, variantCaptures = listOf(capture))
+        assertEquals("compileReleaseKotlin", main)
+        assertEquals("compileReleaseUnitTestKotlin", test)
     }
 }
 

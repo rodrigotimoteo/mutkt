@@ -24,6 +24,7 @@ object JsonReportGenerator {
                 appendLine("    \"noCoverage\": ${report.noCoverageMutations},")
                 appendLine("    \"timeout\": ${report.timeoutMutations},")
                 appendLine("    \"error\": ${report.errorMutations},")
+                appendLine("    \"subsumed\": ${report.subsumedMutations},")
                 appendLine("    \"killedPercentage\": ${report.killedPercentage}")
                 appendLine("  },")
                 appendLine("  \"mutations\": [")

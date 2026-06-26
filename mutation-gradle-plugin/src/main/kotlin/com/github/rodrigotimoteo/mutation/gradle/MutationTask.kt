@@ -81,9 +81,15 @@ abstract class MutationTask
         @Optional
         val classpath: ConfigurableFileCollection = objectFactory.fileCollection()
 
-        /** JaCoCo execution file for coverage analysis. */
-        @InputFile
-        @Optional
+        /**
+         * JaCoCo execution file for coverage analysis. Marked [Internal]
+         * (not [InputFile]) because the file is resolved at execution time —
+         * it may not exist at configuration time when auto-detected, and a
+         * missing `@InputFile` would fail Gradle's input validation. The
+         * actual file lookup (user-set → auto-detect fallback) happens in
+         * [runMutationTests].
+         */
+        @Internal
         val coverageExecFile: RegularFileProperty = objectFactory.fileProperty()
 
         /** Mutation operators to enable. Defaults to MVP_OPERATORS. */
@@ -101,7 +107,15 @@ abstract class MutationTask
         @Optional
         val maxParallelMutants: Property<Int> = objectFactory.property(Int::class.java).convention(4)
 
-        /** Report formats to generate: "html", "console". */
+        /**
+         * Report formats to generate. Supported formats:
+         * - `html` — Static HTML report with per-class breakdown
+         * - `console` — Text summary printed to stdout
+         * - `json` — Machine-readable JSON
+         * - `xml` — JUnit-compatible XML (for CI ingestion)
+         * - `csv` — Spreadsheet-friendly CSV
+         * - `graph` — Interactive D3.js test-mutant relationship graph
+         */
         @Input
         @Optional
         val reportFormats: SetProperty<String> =
@@ -204,11 +218,6 @@ abstract class MutationTask
         @Input
         @Optional
         val enableTestOrdering: Property<Boolean> = objectFactory.property(Boolean::class.java).convention(true)
-
-        /** Whether to run JaCoCo agent automatically. */
-        @Input
-        @Optional
-        val autoRunJaCoCo: Property<Boolean> = objectFactory.property(Boolean::class.java).convention(true)
 
         /** Generate per-class mutation scores in reports. */
         @Input
@@ -403,12 +412,20 @@ abstract class MutationTask
                 logger.lifecycle("Exclude packages: ${excludePkgs.joinToString()}")
             }
 
-            // Apply GeneratedClassFilter when Android context is present or when
-            // the user has supplied excludeGeneratedClasses patterns. Walks the
-            // resolved classes directory, identifies generated classes, and adds
-            // exact-match regex patterns so the runner skips them.
+            // Apply GeneratedClassFilter ONLY when an Android variant
+            // context is present, or when the user has explicitly
+            // configured excludeGeneratedClasses on the task. The
+            // extension's default excludeGeneratedClasses patterns are
+            // Android-specific (R, BuildConfig, Hilt, databinding, etc.)
+            // and useless for pure-JVM projects, but the convention is
+            // non-empty so Android works "out of the box". Without this
+            // gate, every pure-JVM build would walk the entire classes
+            // directory to match a set of patterns that can never
+            // match — paying a directory-scan cost for zero results.
+            val androidCtxForFilter = androidContext.getOrNull()
+            val userEnabled = excludeGeneratedClasses.isPresent
             val generatedPatterns = excludeGeneratedClasses.getOrElse(emptySet())
-            if (generatedPatterns.isNotEmpty() && classesDir.exists()) {
+            if ((androidCtxForFilter != null || userEnabled) && generatedPatterns.isNotEmpty() && classesDir.exists()) {
                 val generatedClassNames = collectGeneratedClassNames(classesDir, generatedPatterns)
                 if (generatedClassNames.isNotEmpty()) {
                     generatedClassNames.forEach { className ->
@@ -516,39 +533,57 @@ abstract class MutationTask
                 )
             }
 
-            val threshold = failOnScoreThreshold.get()
+            // `failOnScoreThreshold` is the deprecated alias of
+            // `failOnMutationScoreThreshold`; both hold the same
+            // numeric setting (the legacy name was misleading — it
+            // always compared the mutation score, not line coverage).
+            // Consult only the non-deprecated property to avoid the
+            // duplicate-check race where both copies of the threshold
+            // were evaluated and the build could be failed twice for
+            // the same condition. The deprecated alias remains on the
+            // extension for backward compatibility with user scripts.
+            val threshold = failOnMutationScoreThreshold.get()
             if (threshold > 0 && report.killedPercentage < threshold) {
                 throw org.gradle.api.GradleException(
                     "Mutation score ${report.killedPercentage}% is below threshold $threshold%. Build failed.",
                 )
             }
-
-            val coverageThreshold = failOnMutationScoreThreshold.get()
-            if (coverageThreshold > 0 && report.killedPercentage < coverageThreshold) {
-                throw org.gradle.api.GradleException(
-                    "Mutation score ${report.killedPercentage}% is below threshold $coverageThreshold%. Build failed.",
-                )
-            }
         }
 
+        /**
+         * Convert a glob pattern to a regex matched against the slashed
+         * class name. Supports double `*` (zero or more path segments),
+         * single `*` (zero or more chars within one segment), and `?`
+         * (one char within one segment). A double `*` followed by `/` in
+         * the middle of a pattern emits a non-capturing group with an
+         * optional trailing slash so the trailing simple class name
+         * matches with or without a package prefix.
+         */
         private fun globToRegex(pattern: String): String {
-            val stripped = pattern.removePrefix("**/")
             val regex = StringBuilder("^")
             var i = 0
-            while (i < stripped.length) {
-                val c = stripped[i]
+            while (i < pattern.length) {
+                val c = pattern[i]
                 when {
-                    c == '*' && i + 1 < stripped.length && stripped[i + 1] == '*' -> {
-                        regex.append(".*")
+                    c == '*' && i + 1 < pattern.length && pattern[i + 1] == '*' -> {
                         i += 2
-                        if (i < stripped.length && stripped[i] == '/') i++
+                        if (i < pattern.length && pattern[i] == '/') {
+                            i++
+                            if (i == pattern.length) {
+                                regex.append(".*")
+                            } else {
+                                regex.append("(?:.*/)?")
+                            }
+                        } else {
+                            regex.append(".*")
+                        }
                     }
                     c == '*' -> {
                         regex.append("[^/]*")
                         i++
                     }
                     c == '?' -> {
-                        regex.append(".")
+                        regex.append("[^/]")
                         i++
                     }
                     else -> {
@@ -733,7 +768,16 @@ abstract class MutationTask
                     }
                     "csv" -> {
                         val csvReport = com.github.rodrigotimoteo.mutation.report.CsvReportGenerator.generate(report, outputDirFile)
+                        // Always produce the per-class summary alongside
+                        // the per-mutation CSV when the CSV format is
+                        // selected — previously `generateSummary` was
+                        // dead code (the Gradle task never called it),
+                        // so the per-class aggregate was unreachable
+                        // from the build. Pairing the two keeps the
+                        // summary and the raw rows in lockstep.
+                        val csvSummary = com.github.rodrigotimoteo.mutation.report.CsvReportGenerator.generateSummary(report, outputDirFile)
                         logger.lifecycle("CSV report: $csvReport")
+                        logger.lifecycle("CSV summary: $csvSummary")
                     }
                     "xml" -> {
                         val xmlReport = com.github.rodrigotimoteo.mutation.report.XmlReportGenerator.generate(report, outputDirFile)

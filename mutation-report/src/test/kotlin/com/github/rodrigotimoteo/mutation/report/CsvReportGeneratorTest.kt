@@ -129,7 +129,7 @@ class CsvReportGeneratorTest {
         val lines = content.trim().split("\n")
         assertEquals(3, lines.size) // header + 2 classes
 
-        assertContains(content, "class,total_mutations,killed,survived,score")
+        assertContains(content, "class,total_mutations,killed,survived,subsumed,score")
         assertContains(content, "com.Foo")
         assertContains(content, "com.Bar")
     }
@@ -153,9 +153,9 @@ class CsvReportGeneratorTest {
         val rowA = dataRows.single { it[0] == "com.A" }
         val rowB = dataRows.single { it[0] == "com.B" }
         // com.A: 1 killed, 1 survived → score 50
-        assertEquals(listOf("com.A", "2", "1", "1", "50"), rowA)
+        assertEquals(listOf("com.A", "2", "1", "1", "0", "50"), rowA)
         // com.B: 2 killed, 0 survived → score 100
-        assertEquals(listOf("com.B", "2", "2", "0", "100"), rowB)
+        assertEquals(listOf("com.B", "2", "2", "0", "0", "100"), rowB)
     }
 
     @Test
@@ -177,7 +177,7 @@ class CsvReportGeneratorTest {
 
         val lines = content.split("\n")
         assertEquals(1, lines.size)
-        assertEquals("class,total_mutations,killed,survived,score", lines[0])
+        assertEquals("class,total_mutations,killed,survived,subsumed,score", lines[0])
     }
 
     @Test

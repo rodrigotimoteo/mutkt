@@ -61,9 +61,12 @@ class HtmlReportGenerator {
                 appendLine("    <header>")
                 appendLine("      <h1>MutKt Mutation Report</h1>")
                 appendLine("      <p class=\"subtitle\">")
-                appendLine(
-                    "        <img src=\"${safeBadgeSrc(report.scoreBadgeUrl)}\" alt=\"Mutation Score\">",
-                )
+                val badgeSrc = safeBadgeSrc(report.scoreBadgeUrl)
+                if (badgeSrc.isNotEmpty()) {
+                    appendLine(
+                        "        <img src=\"$badgeSrc\" alt=\"Mutation Score\">",
+                    )
+                }
                 appendLine("      </p>")
                 appendLine("    </header>")
                 appendLine()
@@ -93,6 +96,10 @@ class HtmlReportGenerator {
                 appendLine("        <div class=\"stat-card timeout\">")
                 appendLine("          <div class=\"stat-value\">${report.timeoutMutations}</div>")
                 appendLine("          <div class=\"stat-label\">Timeouts</div>")
+                appendLine("        </div>")
+                appendLine("        <div class=\"stat-card subsumed\">")
+                appendLine("          <div class=\"stat-value\">${report.subsumedMutations}</div>")
+                appendLine("          <div class=\"stat-label\">Subsumed (${report.subsumedPercentage}%)</div>")
                 appendLine("        </div>")
                 appendLine("      </div>")
                 appendLine()
@@ -217,6 +224,7 @@ class HtmlReportGenerator {
             .stat-card.no-coverage .stat-value { color: #f39c12; }
             .stat-card.error .stat-value { color: #9b59b6; }
             .stat-card.timeout .stat-value { color: #34495e; }
+            .stat-card.subsumed .stat-value { color: #95a5a6; }
             .kill-rate-bar { background: #ecf0f1; border-radius: 8px; height: 30px; position: relative; margin-bottom: 1rem; overflow: hidden; }
             .bar-fill { background: linear-gradient(90deg, #27ae60, #2ecc71); height: 100%; transition: width 0.3s; }
             .bar-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #2c3e50; }

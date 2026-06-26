@@ -112,49 +112,59 @@ class TestStrengthOrdering(private val projectDir: File) {
         val content = historyFile.readText()
         val entries = mutableMapOf<String, TestStrengthEntry>()
 
-        // Simple JSON parsing
+        // Field detection uses regex anchored at line start so partial
+        // matches in string values (e.g. a test class name containing
+        // "totalKills") cannot corrupt a numeric field. Field order is
+        // arbitrary: each line is classified independently and the
+        // entry is committed when the closing `}` is seen.
+        val fieldRegex = Regex("\"(totalKills|totalRuns|totalMutations|lastRun)\"\\s*:\\s*(-?\\d+)")
+
         var currentTest: String? = null
         var totalKills = 0
         var totalRuns = 0
         var totalMutations = 0
         var lastRun = 0L
 
+        fun commit() {
+            val test = currentTest ?: return
+            entries[test] =
+                TestStrengthEntry(
+                    totalKills = totalKills,
+                    totalRuns = totalRuns,
+                    totalMutations = totalMutations,
+                    lastRun = lastRun,
+                )
+        }
+
         for (line in content.lines()) {
             val trimmed = line.trim()
             when {
-                trimmed.matches(Regex("^\"[^\"]+\":\\s*\\{$")) -> {
-                    currentTest = trimmed.substringAfter("\"").substringBefore("\"")
-                    totalKills = 0
-                    totalRuns = 0
-                    totalMutations = 0
-                    lastRun = 0L
+                // Opening of an entry: "test class name": {
+                trimmed.startsWith("\"") && trimmed.endsWith("{") -> {
+                    val testName = trimmed.substringAfter("\"").substringBeforeLast("\"")
+                    if (testName.isNotEmpty()) {
+                        currentTest = testName
+                        totalKills = 0
+                        totalRuns = 0
+                        totalMutations = 0
+                        lastRun = 0L
+                    }
                 }
-                trimmed.contains("\"totalKills\":") -> {
-                    totalKills = trimmed.substringAfter(":").trim().removeSuffix(",").toIntOrNull() ?: 0
-                }
-                trimmed.contains("\"totalRuns\":") -> {
-                    totalRuns = trimmed.substringAfter(":").trim().removeSuffix(",").toIntOrNull() ?: 0
-                }
-                trimmed.contains("\"totalMutations\":") -> {
-                    totalMutations = trimmed.substringAfter(":").trim().removeSuffix(",").toIntOrNull() ?: 0
-                }
-                trimmed.contains("\"lastRun\":") -> {
-                    lastRun = trimmed.substringAfter(":").trim().removeSuffix(",").toLongOrNull() ?: 0
-                }
-                trimmed == "}," || trimmed == "}" -> {
-                    if (currentTest != null) {
-                        entries[currentTest!!] =
-                            TestStrengthEntry(
-                                totalKills = totalKills,
-                                totalRuns = totalRuns,
-                                totalMutations = totalMutations,
-                                lastRun = lastRun,
-                            )
-                        currentTest = null
+                trimmed == "}," || trimmed == "}" -> commit().also { currentTest = null }
+                else -> {
+                    val match = fieldRegex.find(trimmed) ?: continue
+                    val (name, raw) = match.destructured
+                    when (name) {
+                        "totalKills" -> totalKills = raw.toIntOrNull() ?: 0
+                        "totalRuns" -> totalRuns = raw.toIntOrNull() ?: 0
+                        "totalMutations" -> totalMutations = raw.toIntOrNull() ?: 0
+                        "lastRun" -> lastRun = raw.toLongOrNull() ?: 0L
                     }
                 }
             }
         }
+        // File may end without a trailing newline + `}`; commit any open entry.
+        commit()
 
         return entries
     }

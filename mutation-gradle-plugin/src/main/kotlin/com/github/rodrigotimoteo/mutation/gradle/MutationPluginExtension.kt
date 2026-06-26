@@ -153,14 +153,24 @@ open class MutationPluginExtension(project: Project) {
 
     /**
      * Whether to run JaCoCo agent automatically for coverage analysis.
+     *
+     * Reserved for future use; not yet consumed by the engine. Kept on the
+     * extension so user scripts referencing it keep compiling.
      */
-
+    @Deprecated("Not yet implemented; reserved for future JaCoCo agent auto-run")
     val autoRunJaCoCo: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 
     /**
      * Mutation score threshold (0-100). Fail build if score below this.
+     *
+     * @deprecated Use [failOnMutationScoreThreshold] instead. The score
+     *   this property compared was always the mutation score (not line
+     *   coverage), so the legacy name was misleading.
      */
-
+    @Deprecated(
+        "Use failOnMutationScoreThreshold instead",
+        ReplaceWith("failOnMutationScoreThreshold"),
+    )
     val failOnScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
 
     /**
@@ -185,8 +195,12 @@ open class MutationPluginExtension(project: Project) {
 
     /**
      * Timeout per mutant in milliseconds.
+     *
+     * @deprecated Use [timeoutMs] instead. The two properties duplicate
+     *   the same setting with confusing precedence; [timeoutMs] is the
+     *   single source of truth.
      */
-
+    @Deprecated("Use timeoutMs instead", ReplaceWith("timeoutMs"))
     val mutantTimeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(0)
 
     // === Regex Filtering ===
@@ -266,8 +280,15 @@ open class MutationPluginExtension(project: Project) {
 
     /**
      * Generate interactive HTML graph of test-mutant relationships.
+     *
+     * @deprecated Use [reportFormats] instead. The graph report is one
+     *   of the available report formats; this boolean duplicates that
+     *   control and creates two ways to enable the same output.
      */
-
+    @Deprecated(
+        "Use reportFormats instead",
+        ReplaceWith("reportFormats.add(\"graph\")"),
+    )
     val generateGraph: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 
     // === Caching ===
@@ -302,7 +323,10 @@ open class MutationPluginExtension(project: Project) {
 
     /**
      * Verbose output: show all mutations tested, not just summary.
+     *
+     * Reserved for future use; not yet wired to engine logging level.
      */
+    @Deprecated("Not yet implemented; reserved for future verbose logging mode")
     val verbose: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 
     // === Android Support ===

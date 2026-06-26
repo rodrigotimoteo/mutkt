@@ -45,8 +45,8 @@ dependencies {
 }
 
 mutationTest {
-    targetClasses.setFrom("com.example.app.*")
-    testClasses.setFrom("com.example.app.*Test")
+    targetClasses.from("com.example.app.*")
+    testClasses.from("com.example.app.*Test")
     // Optional: pick a specific variant (default: debug)
     androidVariant.set("debug")
 }
@@ -77,8 +77,8 @@ When MutKt detects an Android plugin (`com.android.application` or `com.android.
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `isAndroid` | `Property<Boolean>` | auto-detected | Set to true if MutKt failed to detect AGP |
-| `androidPluginType` | `Property<String>` | auto-detected | "application" or "library" |
-| `androidVariant` | `Property<String>` | "debug" | Which build variant to test |
+| `androidPluginType` | `Property<String>` | auto-detected | `"application"` or `"library"` |
+| `androidVariant` | `Property<String>` | `"debug"` | Which build variant to test |
 | `excludeGeneratedClasses` | `SetProperty<String>` | 20 patterns | Classes to skip during mutation (R, BuildConfig, etc.) |
 
 ### Customizing generated class patterns
@@ -97,7 +97,7 @@ mutationTest {
 ## Known limitations
 
 - **Instrumented tests not supported** — MutKt only runs JVM unit tests. Instrumented tests (on device/emulator) are out of scope.
-- **No Hilt test execution** — Hilt's test rules use a custom test runner that doesn't work with MutKt's reflection-based runner. Use Robolectric for now.
+- **No Hilt test execution** — Hilt's test rules use a custom test runner that doesn't work with MutKt's JUnit Platform Launcher-based runner. Use Robolectric for now.
 - **Compose runtime classes skipped** — Composable functions, lambdas, and `@ComposableSingletons$*` are excluded from mutation.
 - **AGP 7.x not supported** — Requires AGP 8.0+ for the modern `AndroidComponentsExtension` API.
 
@@ -120,18 +120,17 @@ sdk.dir=/Users/you/Library/Android/sdk
 
 ### `Task with name 'compileKotlin' not found`
 
-This happens on Android because AGP uses variant-specific task names (`compileDebugKotlin`, `compileReleaseKotlin`). MutKt should auto-detect this. If it fails, set manually:
+This happens on Android because AGP uses variant-specific task names (`compileDebugKotlin`, `compileReleaseKotlin`). MutKt auto-detects the active variant via AGP's `AndroidComponentsExtension` and wires the right compile tasks for you. If auto-detection fails (e.g. unusual variant configuration), set `androidVariant` explicitly:
 
 ```kotlin
 mutationTest {
-    compileTask.set("compileDebugKotlin")
-    testCompileTask.set("compileDebugUnitTestKotlin")
+    androidVariant.set("release")
 }
 ```
 
 ### Mutations all show as `NO_COVERAGE`
 
-The reflection-based test runner isn't executing your `@Test` methods. Common causes:
+The JUnit Platform Launcher-based test runner isn't executing your `@Test` methods. Common causes:
 
 1. Tests use Hilt's `@HiltAndroidTest` — not supported, use Robolectric instead
 2. Tests use JUnit 5 (`@Test` from `org.junit.jupiter.api`) — MutKt supports both, but verify
@@ -143,7 +142,7 @@ Your AAR dependencies don't have matching variant attributes. This is rare. Work
 
 ## Mocking support (MockK + Mockito)
 
-MutKt's reflection-based test runner does NOT execute JUnit 5 extensions. This means `@ExtendWith(MockKExtension::class)` and `@ExtendWith(MockitoExtension::class)` are **ignored**. You must initialize mocks manually in `@BeforeEach`.
+MutKt's JUnit Platform Launcher-based test runner does NOT execute JUnit 5 extensions. This means `@ExtendWith(MockKExtension::class)` and `@ExtendWith(MockitoExtension::class)` are **ignored**. You must initialize mocks manually in `@BeforeEach`.
 
 ### Compatibility matrix
 
@@ -215,7 +214,7 @@ If you need any of these, run `./gradlew test` (the regular JUnit test task) ins
 
 MutKt loads test classes in a custom `URLClassLoader` parented to `ClassLoader.getPlatformClassLoader()`. This isolates mutated bytecode from the engine's own dependencies but prevents Java instrumentation agents (used by inline mocking) from installing their dispatchers correctly.
 
-For full mocking support, the next major MutKt release will switch from reflection-based to **JUnit Platform Launcher** based test execution, which has first-class classloader + agent integration.
+For full mocking support, future MutKt releases will improve classloader + agent integration under the JUnit Platform Launcher.
 
 ## Example
 

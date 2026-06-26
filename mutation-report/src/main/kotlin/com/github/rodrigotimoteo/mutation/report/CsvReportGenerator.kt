@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutation.report
 
 import com.github.rodrigotimoteo.mutation.model.MutationReport
+import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import java.io.File
 
 /**
@@ -78,9 +79,15 @@ object CsvReportGenerator {
             val total: Int,
             val killed: Int,
             val survived: Int,
+            val subsumed: Int,
             val score: Int,
         )
 
+        // Per-class scoring mirrors the global report: the denominator
+        // is the class's total mutation count INCLUDING subsumed
+        // mutations. The subsumed bucket is reported as its own column
+        // so callers can reproduce the global killed percentage without
+        // an external lookup.
         val classScores =
             report.results
                 .groupBy { it.mutation.className }
@@ -88,17 +95,18 @@ object CsvReportGenerator {
                     val total = results.size
                     val killed = results.count { it.isKilled }
                     val survived = results.count { it.isSurvived }
+                    val subsumed = results.count { it.status == MutationStatus.SUBSUMED }
                     val score = if (total > 0) (killed * 100) / total else 0
 
-                    ClassScore(className, total, killed, survived, score)
+                    ClassScore(className, total, killed, survived, subsumed, score)
                 }
 
         val csv =
             buildString {
-                appendLine("class,total_mutations,killed,survived,score")
+                appendLine("class,total_mutations,killed,survived,subsumed,score")
                 for (cs in classScores) {
                     appendLine(
-                        "${escapeCsv(cs.className)},${cs.total},${cs.killed},${cs.survived},${cs.score}",
+                        "${escapeCsv(cs.className)},${cs.total},${cs.killed},${cs.survived},${cs.subsumed},${cs.score}",
                     )
                 }
             }

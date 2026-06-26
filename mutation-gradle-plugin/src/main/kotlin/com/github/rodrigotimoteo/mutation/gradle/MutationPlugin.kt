@@ -16,7 +16,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
  * Usage:
  * ```kotlin
  * plugins {
- *     id("com.github.rodrigotimoteo.mutation-kotlin") version "0.1.0"
+ *     id("io.github.rodrigotimoteo.mutation-kotlin") version "0.3.0"
  * }
  * ```
  *
@@ -75,15 +75,25 @@ class MutationPlugin : Plugin<Project> {
                 task.description = "Runs mutation testing analysis"
 
                 // Discover the Kotlin compile tasks for both pure-JVM and Android
-                // projects. Android variants use compileDebugKotlin / compileReleaseKotlin
-                // / compileDebugUnitTestKotlin; pure-JVM uses compileKotlin /
-                // compileTestKotlin (or compileKotlinJvm for KMP). withType is evaluated
-                // at task-realization time so all plugins (including AGP) have been
-                // applied by the time this runs.
+                // projects. Android variants use the captured AGP variant task
+                // names (e.g. compileDebugKotlin / compileDebugUnitTestKotlin)
+                // when available — those are guaranteed to exist for the
+                // project's actual variant set. Pure-JVM uses compileKotlin /
+                // compileTestKotlin (or compileKotlinJvm for KMP). Hardcoded
+                // fallbacks are avoided for Android to prevent depending on
+                // tasks that may not exist in release-only or custom variant
+                // configurations. withType is evaluated at task-realization
+                // time so all plugins (including AGP) have been applied.
                 val isAndroid = extension.isAndroid.getOrElse(false)
                 val (compileTaskName, testCompileTaskName) =
-                    discoverKotlinCompileTasks(project, isAndroid)
-                task.dependsOn(compileTaskName, testCompileTaskName)
+                    discoverKotlinCompileTasks(project, isAndroid, variantCaptures)
+                // Only wire dependencies for tasks that actually exist or are
+                // standard pure-JVM defaults. For Android with no AGP variant
+                // capture, the wiring is deferred to afterEvaluate where
+                // resolveAndroidContext re-wires with the correct names.
+                if (compileTaskName.isNotEmpty() && testCompileTaskName.isNotEmpty()) {
+                    task.dependsOn(compileTaskName, testCompileTaskName)
+                }
 
                 // Wire extension properties lazily
                 task.targetClasses.from(extension.targetClasses)
@@ -112,7 +122,6 @@ class MutationPlugin : Plugin<Project> {
                 task.enableWeakMutation.set(extension.enableWeakMutation)
                 task.enableInlinedFinally.set(extension.enableInlinedFinally)
                 task.enableTestOrdering.set(extension.enableTestOrdering)
-                task.autoRunJaCoCo.set(extension.autoRunJaCoCo)
                 task.showClassScores.set(extension.showClassScores)
                 task.generateGraph.set(extension.generateGraph)
                 task.enableCache.set(extension.enableCache)
@@ -252,24 +261,56 @@ class MutationPlugin : Plugin<Project> {
     /**
      * Discover the main and test Kotlin compile task names for this project.
      *
-     * - Pure-JVM / KMP: prefers `compileKotlin` / `compileTestKotlin` (with the
-     *   `Jvm` suffix variant for KMP). Falls back to the same names if nothing
-     *   matches.
-     * - Android: picks the first `compile<Variant>Kotlin` (preferring the
-     *   `debug` variant) for main, and the first matching
-     *   `compile<Variant>UnitTestKotlin` for tests.
+     * - Android: prefers the captured AGP variant data (from
+     *   [AgpVariantResolver.registerOnVariants]) since those names are
+     *   guaranteed to exist for the project's actual variant set. This
+     *   avoids depending on hardcoded `compileDebugKotlin` /
+     *   `compileDebugUnitTestKotlin` names that may not exist in
+     *   release-only or custom variant configurations. When no variants
+     *   are captured (e.g. tests with no real AGP applied) the function
+     *   returns an empty pair and the wiring is deferred to
+     *   [resolveAndroidContext] in afterEvaluate.
+     * - Pure-JVM / KMP: prefers `compileKotlin` / `compileTestKotlin`
+     *   (with the `Jvm` suffix variant for KMP). Falls back to the same
+     *   names if nothing matches.
      *
-     * @return Pair of (mainCompileTaskName, testCompileTaskName).
+     * @return Pair of (mainCompileTaskName, testCompileTaskName). Both
+     *   strings are empty when no usable task name can be resolved (e.g.
+     *   Android with no AGP variants captured).
      */
     internal fun discoverKotlinCompileTasks(
         project: Project,
         isAndroid: Boolean,
-    ): Pair<String, String> = discoverKotlinCompileTasksInternal(project, isAndroid)
+        variantCaptures: List<AgpVariantResolver.VariantCapture> = emptyList(),
+    ): Pair<String, String> = discoverKotlinCompileTasksInternal(project, isAndroid, variantCaptures)
 
     private fun discoverKotlinCompileTasksInternal(
         project: Project,
         isAndroid: Boolean,
+        variantCaptures: List<AgpVariantResolver.VariantCapture>,
     ): Pair<String, String> {
+        // Android path: prefer captured variant data. The captures contain
+        // exact task names (e.g. `compileReleaseKotlin` for a release-only
+        // project) — hardcoded debug names would add bogus dependencies for
+        // release-only or custom variant configurations.
+        if (isAndroid) {
+            if (variantCaptures.isNotEmpty()) {
+                val debugCapture =
+                    variantCaptures.firstOrNull {
+                        it.name.equals("debug", ignoreCase = true)
+                    }
+                val capture = debugCapture ?: variantCaptures.first()
+                return capture.compileTask to capture.testCompileTask
+            }
+            // No AGP variants captured. Do NOT fall back to hardcoded
+            // `compileDebugKotlin` — the task may not exist (release-only
+            // builds, custom variants). Return empty so the caller skips
+            // wiring; the actual dependency is set up in afterEvaluate via
+            // resolveAndroidContext when an Android context is resolved.
+            return "" to ""
+        }
+
+        // Pure-JVM / KMP path: discover the standard Kotlin compile tasks.
         val kotlinCompiles =
             project.tasks
                 .withType(KotlinCompile::class.java)
@@ -277,25 +318,14 @@ class MutationPlugin : Plugin<Project> {
                 .map { it.name }
                 .toList()
 
-        return if (isAndroid) {
-            val unitTestCompile =
-                kotlinCompiles.firstOrNull { it.contains("UnitTest") }
-                    ?: "compileDebugUnitTestKotlin"
-            val mainCompile =
-                kotlinCompiles.firstOrNull { it == "compileDebugKotlin" }
-                    ?: kotlinCompiles.firstOrNull { !it.contains("UnitTest") && !it.contains("AndroidTest") }
-                    ?: "compileDebugKotlin"
-            mainCompile to unitTestCompile
-        } else {
-            val main =
-                kotlinCompiles.firstOrNull { it == "compileKotlin" || it == "compileKotlinJvm" }
-                    ?: "compileKotlin"
-            val test =
-                kotlinCompiles.firstOrNull {
-                    it == "compileTestKotlin" || it == "compileTestKotlinJvm"
-                }
-                    ?: "compileTestKotlin"
-            main to test
-        }
+        val main =
+            kotlinCompiles.firstOrNull { it == "compileKotlin" || it == "compileKotlinJvm" }
+                ?: "compileKotlin"
+        val test =
+            kotlinCompiles.firstOrNull {
+                it == "compileTestKotlin" || it == "compileTestKotlinJvm"
+            }
+                ?: "compileTestKotlin"
+        return main to test
     }
 }

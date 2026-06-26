@@ -4,24 +4,26 @@ package com.github.rodrigotimoteo.mutation.gradle
  * Filters generated classes (R, BuildConfig, Hilt factories, Kotlin synthetics)
  * from mutation testing.
  *
- * Patterns use glob-style wildcards against the fully qualified dot-separated
- * class name. Supported forms:
- * - exact match — class name equals the pattern
- * - prefix — class name starts with the pattern (pattern ends with asterisk)
- * - suffix — class name ends with the pattern (pattern starts with asterisk)
- * - contains — class name contains the pattern (pattern wrapped in asterisks)
- * - nested — class name starts with the pattern (pattern ends with dollar-asterisk)
+ * Patterns are matched against the fully qualified dot-separated class name.
+ * Single `*` matches zero or more characters within a single path segment
+ * (does not cross `/`). Double `*` matches zero or more path segments,
+ * including the leading double-star path-agnostic marker found in Android
+ * codegen pattern sets. `?` matches a single character within a segment.
  *
- * The leading double-asterisk path-agnostic marker (e.g. star-star-slash-Foo)
- * found in many Android codegen pattern sets is matched literally by this
- * matcher; callers may pre-strip it from patterns that use it as a
- * path-agnostic marker.
+ * Supported forms:
+ * - exact — `R`, `BuildConfig` match only that simple class name
+ * - prefix — `R$*` matches names starting with `R$`
+ * - suffix — `*_Impl` matches names ending with `_Impl`
+ * - contains — `*Hilt*` matches names containing `Hilt`
+ * - nested — `R$*` matches `R$drawable`, `R$id`, etc.
+ * - path-agnostic — a leading double-star with a trailing simple class
+ *   name matches the simple name in any package.
  */
 object GeneratedClassFilter {
     /**
      * Returns true when [className] matches any pattern in [patterns].
-     * Matching is dot-against-dot; the class name is expected in
-     * `com.example.Foo` form (not JVM-internal `com/example/Foo`).
+     * The class name is expected in `com.example.Foo` form (not
+     * JVM-internal `com/example/Foo`).
      */
     fun shouldExclude(
         className: String,
@@ -29,15 +31,72 @@ object GeneratedClassFilter {
     ): Boolean {
         val slashed = className.replace('.', '/')
         return patterns.any { pattern ->
-            val normalized = pattern.removePrefix("**/")
-            when {
-                normalized.endsWith("\$*") -> slashed.contains(normalized.removeSuffix("*"))
-                normalized.startsWith("*") && normalized.endsWith("*") ->
-                    slashed.contains(normalized.drop(1).dropLast(1))
-                normalized.endsWith("*") -> slashed.startsWith(normalized.dropLast(1))
-                normalized.startsWith("*") -> slashed.endsWith(normalized.drop(1))
-                else -> slashed == normalized || className == normalized
+            if (pattern.contains("**")) {
+                matchesGlob(slashed, pattern)
+            } else {
+                when {
+                    pattern.endsWith("\$*") -> slashed.contains(pattern.removeSuffix("*"))
+                    pattern.startsWith("*") && pattern.endsWith("*") ->
+                        slashed.contains(pattern.drop(1).dropLast(1))
+                    pattern.endsWith("*") -> slashed.startsWith(pattern.dropLast(1))
+                    pattern.startsWith("*") -> slashed.endsWith(pattern.drop(1))
+                    else -> slashed == pattern || className == pattern
+                }
             }
         }
+    }
+
+    /**
+     * Match a slashed path (segment-separated) against a glob pattern that
+     * may contain `**`. The double-star matches zero or more path segments,
+     * single `*` matches any chars within one segment (not crossing `/`),
+     * and `?` matches a single character within a segment. A `**` followed
+     * by `/` in the middle of a pattern emits a non-capturing group with
+     * an optional trailing slash so the simple class name matches with or
+     * without a package prefix.
+     */
+    private fun matchesGlob(
+        path: String,
+        glob: String,
+    ): Boolean {
+        val regex = StringBuilder("^")
+        var i = 0
+        while (i < glob.length) {
+            val c = glob[i]
+            when {
+                c == '*' && i + 1 < glob.length && glob[i + 1] == '*' -> {
+                    i += 2
+                    if (i < glob.length && glob[i] == '/') {
+                        i++
+                        if (i == glob.length) {
+                            // Trailing **/ — match any remaining path.
+                            regex.append(".*")
+                        } else {
+                            // **/X in the middle — zero or more path segments
+                            // then a segment separator, leaving X as the
+                            // simple class name matcher.
+                            regex.append("(?:.*/)?")
+                        }
+                    } else {
+                        // Bare ** (no following slash) — match any chars.
+                        regex.append(".*")
+                    }
+                }
+                c == '*' -> {
+                    regex.append("[^/]*")
+                    i++
+                }
+                c == '?' -> {
+                    regex.append("[^/]")
+                    i++
+                }
+                else -> {
+                    regex.append(Regex.escape(c.toString()))
+                    i++
+                }
+            }
+        }
+        regex.append("$")
+        return Regex(regex.toString()).matches(path)
     }
 }

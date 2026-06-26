@@ -25,6 +25,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.regex.PatternSyntaxException
 
 /**
  * Main mutation testing engine.
@@ -102,9 +103,24 @@ class MutationEngine(
     /** 0 = use all available processors. */
     private val parallelism = if (maxParallelMutants > 0) maxParallelMutants else Runtime.getRuntime().availableProcessors()
 
-    // Compiled regex patterns for include/exclude filtering
-    private val compiledIncludePatterns = includePatterns.map { Regex(it) }
-    private val compiledExcludePatterns = excludePatterns.map { Regex(it) }
+    // Compiled regex patterns for include/exclude filtering. Patterns are
+    // validated at construction time so an invalid regex fails fast with a
+    // descriptive error instead of throwing from a deep call site during
+    // mutation filtering.
+    private val compiledIncludePatterns = compilePatterns(includePatterns, "includePatterns")
+    private val compiledExcludePatterns = compilePatterns(excludePatterns, "excludePatterns")
+
+    // Per-run scratch state. These two maps are mutable `var` fields set
+    // by `runMutationTesting` and read by helpers like `getOriginalClassBytes`
+    // and `runMutants`. They are intentionally instance state because the
+    // engine is treated as a single-shot, single-run object: create an
+    // engine, run it, throw it away.
+    //
+    // Concurrency warning: a single `MutationEngine` instance is NOT safe
+    // for concurrent `runMutationTesting` calls — the assignments below race
+    // and the second caller observes the first caller's bytes. For parallel
+    // runs, give each thread its own engine instance. (The shared
+    // `ReflectionTestRunner` has the same constraint; see its docs.)
 
     // Store class files for cache lookups
     private var classFilesMap: Map<String, ByteArray> = emptyMap()
@@ -114,6 +130,17 @@ class MutationEngine(
     // mutation classloader when defining test classes (the classpath
     // does NOT include the compiled test .class files).
     private var allTestClassBytes: Map<String, ByteArray> = emptyMap()
+
+    /**
+     * Single [ReflectionTestRunner] shared across all mutants in a run.
+     * The runner caches the JUnit Launcher per worker thread (see
+     * [ReflectionTestRunner]), so reusing the runner across mutants
+     * turns N launcher creations into P (one per worker thread).
+     * Trade-off: the runner holds a per-thread launcher; if two
+     * concurrent runs shared a single engine instance they would
+     * collide on those launchers — keep it scoped to one run.
+     */
+    private val sharedTestRunner = ReflectionTestRunner()
 
     /**
      * Runs mutation testing on the given classpath.
@@ -138,10 +165,10 @@ class MutationEngine(
         val scanStart = System.currentTimeMillis()
         val allMutations = generateAllMutations(classFiles)
         val scanTime = System.currentTimeMillis() - scanStart
-        System.err.println("$LOG_PREFIX Scanned ${allMutations.size} mutations in ${scanTime}ms")
+        logger.info("Scanned ${allMutations.size} mutations in ${scanTime}ms")
 
         if (allMutations.isEmpty()) {
-            System.err.println("$LOG_PREFIX WARNING: No mutations found. Check enabled operators and class filter patterns.")
+            logger.warn("No mutations found. Check enabled operators and class filter patterns.")
         }
 
         // Combine class files with test class files
@@ -151,8 +178,8 @@ class MutationEngine(
         val mutationsAfterRegex = filterByPatterns(allMutations)
         val skippedRegex = allMutations.size - mutationsAfterRegex.size
         if (skippedRegex > 0) {
-            System.err.println(
-                "$LOG_PREFIX Regex: skipped $skippedRegex mutations (include=${includePatterns.size}, exclude=${excludePatterns.size})",
+            logger.info(
+                "Regex: skipped $skippedRegex mutations (include=${includePatterns.size}, exclude=${excludePatterns.size})",
             )
         }
 
@@ -188,7 +215,7 @@ class MutationEngine(
                         mutation in reachableSet
                     }
                 if (unreachable.isNotEmpty()) {
-                    System.err.println("$LOG_PREFIX Weak mutation: skipped ${unreachable.size} unreachable mutations")
+                    logger.info("Weak mutation: skipped ${unreachable.size} unreachable mutations")
                 }
                 reachable
             } else {
@@ -235,8 +262,8 @@ class MutationEngine(
                     }
                 val skippedIncremental = mutationsAfterInlined.size - filtered.size
                 if (skippedIncremental > 0) {
-                    System.err.println(
-                        "$LOG_PREFIX Incremental: skipped $skippedIncremental " +
+                    logger.info(
+                        "Incremental: skipped $skippedIncremental " +
                             "mutations (only testing ${changedClasses.size} changed classes)",
                     )
                 }
@@ -248,15 +275,15 @@ class MutationEngine(
         // Check cache for previously tested mutations
         val (mutationsToTest, cachedResults) = filterByCache(mutationsAfterIncremental)
         if (cachedResults.isNotEmpty()) {
-            System.err.println("$LOG_PREFIX Cache: ${cachedResults.size} mutations already tested")
+            logger.info("Cache: ${cachedResults.size} mutations already tested")
         }
 
         // Run tests against each mutant
         val testStart = System.currentTimeMillis()
         val (results, killSets) = runMutants(mutationsToTest, allClassFiles, orderedTestNames, testClassLoader)
         val testTime = System.currentTimeMillis() - testStart
-        System.err.println(
-            "$LOG_PREFIX Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
+        logger.info(
+            "Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
         )
 
         // Merge cached results into final results so cache hits are reported
@@ -288,7 +315,7 @@ class MutationEngine(
                 val mutations = allResults.map { it.mutation }
                 val (essential, subsumed) = subsumptionAnalyzer.analyze(mutations, killSets)
                 if (subsumed.isNotEmpty()) {
-                    System.err.println("$LOG_PREFIX Subsumption: ${subsumed.size} redundant mutations identified")
+                    logger.info("Subsumption: ${subsumed.size} redundant mutations identified")
                     allResults.map { result ->
                         if (result.mutation.id in subsumed) {
                             result.copy(status = MutationStatus.SUBSUMED)
@@ -505,17 +532,24 @@ class MutationEngine(
                 val filtered = mutableListOf<Pair<MutationInfo, ByteArray>>()
                 for ((mutation, mutatedBytes) in allMutations) {
                     val classBytes = classFiles[mutation.className.replace('.', '/')]
-                    if (classBytes != null) {
-                        val coverage =
-                            coverageAnalyzer.analyzeCoverage(
-                                classBytes,
-                                mutation.className,
-                                coverageData,
-                                listOf(mutation),
-                            )
-                        if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
-                            filtered.add(mutation to mutatedBytes)
-                        }
+                    if (classBytes == null) {
+                        // Class bytes missing from the classpath map. We can't
+                        // run the JaCoCo analyzer for this class, so we err on
+                        // the side of testing the mutation rather than
+                        // silently dropping it — a key-mismatch here would
+                        // otherwise shrink the test set for no good reason.
+                        filtered.add(mutation to mutatedBytes)
+                        continue
+                    }
+                    val coverage =
+                        coverageAnalyzer.analyzeCoverage(
+                            classBytes,
+                            mutation.className,
+                            coverageData,
+                            listOf(mutation),
+                        )
+                    if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
+                        filtered.add(mutation to mutatedBytes)
                     }
                 }
                 filtered
@@ -530,9 +564,6 @@ class MutationEngine(
         testClassLoader: ClassLoader? = null,
     ): Pair<List<MutationResult>, Map<String, Set<String>>> {
         if (mutations.isEmpty()) return emptyList<MutationResult>() to emptyMap()
-
-        // Reset the shared class-loading failure cache for this run.
-        MutantClassLoaderFactory.resetCache()
 
         val parentLoader = testClassLoader ?: this.javaClass.classLoader
         // Filter the test class bytes (not the main classFiles) so the
@@ -550,7 +581,7 @@ class MutationEngine(
         // Group mutations by target class. Each group shares a BaseProjectClassLoader
         // that loads all non-target project classes once, avoiding repeated defineClass.
         val mutationsByClass = mutations.groupBy { it.first.className }
-        System.err.println("$LOG_PREFIX ${mutations.size} mutations across ${mutationsByClass.size} classes")
+        logger.info("${mutations.size} mutations across ${mutationsByClass.size} classes")
 
         // Pre-create BaseProjectClassLoader per target class (shared across mutations).
         val baseLoaders = mutableMapOf<String, com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader>()
@@ -570,7 +601,7 @@ class MutationEngine(
             Executors.newFixedThreadPool(parallelism) { runnable ->
                 Thread(runnable, "mutation-worker").apply { isDaemon = true }
             }
-        System.err.println("$LOG_PREFIX Running $parallelism parallel workers")
+        logger.info("Running $parallelism parallel workers")
 
         try {
             val futures =
@@ -591,10 +622,15 @@ class MutationEngine(
                     if (failedTests.isNotEmpty()) {
                         killSets[result.mutation.id] = failedTests
                     }
-                    // Print progress
+                    // Print progress. Guard `rate` against a zero
+                    // denominator: when the first mutation finishes
+                    // within the same millisecond the worker started,
+                    // `elapsed` is 0 and `count / elapsed` produces
+                    // `Infinity` (a Double), which would print as
+                    // "Inf mut/s" in the progress bar.
                     val count = completedCount.incrementAndGet()
                     val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
-                    val rate = count / elapsed
+                    val rate = if (elapsed > 0.0) count / elapsed else 0.0
                     val pct = count * 100 / mutations.size
                     System.err.print(
                         "\r$LOG_PREFIX Progress: $count/${mutations.size} ($pct%) ${elapsed}s ${rate.toInt()} mut/s",
@@ -642,6 +678,21 @@ class MutationEngine(
                     logger.warn("Executor did not terminate after shutdownNow — threads may leak")
                 }
             }
+            // Terminate the progress bar line so subsequent log output does
+            // not overwrite the final progress percentage.
+            System.err.println()
+            // Close the shared BaseProjectClassLoader instances. Per-mutant
+            // MutationClassLoader instances are closed in runSingleMutantBatched.
+            // Each close is wrapped so a failing close does not prevent the
+            // remaining loaders from being released.
+            for ((targetClass, baseLoader) in baseLoaders) {
+                try {
+                    invokeClose(baseLoader)
+                } catch (e: Exception) {
+                    logger.debug("Error closing BaseProjectClassLoader for $targetClass: ${e.message}")
+                }
+            }
+            baseLoaders.clear()
         }
 
         return results to killSets
@@ -672,22 +723,35 @@ class MutationEngine(
                 classFiles,
             )
 
-        val (status, failedTestClasses) = runTestsWithClassLoader(classLoader, testClassNames)
+        try {
+            val (status, failedTestClasses) = runTestsWithClassLoader(classLoader, testClassNames)
 
-        return MutationResult(
-            mutation = toMutation(mutation, mutatedBytes),
-            status = status,
-            executionTimeMs = System.currentTimeMillis() - startTime,
-        ) to failedTestClasses
+            return MutationResult(
+                mutation = toMutation(mutation, mutatedBytes),
+                status = status,
+                executionTimeMs = System.currentTimeMillis() - startTime,
+            ) to failedTestClasses
+        } finally {
+            // Close the per-mutant classloader so any resources it holds
+            // (caches, jar handles) are released before the next mutant
+            // run. BaseProjectClassLoader is shared across mutations of the
+            // same target and is closed in runMutants' finally block.
+            try {
+                invokeClose(classLoader)
+            } catch (e: Exception) {
+                logger.debug("Error closing per-mutant classloader for $targetClassKey: ${e.message}")
+            }
+        }
     }
 
     private fun runTestsWithClassLoader(
         classLoader: ClassLoader,
         testClassNames: List<String>,
     ): Pair<MutationStatus, Set<String>> {
-        // Use ReflectionTestRunner which supports @Nested, @ParameterizedTest, @RepeatedTest
-        val runner = ReflectionTestRunner(classLoader)
-        val results = runner.runTests(testClassNames)
+        // Reuse the engine-level ReflectionTestRunner so the per-thread
+        // JUnit Launcher is cached and reused across mutants. Each mutant
+        // passes its own per-mutant classloader as a run-time argument.
+        val results = sharedTestRunner.runTests(testClassNames, classLoader)
 
         if (!results.hasTests) {
             return if (results.failureMessages.isNotEmpty()) {
@@ -731,6 +795,14 @@ class MutationEngine(
         )
     }
 
+    /**
+     * Cache of source-file contents keyed by absolute path. A single
+     * class can produce dozens of mutations; previously `findSourceCode`
+     * re-read the same `.kt`/`.java` from disk for every mutation in
+     * the class. Caching the read eliminates N×file I/O per class.
+     */
+    private val sourceFileCache = mutableMapOf<String, List<String>?>()
+
     private fun findSourceCode(
         className: String,
         lineNumber: Int,
@@ -742,8 +814,18 @@ class MutationEngine(
         for (srcDir in srcDirs) {
             for (path in listOf(relativePath, javaPath)) {
                 val sourceFile = File(projectDir, "$srcDir/$path")
+                val cacheKey = sourceFile.path
                 if (sourceFile.exists()) {
-                    val lines = sourceFile.readLines()
+                    // `null` cache value means "file exists but lines not
+                    // yet loaded" — read once and store. A class can
+                    // produce dozens of mutations; the previous code
+                    // re-read the same .kt/.java from disk for every
+                    // one, wasting N×file I/O.
+                    val lines =
+                        sourceFileCache.getOrPut(cacheKey) {
+                            if (sourceFile.exists()) sourceFile.readLines() else null
+                        }
+                    if (lines == null) continue
                     if (lineNumber <= lines.size) {
                         val snippet =
                             lines.subList(
@@ -754,6 +836,9 @@ class MutationEngine(
                     }
                     return sourceFile.path to null
                 }
+                // Negative cache for non-existent paths so we don't stat
+                // the same missing file on every mutation in the class.
+                sourceFileCache.putIfAbsent(cacheKey, null)
             }
         }
         return null to null
@@ -763,11 +848,23 @@ class MutationEngine(
         results: List<MutationResult>,
         totalTime: Long,
     ): MutationReport {
-        val killed = results.count { it.isKilled }
+        val killed = results.count { it.status == MutationStatus.KILLED }
+        val weakKilled = results.count { it.status == MutationStatus.WEAK_KILLED }
         val survived = results.count { it.isSurvived }
         val errors = results.count { it.status == MutationStatus.ERROR }
         val timeouts = results.count { it.status == MutationStatus.TIMEOUT }
         val noCoverage = results.count { it.status == MutationStatus.NO_COVERAGE }
+        val subsumed = results.count { it.status == MutationStatus.SUBSUMED }
+        // Invariant: all buckets must sum to totalMutations. Subsumed and
+        // weak-killed were previously counted in `total` but lived in no
+        // bucket, so reports could show killed+survived < total.
+        val accountedFor = killed + weakKilled + survived + errors + timeouts + noCoverage + subsumed
+        if (accountedFor != results.size) {
+            logger.warn(
+                "MutationReport bucket mismatch: buckets=$accountedFor total=${results.size} " +
+                    "(unexpected status in results list)",
+            )
+        }
 
         return MutationReport(
             results = results,
@@ -778,6 +875,8 @@ class MutationEngine(
             timeoutMutations = timeouts,
             noCoverageMutations = noCoverage,
             totalExecutionTimeMs = totalTime,
+            subsumedMutations = subsumed,
+            weakKilledMutations = weakKilled,
         )
     }
 
@@ -799,7 +898,7 @@ class MutationEngine(
         val totalBefore = mutations.size
         val totalAfter = limited.size
         if (totalBefore != totalAfter) {
-            System.err.println("$LOG_PREFIX Max mutations per class: limited $totalBefore → $totalAfter mutations")
+            logger.info("Max mutations per class: limited $totalBefore → $totalAfter mutations")
         }
         return limited
     }
@@ -819,6 +918,52 @@ class MutationEngine(
             val matchesInclude = compiledInclude.isEmpty() || compiledInclude.any { it.containsMatchIn(name) }
             val matchesExclude = compiledExclude.any { it.containsMatchIn(name) }
             matchesInclude && !matchesExclude
+        }
+    }
+
+    /**
+     * Compile a list of regex pattern strings, wrapping any
+     * [PatternSyntaxException] in a descriptive [IllegalArgumentException]
+     * that names the offending pattern and the source parameter. This makes
+     * user-facing configuration errors obvious at engine construction time
+     * instead of bubbling up from a deep call site during mutation
+     * filtering.
+     */
+    private fun compilePatterns(
+        patterns: List<String>,
+        sourceName: String,
+    ): List<Regex> =
+        patterns.map { pattern ->
+            try {
+                Regex(pattern)
+            } catch (e: PatternSyntaxException) {
+                throw IllegalArgumentException(
+                    "Invalid regex in $sourceName: \"$pattern\" " +
+                        "(${e.description ?: "syntax error"} near index ${e.index})",
+                    e,
+                )
+            }
+        }
+
+    /**
+     * Invoke [ClassLoader.close] via reflection. `ClassLoader.close` is a
+     * Java 7+ method but the Kotlin compiler in some module graphs resolves
+     * `kotlin.jvm.internal.ClassLoader` (which lacks `close`) instead of
+     * `java.lang.ClassLoader`. Reflection sidesteps the resolution issue
+     * while still releasing the underlying resources. Falls through as a
+     * no-op for older JVMs that do not expose `close`.
+     */
+    private fun invokeClose(classLoader: ClassLoader) {
+        try {
+            val closeMethod = ClassLoader::class.java.getMethod("close")
+            closeMethod.invoke(classLoader)
+        } catch (_: NoSuchMethodException) {
+            // JVM predates Java 7 — no close support, nothing to do.
+        } catch (_: java.lang.reflect.InvocationTargetException) {
+            // The loader's close threw — surface as debug noise.
+            logger.debug("ClassLoader.close() threw for $classLoader")
+        } catch (_: IllegalAccessException) {
+            // Should not happen for ClassLoader.close, but stay defensive.
         }
     }
 }

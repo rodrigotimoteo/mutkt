@@ -82,12 +82,15 @@ class MutationClassLoader(
     private val allClassBytes: Map<String, ByteArray>,
     val failedClassCache: MutableSet<String>,
 ) : ClassLoader(baseLoader) {
-    // Pre-compute the set of test-class prefixes ("foo/Bar" + "$") so the
-    // per-loadClass test-class membership test is O(1) instead of O(n) over
-    // all test class names. For projects with hundreds of test classes this
-    // collapses a quadratic-looking hot path to a constant lookup.
-    private val testClassPrefixes: Set<String> =
-        testClassBytes.keys.map { "$it\$" }.toSet()
+    // Top-level test class names (e.g. "com/example/FooTest"). Inner/nested
+    // classes are detected by splitting on '$' and checking the prefix
+    // against this set — constant-time membership per loadClass call.
+    //
+    // The previous implementation used a set of `"name$"` prefixes and
+    // matched via `startsWith`, which was both O(n) per lookup AND
+    // misclassified unrelated classes (e.g. `com/example/foo/BarHelper`
+    // matched prefix `com/example/foo/Bar`). This version is O(1) and
+    // only matches true test classes and their inner classes.
     private val testClassNames: Set<String> = testClassBytes.keys
 
     override fun loadClass(
@@ -135,10 +138,12 @@ class MutationClassLoader(
             }
 
             // Test class (or inner class of test class) → intercept to keep in same classloader.
-            // O(1) membership test using pre-computed prefix and exact-name sets.
+            // O(1) membership: exact-name hit OR prefix-before-'$' hit. The '$' split prevents
+            // false positives like `com/example/foo/BarHelper` matching `com/example/foo/Bar`.
+            val dollarIdx = slashedName.indexOf('$')
             val isTestOrInner =
                 slashedName in testClassNames ||
-                    testClassPrefixes.any { slashedName.startsWith(it) }
+                    (dollarIdx > 0 && slashedName.substring(0, dollarIdx) in testClassNames)
             if (isTestOrInner && slashedName !in failedClassCache) {
                 val testBytes = testClassBytes[slashedName]
                 if (testBytes != null) {
@@ -190,19 +195,6 @@ class MutationClassLoader(
  * ```
  */
 object MutantClassLoaderFactory {
-    /**
-     * No-op retained for backward compatibility. Caches are now per-group;
-     * there is no singleton state to clear. New code should not depend on it.
-     */
-    @Deprecated(
-        "Failed-class cache is now scoped per BaseProjectClassLoader instance. " +
-            "This method is a no-op and will be removed in a future release.",
-        ReplaceWith("Unit"),
-    )
-    fun resetCache() {
-        // intentional no-op
-    }
-
     /**
      * Creates a [BaseProjectClassLoader] for a target class, excluding it
      * (and test classes) from the base so child loaders can intercept them.
