@@ -38,7 +38,11 @@ class CoverageAnalyzerFullTest {
     ) {
         val analyzer = io.mockk.spyk(CoverageAnalyzer())
         io.mockk.every {
-            analyzer.getCoveredLinesForClass(any(), any(), any())
+            analyzer.getCoveredLinesForClass(
+                any<CoverageAnalyzer.CoverageData.Valid>(),
+                any<String>(),
+                any<ByteArray>(),
+            )
         } returns setOf(10, 11)
 
         val execFile = tempDir.resolve("coverage.exec").toFile()
@@ -287,7 +291,11 @@ class CoverageAnalyzerFullTest {
     ) {
         val analyzer = io.mockk.spyk(CoverageAnalyzer())
         io.mockk.every {
-            analyzer.getCoveredLinesForClass(any(), any(), any())
+            analyzer.getCoveredLinesForClass(
+                any<CoverageAnalyzer.CoverageData.Valid>(),
+                any<String>(),
+                any<ByteArray>(),
+            )
         } returns setOf(10, 11)
 
         val execFile = tempDir.resolve("coverage.exec").toFile()

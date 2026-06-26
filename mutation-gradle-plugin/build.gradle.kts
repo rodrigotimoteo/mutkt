@@ -15,19 +15,10 @@ gradlePlugin {
     plugins {
         create("mutation-kotlin") {
             id = "io.github.rodrigotimoteo.mutation-kotlin"
-            implementationClass = "com.github.rodrigotimoteo.mutation.gradle.MutationPlugin"
+            implementationClass = "io.github.rodrigotimoteo.mutation.gradle.MutationPlugin"
             displayName = "MutKt - Kotlin Mutation Testing"
             description = "PITest-style mutation testing for Kotlin/JVM. Run existing tests against mutated bytecode."
             tags.set(listOf("mutation-testing", "kotlin", "testing", "code-quality"))
-            website.set("https://github.com/rodrigotimoteo/mutkt")
-            vcsUrl.set("https://github.com/rodrigotimoteo/mutkt")
-        }
-        create("mutation-kotlin-sample") {
-            id = "io.github.rodrigotimoteo.mutation-kotlin-sample"
-            implementationClass = "com.github.rodrigotimoteo.mutation.gradle.MutationPlugin"
-            displayName = "MutKt Sample (internal)"
-            description = "Sample project for MutKt plugin testing."
-            tags.set(listOf("mutation-testing", "kotlin", "sample"))
             website.set("https://github.com/rodrigotimoteo/mutkt")
             vcsUrl.set("https://github.com/rodrigotimoteo/mutkt")
         }

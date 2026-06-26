@@ -259,6 +259,45 @@ abstract class MutationTask
         val androidContext: Property<AndroidMutationContext> =
             objectFactory.property(AndroidMutationContext::class.java)
 
+        /**
+         * Android variant runtime classpath exposed as a proper
+         * [InputFiles] so the build cache invalidates when any of its
+         * entries change. Mirrors `androidContext.runtimeClasspath` but is
+         * tracked as a task input (the original lives on an `@Internal`
+         * holder and was therefore invisible to the cache).
+         */
+        @InputFiles
+        @Optional
+        val androidRuntimeClasspath: ConfigurableFileCollection = objectFactory.fileCollection()
+
+        /**
+         * `android.jar` for the active Android variant, exposed as
+         * [InputFile] so the build cache invalidates when the SDK
+         * version changes. Empty when no AGP variant is active.
+         */
+        @InputFile
+        @Optional
+        val androidJar: RegularFileProperty = objectFactory.fileProperty()
+
+        /**
+         * Compiled main classes for the active Android variant
+         * (e.g. `build/tmp/kotlin-classes/debug`). Tracked as
+         * [InputFiles] so the cache invalidates when the AGP compile
+         * task outputs change. Empty for pure-JVM projects.
+         */
+        @InputFiles
+        @Optional
+        val androidTargetClasses: ConfigurableFileCollection = objectFactory.fileCollection()
+
+        /**
+         * Compiled unit-test classes for the active Android variant.
+         * Tracked as [InputFiles] for the same reason as
+         * [androidTargetClasses]. Empty for pure-JVM projects.
+         */
+        @InputFiles
+        @Optional
+        val androidTestClasses: ConfigurableFileCollection = objectFactory.fileCollection()
+
         /** Patterns for generated classes (R, BuildConfig, Hilt, etc.) to exclude. */
         @Input
         @Optional
@@ -302,23 +341,25 @@ abstract class MutationTask
             val classesDir =
                 resolveClassesDir(
                     androidCtx?.mainClassesDir,
+                    androidTargetClasses.files,
                     targetClasses.files,
                     isTestClasses = false,
                 )
             val testClassesDir =
                 resolveClassesDir(
                     androidCtx?.testClassesDir,
+                    androidTestClasses.files,
                     testClasses.files,
                     isTestClasses = true,
                 )
             val rawClasspathFiles =
                 if (androidCtx != null) {
                     logger.lifecycle("Using Android variant '${androidCtx.variantName}' runtime classpath")
-                    val base = androidCtx.runtimeClasspath.files.toList()
-                    val androidJar = androidCtx.androidJar
-                    if (androidJar != null && androidJar.exists()) {
-                        logger.lifecycle("Adding auto-detected android.jar to classpath: $androidJar")
-                        base + androidJar
+                    val base = androidRuntimeClasspath.files.toList()
+                    val jarFile = if (androidJar.isPresent) androidJar.get().asFile else null
+                    if (jarFile != null && jarFile.exists()) {
+                        logger.lifecycle("Adding auto-detected android.jar to classpath: $jarFile")
+                        base + jarFile
                     } else {
                         base
                     }
@@ -330,8 +371,12 @@ abstract class MutationTask
             // AARs present → returns the same list). Runs even when the
             // Android resolver failed so users with manually-wired
             // debugUnitTestRuntimeClasspath still get working classpath.
+            // The AAR temp dir is wiped at the start of every run so stale
+            // extractions from AARs no longer on the classpath do not
+            // accumulate in `build/mutkt-aars/` across runs.
             val aarTempDir =
                 aarExtractDir.asFile.get().apply { mkdirs() }
+            AarExtractor(aarTempDir).clearAars()
             val classpathFiles = expandAars(rawClasspathFiles, aarTempDir)
 
             // Find coverage file
@@ -537,12 +582,14 @@ abstract class MutationTask
             // `failOnMutationScoreThreshold`; both hold the same
             // numeric setting (the legacy name was misleading — it
             // always compared the mutation score, not line coverage).
-            // Consult only the non-deprecated property to avoid the
-            // duplicate-check race where both copies of the threshold
-            // were evaluated and the build could be failed twice for
-            // the same condition. The deprecated alias remains on the
-            // extension for backward compatibility with user scripts.
-            val threshold = failOnMutationScoreThreshold.get()
+            // Honor whichever is set to a positive value; if both are
+            // set, use the higher of the two so a user who set the
+            // legacy property does not get a regression when the new
+            // property is also defaulted. The deprecated alias remains
+            // on the extension for backward compatibility with user
+            // scripts.
+            val threshold =
+                if (failOnScoreThreshold.get() > 0) failOnScoreThreshold.get() else failOnMutationScoreThreshold.get()
             if (threshold > 0 && report.killedPercentage < threshold) {
                 throw org.gradle.api.GradleException(
                     "Mutation score ${report.killedPercentage}% is below threshold $threshold%. Build failed.",
@@ -617,13 +664,16 @@ abstract class MutationTask
             // case-sensitive but real-world classpaths contain AARs from
             // Windows-built pipelines (uppercase .AAR) and from Gradle
             // dependency caches that occasionally emit mixed case.
-            if (classpath.none { it.extension.equals("aar", ignoreCase = true) }) return classpath
+            if (classpath.none { it.extension.lowercase() == "aar" }) return classpath
             val aarExtractor = AarExtractor(tempDir)
             val expanded = mutableListOf<File>()
             for (file in classpath) {
-                if (file.extension.equals("aar", ignoreCase = true)) {
+                if (file.extension.lowercase() == "aar") {
                     try {
-                        expanded.add(aarExtractor.extractClassesJar(file))
+                        // extractAll pulls classes.jar plus any libs/*.jar
+                        // entries — AARs can bundle transitive dependencies
+                        // under libs/ that the URL classloader must see.
+                        expanded.addAll(aarExtractor.extractAll(file))
                     } catch (e: Exception) {
                         logger.warn("Could not extract AAR ${file.name}: ${e.message}")
                     }
@@ -636,20 +686,16 @@ abstract class MutationTask
 
         private fun parseOperators(names: Set<String>): List<MutationOperator> {
             if (names.isEmpty()) return MutationOperator.MVP_OPERATORS.toList()
-            val valid = mutableListOf<MutationOperator>()
-            for (name in names) {
-                val op = MutationOperator.fromName(name)
-                if (op != null) {
-                    valid.add(op)
-                } else {
-                    logger.warn("Unknown mutation operator: '$name' (ignored)")
+            val resolved =
+                names.mapNotNull { name ->
+                    val op = MutationOperator.fromName(name)
+                    if (op == null) logger.warn("Unknown mutation operator: '$name' (ignored)")
+                    op
                 }
-            }
-            if (valid.isEmpty()) {
+            return resolved.ifEmpty {
                 logger.warn("All specified operators are invalid: $names. Falling back to MVP_OPERATORS.")
-                return MutationOperator.MVP_OPERATORS.toList()
+                MutationOperator.MVP_OPERATORS.toList()
             }
-            return valid
         }
 
         private fun findClassesDir(
@@ -677,23 +723,32 @@ abstract class MutationTask
          * Pick the classes directory to use at execution time.
          *
          * Order of precedence:
-         * 1. AGP-reported dir from [AndroidMutationContext] when it points
-         *    to an existing location — this is the canonical Android
-         *    output (e.g. `build/tmp/kotlin-classes/debug`) and is
-         *    required because AGP does not emit to the JVM default
+         * 1. AGP-reported primary dir from [AndroidMutationContext] when
+         *    it points to an existing location — this is the canonical
+         *    Android output (e.g. `build/tmp/kotlin-classes/debug`) and
+         *    is required because AGP does not emit to the JVM default
          *    `build/classes/java/main`.
-         * 2. First populated directory in the user's `targetClasses` /
+         * 2. First populated directory in [androidFiles] (the
+         *    `androidTargetClasses` / `androidTestClasses` file
+         *    collection, which aggregates every AGP-reported classes
+         *    dir for the variant).
+         * 3. First populated directory in the user's `targetClasses` /
          *    `testClasses` file collection (existing behavior for
          *    manually-wired projects).
-         * 3. JVM fallback search (kotlin/main, kotlin/jvm/main, java/main).
+         * 4. JVM fallback search (kotlin/main, kotlin/jvm/main, java/main).
          */
         private fun resolveClassesDir(
             androidDir: File?,
+            androidFiles: Set<File>,
             configuredFiles: Set<File>,
             isTestClasses: Boolean,
         ): File {
             if (androidDir != null && androidDir.exists()) {
                 return androidDir
+            }
+            val androidPick = findClassesDir(androidFiles, isTestClasses)
+            if (androidPick.exists()) {
+                return androidPick
             }
             return findClassesDir(configuredFiles, isTestClasses)
         }

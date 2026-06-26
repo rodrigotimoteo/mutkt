@@ -61,6 +61,39 @@ class MutationPlugin : Plugin<Project> {
                 extension.androidPluginType.set("library")
                 agpVariantResolver.registerOnVariants(project, variantCaptures)
             }
+            // AGP also ships DynamicFeaturePlugin, TestPlugin, and
+            // InstantAppPlugin. None of these add new task names we care
+            // about (they all publish the standard compile<Variant>Kotlin
+            // / compile<Variant>UnitTestKotlin tasks via their consumed
+            // base plugin), but the project must be flagged as Android
+            // so the variant resolver runs. Looked up reflectively because
+            // these classes live in sub-jars of AGP that the plugin only
+            // depends on transitively, and referencing them directly would
+            // require a hard `implementation` dependency on AGP.
+            registerAndroidVariantSubtype(
+                project,
+                "com.android.build.gradle.DynamicFeaturePlugin",
+                "dynamicFeature",
+                extension,
+                agpVariantResolver,
+                variantCaptures,
+            )
+            registerAndroidVariantSubtype(
+                project,
+                "com.android.build.gradle.TestPlugin",
+                "test",
+                extension,
+                agpVariantResolver,
+                variantCaptures,
+            )
+            registerAndroidVariantSubtype(
+                project,
+                "com.android.build.gradle.InstantAppPlugin",
+                "instantApp",
+                extension,
+                agpVariantResolver,
+                variantCaptures,
+            )
         } catch (_: NoClassDefFoundError) {
             // AGP not on classpath — pure-JVM project, detection skipped.
         }
@@ -85,14 +118,24 @@ class MutationPlugin : Plugin<Project> {
                 // configurations. withType is evaluated at task-realization
                 // time so all plugins (including AGP) have been applied.
                 val isAndroid = extension.isAndroid.getOrElse(false)
-                val (compileTaskName, testCompileTaskName) =
-                    discoverKotlinCompileTasks(project, isAndroid, variantCaptures)
-                // Only wire dependencies for tasks that actually exist or are
-                // standard pure-JVM defaults. For Android with no AGP variant
-                // capture, the wiring is deferred to afterEvaluate where
-                // resolveAndroidContext re-wires with the correct names.
-                if (compileTaskName.isNotEmpty() && testCompileTaskName.isNotEmpty()) {
-                    task.dependsOn(compileTaskName, testCompileTaskName)
+                // Compile-task dependency wiring for Android is deferred
+                // entirely to afterEvaluate via resolveAndroidContext.
+                // Pre-wiring here would pick the debug (or first) capture
+                // and ignore extension.androidVariant, so a user requesting
+                // the release variant would still get the debug compile
+                // tasks on the dependency graph. Pure-JVM / KMP projects
+                // are wired immediately since they have a stable task set
+                // (compileKotlin / compileTestKotlin).
+                if (!isAndroid) {
+                    val (compileTaskName, testCompileTaskName) =
+                        discoverKotlinCompileTasks(project, isAndroid, variantCaptures)
+                    // Only wire dependencies for tasks that actually exist or are
+                    // standard pure-JVM defaults. For Android with no AGP variant
+                    // capture, the wiring is deferred to afterEvaluate where
+                    // resolveAndroidContext re-wires with the correct names.
+                    if (compileTaskName.isNotEmpty() && testCompileTaskName.isNotEmpty()) {
+                        task.dependsOn(compileTaskName, testCompileTaskName)
+                    }
                 }
 
                 // Wire extension properties lazily
@@ -136,6 +179,7 @@ class MutationPlugin : Plugin<Project> {
         // Auto-detect sourceSets after project evaluation
         project.afterEvaluate {
             autoDetectSourceSets(project, extension)
+            autoDetectKmpSourceSets(project, extension)
             autoDetectClasspath(project, extension)
             autoDetectJaCoCo(project, extension)
             resolveAndroidContext(project, extension, mutationTask, agpVariantResolver, variantCaptures)
@@ -171,6 +215,69 @@ class MutationPlugin : Plugin<Project> {
             }
         } catch (e: Exception) {
             project.logger.warn("Could not auto-detect sourceSets: ${e.message}")
+        }
+    }
+
+    private fun autoDetectKmpSourceSets(
+        project: Project,
+        extension: MutationPluginExtension,
+    ) {
+        // KMP projects expose source sets via KotlinProjectExtension
+        // (e.g. jvmMain, commonMain, androidMain, iosMain). Pure-JVM
+        // projects don't have it, so a missing class is a no-op. The
+        // Kotlin Gradle Plugin is a compileOnly dependency of this
+        // plugin, so we cannot reference the type directly — use
+        // reflection to stay safe for users who apply this plugin to
+        // a project that does not apply kotlin("multiplatform").
+        try {
+            val kotlinExtClass = Class.forName("org.jetbrains.kotlin.gradle.dsl.KotlinProjectExtension")
+            val kotlinExt = project.extensions.findByType(kotlinExtClass) ?: return
+            val sourceSetsContainer = kotlinExt.javaClass.getMethod("getSourceSets").invoke(kotlinExt) ?: return
+            val sourceSets = sourceSetsContainer as? Iterable<*> ?: return
+
+            var mainCount = 0
+            var testCount = 0
+            for (sourceSet in sourceSets) {
+                val name = sourceSet?.javaClass?.getMethod("getName")?.invoke(sourceSet) as? String ?: continue
+                // KMP convention: main-like source sets end with "Main"
+                // (e.g. jvmMain, iosMain); test-like end with "Test"
+                // (e.g. jvmTest, commonTest). Skip intermediates and
+                // anything that does not match this convention.
+                val isMainLike = name.endsWith("Main")
+                val isTestLike = name.endsWith("Test")
+                if (!isMainLike && !isTestLike) continue
+
+                val output =
+                    sourceSet?.javaClass
+                        ?.getMethod("getOutput")
+                        ?.invoke(sourceSet)
+                        ?: continue
+                val classesDirs =
+                    output?.javaClass
+                        ?.getMethod("getClassesDirs")
+                        ?.invoke(output)
+                        ?: continue
+                val files = (classesDirs as org.gradle.api.file.FileCollection).files
+                if (files.isEmpty()) continue
+                if (isMainLike) {
+                    extension.targetClasses.from(files)
+                    mainCount++
+                } else {
+                    extension.testClasses.from(files)
+                    testCount++
+                }
+            }
+            if (mainCount > 0 || testCount > 0) {
+                project.logger.info(
+                    "Auto-detected KMP source sets: $mainCount main, $testCount test",
+                )
+            }
+        } catch (_: ClassNotFoundException) {
+            // Kotlin Gradle Plugin not on classpath — pure-JVM project, no-op.
+        } catch (_: NoClassDefFoundError) {
+            // Kotlin Gradle Plugin linkage failure — also a no-op.
+        } catch (e: Exception) {
+            project.logger.debug("KMP source set detection skipped: ${e.message}")
         }
     }
 
@@ -246,6 +353,19 @@ class MutationPlugin : Plugin<Project> {
             extension.androidContext.set(context)
             mutationTask.configure { task ->
                 task.dependsOn(context.compileTask, context.testCompileTask)
+                // Wire the Android variant inputs onto the task as
+                // @InputFiles / @InputFile so the build cache
+                // invalidates when the variant classpath, classes
+                // directories, or android.jar change. Without this the
+                // Android values live on an @Internal holder and the
+                // cache happily reuses stale results across SDK or
+                // dependency upgrades.
+                task.androidRuntimeClasspath.from(context.runtimeClasspath)
+                task.androidTargetClasses.from(context.classesDirs)
+                task.androidTestClasses.from(context.testClassesDirs)
+                if (context.androidJar != null) {
+                    task.androidJar.set(context.androidJar)
+                }
             }
             project.logger.info(
                 "Android variant '${context.variantName}' resolved " +
@@ -255,6 +375,37 @@ class MutationPlugin : Plugin<Project> {
             // AGP not on classpath — pure-JVM project, no variant context.
         } catch (e: Exception) {
             project.logger.warn("Could not resolve Android variant context: ${e.message}")
+        }
+    }
+
+    /**
+     * Reflectively register an `onVariants` callback for a non-app /
+     * non-library Android plugin (Dynamic Feature, Test, Instant App).
+     * The plugin class is resolved by name so this code compiles when
+     * AGP is absent from the plugin's classpath (the `compileOnly` AGP
+     * dep is the canonical case). If the class is not on the build
+     * classpath, the registration is a silent no-op.
+     */
+    private fun registerAndroidVariantSubtype(
+        project: Project,
+        pluginClassName: String,
+        pluginType: String,
+        extension: MutationPluginExtension,
+        agpVariantResolver: AgpVariantResolver,
+        variantCaptures: MutableList<AgpVariantResolver.VariantCapture>,
+    ) {
+        try {
+            @Suppress("UNCHECKED_CAST")
+            val pluginClass = Class.forName(pluginClassName) as Class<out org.gradle.api.Plugin<*>>
+            project.plugins.withType(pluginClass) {
+                extension.isAndroid.set(true)
+                extension.androidPluginType.set(pluginType)
+                agpVariantResolver.registerOnVariants(project, variantCaptures)
+            }
+        } catch (_: ClassNotFoundException) {
+            // AGP sub-plugin not on classpath (older AGP, or not applied).
+        } catch (_: NoClassDefFoundError) {
+            // Sub-plugin class linkage failure — also a no-op.
         }
     }
 
@@ -282,12 +433,6 @@ class MutationPlugin : Plugin<Project> {
         project: Project,
         isAndroid: Boolean,
         variantCaptures: List<AgpVariantResolver.VariantCapture> = emptyList(),
-    ): Pair<String, String> = discoverKotlinCompileTasksInternal(project, isAndroid, variantCaptures)
-
-    private fun discoverKotlinCompileTasksInternal(
-        project: Project,
-        isAndroid: Boolean,
-        variantCaptures: List<AgpVariantResolver.VariantCapture>,
     ): Pair<String, String> {
         // Android path: prefer captured variant data. The captures contain
         // exact task names (e.g. `compileReleaseKotlin` for a release-only

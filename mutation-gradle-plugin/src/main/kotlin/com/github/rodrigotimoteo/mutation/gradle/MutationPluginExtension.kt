@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutation.gradle
 
 import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
+import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import org.gradle.api.Project
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
@@ -71,14 +72,7 @@ open class MutationPluginExtension(project: Project) {
 
     val enabledOperators: SetProperty<String> =
         project.objects.setProperty(String::class.java).convention(
-            setOf(
-                "CONDITIONALS_BOUNDARY",
-                "NEGATE_CONDITIONALS",
-                "ARITHMETIC",
-                "RETURN_VALS",
-                "NULL_RETURNS",
-                "EMPTY_RETURNS",
-            ),
+            MutationOperator.MVP_OPERATORS.map { it.operatorName }.toSet(),
         )
 
     /**
@@ -381,6 +375,12 @@ open class MutationPluginExtension(project: Project) {
                 "**/*\$Lambda\$*",
                 "**/*\$inlined\$*",
                 "**/META-INF/**",
+                "**/*_ViewBinding",
+                "**/*BindingImpl",
+                "**/*_Generated*",
+                "**/DataBinderMapperImpl",
+                "**/*_Adapter",
+                "**/*DiffCallback",
             ),
         )
 

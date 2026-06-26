@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutation.analysis
 import com.github.rodrigotimoteo.mutation.MUTKT_DIR
 import org.slf4j.LoggerFactory
 import java.io.File
+import java.io.RandomAccessFile
 
 /**
  * Persists kill sets (which tests killed which mutations) across runs.
@@ -51,16 +52,18 @@ class KillSetStorage(private val projectDir: File) {
      * @param killSets Map of mutation ID to set of test class names that killed it
      */
     fun save(killSets: Map<String, Set<String>>) {
-        try {
-            storageFile.writeText(
-                killSets.entries
-                    .sortedBy { it.key }
-                    .joinToString("\n") { (id, tests) ->
-                        "$id=${tests.joinToString(",")}"
-                    },
-            )
-        } catch (e: Exception) {
-            logger.warn("Failed to save kill sets: ${e.message}")
+        withFileLock {
+            try {
+                storageFile.writeText(
+                    killSets.entries
+                        .sortedBy { it.key }
+                        .joinToString("\n") { (id, tests) ->
+                            "$id=${tests.joinToString(",")}"
+                        },
+                )
+            } catch (e: Exception) {
+                logger.warn("Failed to save kill sets: ${e.message}")
+            }
         }
     }
 
@@ -71,8 +74,21 @@ class KillSetStorage(private val projectDir: File) {
      * @param newKillSets New kill sets to merge into historical data
      */
     fun saveMerged(newKillSets: Map<String, Set<String>>) {
-        val historical = load()
-        save(merge(historical, newKillSets))
+        withFileLock {
+            val historical = load()
+            val merged = merge(historical, newKillSets)
+            try {
+                storageFile.writeText(
+                    merged.entries
+                        .sortedBy { it.key }
+                        .joinToString("\n") { (id, tests) ->
+                            "$id=${tests.joinToString(",")}"
+                        },
+                )
+            } catch (e: Exception) {
+                logger.warn("Failed to save merged kill sets: ${e.message}")
+            }
+        }
     }
 
     /**
@@ -90,5 +106,28 @@ class KillSetStorage(private val projectDir: File) {
         newKillSets: Map<String, Set<String>>,
     ): Map<String, Set<String>> {
         return historical + newKillSets
+    }
+
+    /**
+     * Run [block] while holding an exclusive OS file lock on the kill
+     * set storage file. Prevents concurrent Gradle workers from
+     * corrupting kill sets during parallel mutation runs.
+     *
+     * The `.lock` sidecar is removed in `finally` so it does not
+     * accumulate in `.mutkt/`.
+     */
+    private inline fun <T> withFileLock(block: () -> T): T {
+        val parent = storageFile.parentFile
+        if (parent != null) parent.mkdirs()
+        val lockFile = File(parent, "${storageFile.name}.lock")
+        try {
+            RandomAccessFile(lockFile, "rw").channel.use { channel ->
+                channel.lock().use {
+                    return block()
+                }
+            }
+        } finally {
+            lockFile.delete()
+        }
     }
 }

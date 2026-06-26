@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutation.baseline
 
 import com.github.rodrigotimoteo.mutation.MUTKT_DIR
+import com.github.rodrigotimoteo.mutation.analysis.GitChangeDetector
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -29,6 +30,7 @@ class BaselineStorage(private val projectDir: File) {
     private val logger = LoggerFactory.getLogger(BaselineStorage::class.java)
     private val baselineDir = File(projectDir, MUTKT_DIR)
     private val baselineFile = File(baselineDir, "baseline")
+    private val gitChangeDetector = GitChangeDetector(projectDir)
 
     init {
         baselineDir.mkdirs()
@@ -105,56 +107,8 @@ class BaselineStorage(private val projectDir: File) {
      *                   be derived from them).
      * @return Set of changed class names (dotted format)
      */
-    fun detectChanges(sourceDirs: List<String> = DEFAULT_SOURCE_DIRS): Set<String> {
-        return try {
-            val process =
-                ProcessBuilder("git", "diff", "--name-only", "HEAD")
-                    .directory(projectDir)
-                    .redirectErrorStream(true)
-                    .start()
-
-            val output = process.inputStream.bufferedReader().readText()
-            val exitCode = process.waitFor()
-
-            if (exitCode != 0) {
-                logger.warn("git diff failed (exit code $exitCode), no incremental filtering applied")
-                return emptySet()
-            }
-
-            output.lines()
-                .filter { it.endsWith(".kt") || it.endsWith(".java") }
-                .mapNotNull { path -> fileToClassName(path, sourceDirs) }
-                .toSet()
-        } catch (e: Exception) {
-            logger.warn("git not available: ${e.message}, running all mutations (no filtering)")
-            emptySet()
-        }
-    }
-
-    /**
-     * Convert a `src/.../Class.kt`-style path into a dotted class name by
-     * stripping the first [sourceDirs] prefix that matches. Returns null
-     * for files that do not live under any configured source root, so
-     * callers can filter unknown layouts (e.g. generated resources) out
-     * of the result.
-     */
-    private fun fileToClassName(
-        path: String,
-        sourceDirs: List<String>,
-    ): String? {
-        for (sourceDir in sourceDirs) {
-            if (path.startsWith("$sourceDir/")) {
-                val relative = path.removePrefix("$sourceDir/")
-                val className =
-                    relative
-                        .removeSuffix(".kt")
-                        .removeSuffix(".java")
-                        .replace("/", ".")
-                if (className.isNotEmpty()) return className
-            }
-        }
-        return null
-    }
+    fun detectChanges(sourceDirs: List<String> = GitChangeDetector.DEFAULT_SOURCE_DIRS): Set<String> =
+        gitChangeDetector.detectChangedClasses(sourceDirs)
 
     /**
      * Compare current results with baseline.
@@ -238,21 +192,6 @@ class BaselineStorage(private val projectDir: File) {
         } finally {
             lockFile.delete()
         }
-    }
-
-    companion object {
-        /**
-         * Default source directory prefixes for the [detectChanges]
-         * `src/main` → `src/main` mapping. The slashed form (not the
-         * dotted form) is required because git reports paths with
-         * forward slashes regardless of platform.
-         */
-        private val DEFAULT_SOURCE_DIRS: List<String> =
-            listOf(
-                "src/main/kotlin",
-                "src/main/java",
-                "src/commonMain/kotlin",
-            )
     }
 }
 

@@ -124,6 +124,12 @@ enum class MutationOperator(val operatorName: String, val description: String) {
 
         val ALL_OPERATORS = MVP_OPERATORS + KOTLIN_OPERATORS + QUICK_WIN_OPERATORS
 
+        /**
+         * Convert an operator name string to the enum, returns null if not recognized.
+         *
+         * @param name The string form (typically [operatorName]) to look up
+         * @return Matching [MutationOperator] or `null` when no enum value has that name
+         */
         fun fromName(name: String): MutationOperator? {
             return values().firstOrNull { it.operatorName == name }
         }

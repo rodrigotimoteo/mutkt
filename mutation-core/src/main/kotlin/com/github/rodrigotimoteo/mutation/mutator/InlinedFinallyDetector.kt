@@ -7,6 +7,21 @@ import org.objectweb.asm.tree.MethodNode
 import org.objectweb.asm.tree.TryCatchBlockNode
 
 /**
+ * Opcodes that terminate a method or signal abnormal exit.
+ * Used to detect exit points when scanning for inlined finally duplications.
+ */
+private val EXIT_OPCODES: Set<Int> =
+    setOf(
+        org.objectweb.asm.Opcodes.RETURN,
+        org.objectweb.asm.Opcodes.ARETURN,
+        org.objectweb.asm.Opcodes.IRETURN,
+        org.objectweb.asm.Opcodes.LRETURN,
+        org.objectweb.asm.Opcodes.FRETURN,
+        org.objectweb.asm.Opcodes.DRETURN,
+        org.objectweb.asm.Opcodes.ATHROW,
+    )
+
+/**
  * Detects inlined finally blocks in bytecode.
  *
  * When the Kotlin/JVM compiler inlines finally blocks, it duplicates the
@@ -146,17 +161,7 @@ class InlinedFinallyDetector {
                 }
                 startFound && insn is org.objectweb.asm.tree.InsnNode -> {
                     val opcode = insn.opcode
-                    if (opcode in
-                        listOf(
-                            org.objectweb.asm.Opcodes.RETURN,
-                            org.objectweb.asm.Opcodes.ARETURN,
-                            org.objectweb.asm.Opcodes.IRETURN,
-                            org.objectweb.asm.Opcodes.LRETURN,
-                            org.objectweb.asm.Opcodes.FRETURN,
-                            org.objectweb.asm.Opcodes.DRETURN,
-                            org.objectweb.asm.Opcodes.ATHROW,
-                        )
-                    ) {
+                    if (opcode in EXIT_OPCODES) {
                         return lastLineNumber
                     }
                 }
@@ -188,17 +193,7 @@ class InlinedFinallyDetector {
                 }
             } else if (insn is org.objectweb.asm.tree.InsnNode) {
                 val opcode = insn.opcode
-                if (opcode in
-                    listOf(
-                        org.objectweb.asm.Opcodes.RETURN,
-                        org.objectweb.asm.Opcodes.ARETURN,
-                        org.objectweb.asm.Opcodes.IRETURN,
-                        org.objectweb.asm.Opcodes.LRETURN,
-                        org.objectweb.asm.Opcodes.FRETURN,
-                        org.objectweb.asm.Opcodes.DRETURN,
-                        org.objectweb.asm.Opcodes.ATHROW,
-                    )
-                ) {
+                if (opcode in EXIT_OPCODES) {
                     val line = getLineNumber(methodNode, insn)
                     if (line != null) {
                         exitPoints.add(line)

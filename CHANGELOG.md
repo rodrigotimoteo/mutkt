@@ -61,7 +61,7 @@
 - **Engine: classLoader.close()** — After each mutant with `runCatching`
 - **Engine: pattern validation** — Throws on invalid regex at construction
 - **Engine: parallel scan** — `ForkJoinPool` for `generateAllMutations`
-- **Engine: sourceDirs** — Constructor parameter (was hardcoded)
+- **Engine: sourceDirs** — `IncrementalAnalyzer`/`BaselineStorage` now accept `sourceDirs` parameter (was hardcoded). `MutationEngine` still uses a hardcoded list internally for `findSourceCode` and does not yet expose `sourceDirs` as a constructor parameter.
 - **Engine: Charsets.UTF_8** — For `findSourceCode`
 - **Engine: logger** — Replaced all `System.err.println` with SLF4J
 
@@ -73,6 +73,12 @@
 - **Tests**: 10 quality improvements (try/catch removed, @After added, boundary cases, @Tag integration, specific assertions)
 - **Docs**: README version 0.3.0, annotation example, defaults aligned, property names corrected
 - **CI**: artifact paths, dokka command, token names
+- **M33 TagFilter support** — `MutationEngine` + `MutationTestRunnerFactory` accept `includeTags`/`excludeTags`; `ReflectionTestRunner.runTests` applies `TagFilter.includeTags`/`excludeTags` to the `LauncherDiscoveryRequest` so `@Tag` / `@EnabledIf` / `@EnabledOnOs` style filters can be honored from MutKt config
+- **M34 IDE detection** — `MutKtExtension.isRunningSingleTest` now checks `idea.launcher` (Android Studio) in addition to the IDEA/Eclipse/VS Code markers; kdoc clarifies this detects IDE launch, not Gradle `--tests` single-test filtering
+- **M35 Two-timeout model** — `MutKtExtension.interceptWithTracking` documents the JUnit `@Timeout` vs `mutantTimeoutMs` interaction; on `checkTimeout()` the wrapper now aborts by throwing `AssertionError` with a MutKt marker so the test is recorded as killed, not silently logged
+- **M36 URLClassLoader classpath requirement** — `MutationTestRunner` kdoc + README troubleshooting call out the test-runtime classpath + `-javaagent` requirement for inline-mock agents (MockK / Mockito / ByteBuddy); Gradle plugin inherits these from the regular `test` task
+- **M37 Per-method triggered attribution** — `MutKtExtension.interceptWithTracking` logs per-method trigger count and clears `triggeredMutations` between methods; class-level aggregate in `afterAll` is unchanged for STRICT mode contract
+- **M38 Source-file cache verified** — `findSourceCode` uses `sourceFileCache` (added by M22) so a `.kt`/`.java` file is read once per class, not once per mutation
 
 ### LOW Fixes (46)
 - **Model**: `Mutation.kt` bytecode fields documented, `MutationResult.kt` `getClassScores` cached

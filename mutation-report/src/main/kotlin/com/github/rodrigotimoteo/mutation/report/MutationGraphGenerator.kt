@@ -32,7 +32,7 @@ object MutationGraphGenerator {
                     h1 { color: #333; }
                     .graph { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
                     .node { cursor: pointer; }
-                    .node.test { fill: #4CAF50; }
+                    .node.target { fill: #4CAF50; }
                     .node.mutation.killed { fill: #f44336; }
                     .node.mutation.survived { fill: #FF9800; }
                     .node.mutation.weak { fill: #FFEB3B; }
@@ -91,7 +91,7 @@ object MutationGraphGenerator {
                         .data(nodesData)
                         .enter().append("circle")
                         .attr("class", function(d) { return "node " + d.type + " " + (d.status || ""); })
-                        .attr("r", function(d) { return d.type === "test" ? 10 : 8; })
+                        .attr("r", function(d) { return d.type === "target" ? 10 : 8; })
                         .call(d3.drag()
                             .on("start", dragstarted)
                             .on("drag", dragged)
@@ -156,12 +156,10 @@ object MutationGraphGenerator {
     private fun buildNodes(report: MutationReport): String {
         val nodes = mutableListOf<String>()
 
-        // Add target-class nodes (the class the mutation belongs to — NOT
-        // the JUnit test class, despite the legacy `type: "test"` label
-        // that the d3 styling still keys on).
+        // Add target-class nodes (the class the mutation belongs to).
         val targetClasses = report.results.map { it.mutation.className }.distinct()
         for (targetClass in targetClasses) {
-            nodes.add("""{"id": "${escapeJson(targetClass)}", "type": "test"}""")
+            nodes.add("""{"id": "${escapeJson(targetClass)}", "type": "target"}""")
         }
 
         // Add mutation nodes

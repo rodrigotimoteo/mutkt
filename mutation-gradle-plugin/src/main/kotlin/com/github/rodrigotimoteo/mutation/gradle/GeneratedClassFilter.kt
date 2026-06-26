@@ -30,18 +30,12 @@ object GeneratedClassFilter {
         patterns: Set<String>,
     ): Boolean {
         val slashed = className.replace('.', '/')
+        val simpleName = slashed.substringAfterLast('/')
         return patterns.any { pattern ->
             if (pattern.contains("**")) {
                 matchesGlob(slashed, pattern)
             } else {
-                when {
-                    pattern.endsWith("\$*") -> slashed.contains(pattern.removeSuffix("*"))
-                    pattern.startsWith("*") && pattern.endsWith("*") ->
-                        slashed.contains(pattern.drop(1).dropLast(1))
-                    pattern.endsWith("*") -> slashed.startsWith(pattern.dropLast(1))
-                    pattern.startsWith("*") -> slashed.endsWith(pattern.drop(1))
-                    else -> slashed == pattern || className == pattern
-                }
+                matchesGlob(simpleName, pattern)
             }
         }
     }

@@ -35,7 +35,7 @@ internal class LoadClassResolver(
                     false,
                     Thread.currentThread().contextClassLoader ?: Mutator::class.java.classLoader,
                 )
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 null
             }
         if (result != null) classCache[type] = result
@@ -62,13 +62,13 @@ internal class CommonSuperClassClassWriter(
         val c1 =
             try {
                 resolver.resolve(type1)
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 null
             }
         val c2 =
             try {
                 resolver.resolve(type2)
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 null
             }
 

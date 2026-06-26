@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "2.1.10"
+    alias(libs.plugins.kotlin.jvm)
 }
 
 repositories {
@@ -9,9 +9,9 @@ repositories {
 dependencies {
     implementation(project(":mutation-core"))
     implementation(project(":mutation-test-runner"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation(libs.junit.jupiter)
     testImplementation(kotlin("test"))
-    testImplementation("org.ow2.asm:asm:9.10.1")
+    testImplementation(libs.asm.core)
 }
 
 tasks.test {

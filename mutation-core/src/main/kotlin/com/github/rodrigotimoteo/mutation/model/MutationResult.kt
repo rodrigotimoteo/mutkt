@@ -7,7 +7,7 @@ package com.github.rodrigotimoteo.mutation.model
  * and any error message if the mutation caused an error.
  *
  * @property mutation The mutation that was tested
- * @property status Status of the mutation (KILLED, SURVIVED, ERROR, TIMEOUT, NO_COVERAGE)
+ * @property status Status of the mutation (KILLED, SURVIVED, ERROR, TIMEOUT, NO_COVERAGE, WEAK_KILLED, SUBSUMED)
  * @property executionTimeMs Time taken to execute tests against this mutation
  * @property errorMessage Error message if status is ERROR
  * @see MutationStatus for status details
@@ -41,7 +41,7 @@ data class ClassMutationScore(
 /**
  * Complete mutation testing report with results and statistics.
  *
- * The six "counted" buckets ([killedMutations], [survivedMutations],
+ * The seven "counted" buckets ([killedMutations], [survivedMutations],
  * [errorMutations], [timeoutMutations], [noCoverageMutations],
  * [subsumedMutations], [weakKilledMutations]) always sum to
  * [totalMutations]. Subsumed and weak-killed mutations were previously

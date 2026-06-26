@@ -4,7 +4,23 @@ package com.github.rodrigotimoteo.mutation.filter
  * Filters classes for mutation testing using regex patterns.
  *
  * Supports target and exclude patterns for both classes and tests.
+ *
+ * @deprecated This class is no longer used in production. The engine now drives
+ *   class selection through [com.github.rodrigotimoteo.mutation.engine.MutationEngine]'s
+ *   `includePatterns` / `excludePatterns` (regex against the FQ class name) and the
+ *   Gradle plugin's `GeneratedClassFilter` for codegen names. Retained only because
+ *   `ClassFilterTest` still exercises it. Do not call from new code.
  */
+@Deprecated(
+    message =
+        "Replaced by MutationEngine.includePatterns / excludePatterns; " +
+            "production wiring lives in the Gradle plugin and engine.",
+    replaceWith =
+        ReplaceWith(
+            "MutationEngine(includePatterns = ..., excludePatterns = ...)",
+            "com.github.rodrigotimoteo.mutation.engine.MutationEngine",
+        ),
+)
 class ClassFilter(
     private val targetPatterns: List<Regex> = emptyList(),
     private val excludePatterns: List<Regex> = emptyList(),

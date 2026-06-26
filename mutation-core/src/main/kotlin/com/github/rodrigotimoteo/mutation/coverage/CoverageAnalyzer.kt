@@ -94,7 +94,14 @@ class CoverageAnalyzer {
 
             for ((className, classBytes) in classFiles) {
                 try {
-                    analyzer.analyzeAll(classBytes.inputStream(), className)
+                    // `classBytes.inputStream()` is a fresh ByteArrayInputStream
+                    // but close it defensively anyway — the analyzer API
+                    // accepts any InputStream and a leftover open stream
+                    // would leak one OS file descriptor per class on a
+                    // real InputStream impl.
+                    classBytes.inputStream().use { stream ->
+                        analyzer.analyzeAll(stream, className)
+                    }
                 } catch (e: Exception) {
                     logger.debug("Could not analyze coverage for $className: ${e.message}")
                 }
@@ -137,9 +144,34 @@ class CoverageAnalyzer {
         val coverageData = loadExecutionData(execFile)
         when (coverageData) {
             is CoverageData.Empty -> return emptySet()
-            is CoverageData.Valid -> return analyzeCoveredLinesForClass(coverageData, className, classBytes)
+            is CoverageData.Valid -> return getCoveredLinesForClass(coverageData, className, classBytes)
         }
     }
+
+    /**
+     * Gets covered line numbers for a specific class, reusing an
+     * already-parsed [CoverageData.Valid]. Prefer this overload when the
+     * caller has already loaded the .exec file — it avoids re-parsing
+     * the file once per mutation.
+     */
+    fun getCoveredLinesForClass(
+        coverageData: CoverageData.Valid,
+        className: String,
+        classBytes: ByteArray,
+    ): Set<Int> = analyzeCoveredLinesForClass(coverageData, className, classBytes)
+
+    /**
+     * Gets covered line numbers for every class in [classFiles], reusing
+     * an already-parsed [CoverageData.Valid]. The parse-once motivation
+     * matters when the caller (e.g. the engine) needs the covered-line
+     * map for two different downstream filters — coverage filtering and
+     * weak-mutation filtering — and would otherwise re-parse the .exec
+     * file for each.
+     */
+    fun getCoveredLines(
+        coverageData: CoverageData.Valid,
+        classFiles: Map<String, ByteArray>,
+    ): Map<String, Set<Int>> = analyzeCoveredLines(coverageData, classFiles)
 
     private fun analyzeCoveredLinesForClass(
         valid: CoverageData.Valid,
@@ -151,7 +183,10 @@ class CoverageAnalyzer {
             val slashedName = normalizeClassName(className)
             val coverageBuilder = CoverageBuilder()
             val analyzer = Analyzer(valid.executionDataStore, coverageBuilder)
-            analyzer.analyzeAll(classBytes.inputStream(), slashedName)
+            // Close the input stream after JaCoCo has consumed it.
+            classBytes.inputStream().use { stream ->
+                analyzer.analyzeAll(stream, slashedName)
+            }
 
             var coveredLines = emptySet<Int>()
             for (classCoverage in coverageBuilder.getClasses()) {
@@ -190,9 +225,13 @@ class CoverageAnalyzer {
         coverageData: CoverageData.Valid,
         mutations: List<MutationInfo>,
     ): List<MutationCoverage> {
+        // Reuse the already-parsed store instead of re-loading the .exec
+        // file via getCoveredLinesForClass(File, ...). The previous
+        // implementation re-parsed once per mutation in the engine's
+        // filterByCoverage path.
         val coveredLines =
             getCoveredLinesForClass(
-                coverageData.execFile,
+                coverageData,
                 normalizeClassName(className),
                 classBytes,
             )

@@ -26,20 +26,7 @@ allprojects {
         mavenCentral()
         gradlePluginPortal()
     }
-}
 
-subprojects {
-    apply(plugin = "org.jetbrains.dokka")
-
-    tasks.withType<Test>().configureEach {
-        useJUnitPlatform()
-        testLogging {
-            events("passed", "skipped", "failed")
-        }
-    }
-}
-
-allprojects {
     group = "io.github.rodrigotimoteo"
     version = "0.3.0"
 }
@@ -48,10 +35,11 @@ dependencies {
     dokka(project(":mutation-core"))
     dokka(project(":mutation-report"))
     dokka(project(":mutation-test-runner"))
-    dokka(project(":mutation-sample"))
 }
 
 subprojects {
+    apply(plugin = "org.jetbrains.dokka")
+
     if (name == "mutation-sample" || name == "mutation-sample-android" || name == "mutation-self-test") return@subprojects
 
     apply(plugin = "org.jetbrains.kotlin.jvm")
@@ -59,13 +47,19 @@ subprojects {
     apply(plugin = "signing")
     apply(plugin = "org.jetbrains.kotlinx.kover")
 
+    tasks.withType<Test>().configureEach {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+        }
+    }
+
     extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
         excludeSourceSets {
             names("generated")
         }
     }
 
-    apply(plugin = "org.jetbrains.dokka")
     apply(plugin = "io.gitlab.arturbosch.detekt")
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
@@ -145,13 +139,6 @@ subprojects {
                     "-opt-in=kotlin.RequiresOptIn",
                     "-Xjsr305=strict",
                 )
-        }
-    }
-
-    tasks.withType<Test>().configureEach {
-        useJUnitPlatform()
-        testLogging {
-            events("passed", "skipped", "failed")
         }
     }
 }

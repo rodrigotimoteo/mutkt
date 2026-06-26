@@ -525,6 +525,53 @@ class MutatorFullTest {
         assertEquals(0, sealed.size, "Single instanceof should not trigger SEALED_WHEN")
     }
 
+    @Test
+    fun `SEALED_WHEN ignores switch without preceding instanceof on same line`() {
+        // Build a Kotlin class with a LOOKUPSWITCH but NO instanceof on the same line.
+        val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        cw.visit(
+            Opcodes.V17,
+            Opcodes.ACC_PUBLIC,
+            "com/example/PlainEnum",
+            null,
+            "java/lang/Object",
+            null,
+        )
+        val meta = cw.visitAnnotation("Lkotlin/Metadata;", true)
+        meta.visit("mv", intArrayOf(1, 9, 0))
+        meta.visit("k", 1)
+        meta.visitEnd()
+        val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        ctor.visitCode()
+        ctor.visitVarInsn(Opcodes.ALOAD, 0)
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        ctor.visitInsn(Opcodes.RETURN)
+        ctor.visitMaxs(1, 1)
+        ctor.visitEnd()
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "test", "()I", null, null)
+        mv.visitCode()
+        mv.visitLineNumber(1, Label())
+        val dflt = Label()
+        val c0 = Label()
+        mv.visitInsn(Opcodes.ICONST_0)
+        mv.visitLookupSwitchInsn(dflt, intArrayOf(0), arrayOf(c0))
+        mv.visitLabel(c0)
+        mv.visitInsn(Opcodes.ICONST_1)
+        mv.visitInsn(Opcodes.IRETURN)
+        mv.visitLabel(dflt)
+        mv.visitInsn(Opcodes.ICONST_0)
+        mv.visitInsn(Opcodes.IRETURN)
+        mv.visitMaxs(1, 1)
+        mv.visitEnd()
+        cw.visitEnd()
+        val mutations = Mutator(setOf(MutationOperator.SEALED_WHEN)).scanMutations(cw.toByteArray())
+        assertEquals(
+            0,
+            mutations.size,
+            "Switch without preceding instanceof on same line must not fire SEALED_WHEN",
+        )
+    }
+
     // ======================================================================
     // MutationApplierMethodVisitor
     // ======================================================================
@@ -1460,6 +1507,12 @@ class MutatorFullTest {
     private fun buildClassWithCopyCall(opcode: Int): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
+        // @kotlin.Metadata with d1 protobuf flags = 0x10 (isData) — required for DATA_CLASS_COPY
+        val meta = cw.visitAnnotation("Lkotlin/Metadata;", true)
+        meta.visit("mv", intArrayOf(1, 9, 0))
+        meta.visit("k", 1)
+        meta.visit("d1", byteArrayOf(0x0A.toByte(), 0x01, 0x08, 0x10))
+        meta.visitEnd()
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)
@@ -1562,6 +1615,9 @@ class MutatorFullTest {
         val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "test", "()I", null, null)
         mv?.visitCode()
         mv?.visitLineNumber(1, Label())
+        // Preceded by instanceof on the same line so SEALED_WHEN guard allows mutation
+        mv?.visitVarInsn(Opcodes.ALOAD, 0)
+        mv?.visitTypeInsn(Opcodes.INSTANCEOF, "com/example/WhenExpr")
         val dflt = Label()
         val c0 = Label()
         val c1 = Label()
@@ -1643,6 +1699,9 @@ class MutatorFullTest {
         val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "test", "()I", null, null)
         mv?.visitCode()
         mv?.visitLineNumber(1, Label())
+        // Preceded by instanceof on the same line so SEALED_WHEN guard allows mutation
+        mv?.visitVarInsn(Opcodes.ALOAD, 0)
+        mv?.visitTypeInsn(Opcodes.INSTANCEOF, "com/example/WhenTbl")
         val dflt = Label()
         val c0 = Label()
         val c1 = Label()

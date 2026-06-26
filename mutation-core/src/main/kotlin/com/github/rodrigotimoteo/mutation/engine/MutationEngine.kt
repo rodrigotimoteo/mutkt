@@ -28,6 +28,16 @@ import java.util.concurrent.TimeUnit
 import java.util.regex.PatternSyntaxException
 
 /**
+ * Minimum number of results required before post-hoc subsumption analysis
+ * runs. The subsumption comparison is O(n^2) within each (class, method)
+ * group, so for very small result sets the analysis is more overhead than
+ * benefit — and a 0–9 result set is almost always a degenerate case (e.g.
+ * a single-class run with a couple of operators disabled) where the
+ * "subsumed" output would be noise.
+ */
+private const val MIN_SUBSUMPTION_MUTATIONS = 10
+
+/**
  * Main mutation testing engine.
  *
  * Orchestrates mutation generation, test execution, and result aggregation.
@@ -89,6 +99,8 @@ class MutationEngine(
     private val maxMutationsPerClass: Int = 0,
     private val targetTestPatterns: List<String> = emptyList(),
     private val excludeTestPatterns: List<String> = emptyList(),
+    private val includeTags: Set<String> = emptySet(),
+    private val excludeTags: Set<String> = emptySet(),
 ) {
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators, excludedMethods)
@@ -162,6 +174,54 @@ class MutationEngine(
         allTestClassBytes = testClassBytes
 
         val startTime = System.currentTimeMillis()
+        val allClassFiles = classFiles + testClassBytes
+
+        // Parse coverage once and reuse for both filter and weak-mutation
+        // analysis. Without this, the .exec file is re-parsed for every
+        // mutation in filterByCoverage and again for getCoveredLines.
+        val coverageData =
+            if (coverageExecFile != null && coverageExecFile.exists()) {
+                coverageAnalyzer.loadExecutionData(coverageExecFile)
+            } else {
+                CoverageAnalyzer.CoverageData.Empty
+            }
+
+        val mutationsToTest = prepareMutations(classFiles, coverageData)
+        val (filteredTestNames, orderedTestNames) = prepareTestNames(testClassNames)
+        val (mutationsForRun, cachedResults) = filterByCache(mutationsToTest)
+
+        val (results, killSets) =
+            executeMutants(
+                mutationsForRun,
+                allClassFiles,
+                orderedTestNames,
+                testClassLoader,
+            )
+        logger.info(
+            "Tested ${results.size} mutations (${results.size * 1000 / maxOf(System.currentTimeMillis() - startTime, 1)} mutations/sec)",
+        )
+
+        val allResults = results + cachedResults
+
+        // Post-test bookkeeping: cache, test-strength history, kill-set
+        // storage, subsumption analysis, baseline.
+        recordPostTestResults(results, filteredTestNames, killSets)
+        val finalResults = applySubsumption(allResults, killSets)
+        saveBaselineIfNeeded(finalResults)
+
+        val totalTime = System.currentTimeMillis() - startTime
+        return buildReport(finalResults, totalTime)
+    }
+
+    /**
+     * Phase 1: scan + filter mutations. Reads coverage data once (via
+     * the caller) and threads the parsed [CoverageAnalyzer.CoverageData]
+     * through the coverage, weak-mutation, and inlined-finally filters.
+     */
+    private fun prepareMutations(
+        classFiles: Map<String, ByteArray>,
+        coverageData: CoverageAnalyzer.CoverageData,
+    ): List<Pair<MutationInfo, ByteArray>> {
         val scanStart = System.currentTimeMillis()
         val allMutations = generateAllMutations(classFiles)
         val scanTime = System.currentTimeMillis() - scanStart
@@ -171,136 +231,177 @@ class MutationEngine(
             logger.warn("No mutations found. Check enabled operators and class filter patterns.")
         }
 
-        // Combine class files with test class files
-        val allClassFiles = classFiles + testClassBytes
-
-        // Filter by regex patterns (include/exclude)
-        val mutationsAfterRegex = filterByPatterns(allMutations)
-        val skippedRegex = allMutations.size - mutationsAfterRegex.size
+        val afterRegex = filterByPatterns(allMutations)
+        val skippedRegex = allMutations.size - afterRegex.size
         if (skippedRegex > 0) {
             logger.info(
                 "Regex: skipped $skippedRegex mutations (include=${includePatterns.size}, exclude=${excludePatterns.size})",
             )
         }
 
-        // Limit mutations per class if configured
-        val mutationsAfterLimit =
+        val afterLimit =
             if (maxMutationsPerClass > 0) {
-                limitMutationsPerClass(mutationsAfterRegex)
+                limitMutationsPerClass(afterRegex)
             } else {
-                mutationsAfterRegex
+                afterRegex
             }
 
-        // Filter mutations by coverage if available
-        val mutationsAfterCoverage =
-            if (coverageExecFile != null && coverageExecFile.exists()) {
-                filterByCoverage(mutationsAfterLimit, classFiles, coverageExecFile)
+        val afterCoverage =
+            if (coverageData is CoverageAnalyzer.CoverageData.Valid) {
+                filterByCoverage(afterLimit, classFiles, coverageData)
             } else {
-                mutationsAfterLimit
+                afterLimit
             }
-        logger.info("Testing ${mutationsAfterCoverage.size} mutations after coverage filtering")
+        logger.info("Testing ${afterCoverage.size} mutations after coverage filtering")
 
-        // Weak mutation analysis (skip unreachable mutations)
-        val mutationsAfterWeak =
-            if (enableWeakMutation && coverageExecFile != null && coverageExecFile.exists()) {
-                val coveredLinesMap = getCoveredLines(coverageExecFile)
-                val reachableMutations =
-                    weakMutationAnalyzer.filterUnreachable(
-                        mutationsAfterCoverage.map { it.first },
-                        coveredLinesMap,
-                    )
-                val reachableSet = reachableMutations.toSet()
-                val (reachable, unreachable) =
-                    mutationsAfterCoverage.partition { (mutation, _) ->
-                        mutation in reachableSet
-                    }
-                if (unreachable.isNotEmpty()) {
-                    logger.info("Weak mutation: skipped ${unreachable.size} unreachable mutations")
-                }
-                reachable
+        val afterWeak =
+            if (enableWeakMutation && coverageData is CoverageAnalyzer.CoverageData.Valid) {
+                applyWeakMutation(afterCoverage, coverageData)
             } else {
-                mutationsAfterCoverage
+                afterCoverage
             }
 
-        // Filter out mutations in inlined finally blocks (duplicates)
-        val mutationsAfterInlined =
+        val afterInlined =
             if (enableInlinedFinally) {
-                val detector = InlinedFinallyDetector()
-                val blockCache = mutableMapOf<String, List<InlinedFinallyDetector.InlinedFinallyBlock>>()
-                mutationsAfterWeak.filter { (mutation, _) ->
-                    val classBytes = classFiles[mutation.className.replace('.', '/')]
-                    if (classBytes != null) {
-                        val blocks = blockCache.getOrPut(mutation.className) { detector.detect(classBytes) }
-                        !detector.isInInlinedBlock(mutation.lineNumber, blocks)
-                    } else {
-                        true
-                    }
-                }
+                filterInlinedFinally(afterWeak, classFiles)
             } else {
-                mutationsAfterWeak
+                afterWeak
             }
-        val skippedInlined = mutationsAfterWeak.size - mutationsAfterInlined.size
-        if (skippedInlined > 0) {
-            logger.info("Skipped $skippedInlined mutations in inlined finally blocks")
-        }
 
-        // Order test classes by effectiveness (if history available)
-        val filteredTestNames = filterTestClassNames(testClassNames)
-        val orderedTestNames =
+        return if (changedClasses.isNotEmpty()) {
+            filterIncremental(afterInlined)
+        } else {
+            afterInlined
+        }
+    }
+
+    /**
+     * Apply weak-mutation filtering using the already-parsed coverage data.
+     * Mutations in classes whose lines were not exercised by any test are
+     * dropped, since no test could possibly kill them.
+     */
+    private fun applyWeakMutation(
+        mutations: List<Pair<MutationInfo, ByteArray>>,
+        coverageData: CoverageAnalyzer.CoverageData.Valid,
+    ): List<Pair<MutationInfo, ByteArray>> {
+        val coveredLinesMap = getCoveredLines(coverageData)
+        val reachableMutations =
+            weakMutationAnalyzer.filterUnreachable(
+                mutations.map { it.first },
+                coveredLinesMap,
+            )
+        val reachableSet = reachableMutations.toSet()
+        val (reachable, unreachable) =
+            mutations.partition { (mutation, _) -> mutation in reachableSet }
+        if (unreachable.isNotEmpty()) {
+            logger.info("Weak mutation: skipped ${unreachable.size} unreachable mutations")
+        }
+        return reachable
+    }
+
+    /**
+     * Drop mutations that fall inside a Kotlin inlined `finally` block.
+     * These mutations don't represent distinct observable behavior (the
+     * same bytecode is reachable from the outer call site) and would
+     * inflate the mutation count without adding coverage signal.
+     */
+    private fun filterInlinedFinally(
+        mutations: List<Pair<MutationInfo, ByteArray>>,
+        classFiles: Map<String, ByteArray>,
+    ): List<Pair<MutationInfo, ByteArray>> {
+        val detector = InlinedFinallyDetector()
+        val blockCache = mutableMapOf<String, List<InlinedFinallyDetector.InlinedFinallyBlock>>()
+        val filtered =
+            mutations.filter { (mutation, _) ->
+                val classBytes = classFiles[mutation.className.replace('.', '/')]
+                if (classBytes != null) {
+                    val blocks = blockCache.getOrPut(mutation.className) { detector.detect(classBytes) }
+                    !detector.isInInlinedBlock(mutation.lineNumber, blocks)
+                } else {
+                    true
+                }
+            }
+        val skipped = mutations.size - filtered.size
+        if (skipped > 0) {
+            logger.info("Skipped $skipped mutations in inlined finally blocks")
+        }
+        return filtered
+    }
+
+    /**
+     * Keep only mutations whose class is in the changed-classes set
+     * (incremental analysis). Mutations in unchanged classes are skipped
+     * because their tests have already been exercised in a previous run.
+     */
+    private fun filterIncremental(mutations: List<Pair<MutationInfo, ByteArray>>): List<Pair<MutationInfo, ByteArray>> {
+        val filtered =
+            mutations.filter { (mutation, _) -> mutation.className in changedClasses }
+        val skipped = mutations.size - filtered.size
+        if (skipped > 0) {
+            logger.info(
+                "Incremental: skipped $skipped " +
+                    "mutations (only testing ${changedClasses.size} changed classes)",
+            )
+        }
+        return filtered
+    }
+
+    /**
+     * Phase 2: apply test-class include/exclude regex, then order the
+     * remaining test classes by historical strength (if enabled). The
+     * returned pair is `(unfilteredNames, orderedNames)` — callers need
+     * the unfiltered set to credit per-test strength scores correctly.
+     */
+    private fun prepareTestNames(testClassNames: List<String>): Pair<List<String>, List<String>> {
+        val filtered = filterTestClassNames(testClassNames)
+        val ordered =
             if (enableTestOrdering && testStrengthOrdering != null) {
-                testStrengthOrdering.orderTests(filteredTestNames)
+                testStrengthOrdering.orderTests(filtered)
             } else {
-                filteredTestNames
-            }
-
-        // Filter by changed classes for incremental analysis
-        val mutationsAfterIncremental =
-            if (changedClasses.isNotEmpty()) {
-                val filtered =
-                    mutationsAfterInlined.filter { (mutation, _) ->
-                        mutation.className in changedClasses
-                    }
-                val skippedIncremental = mutationsAfterInlined.size - filtered.size
-                if (skippedIncremental > 0) {
-                    logger.info(
-                        "Incremental: skipped $skippedIncremental " +
-                            "mutations (only testing ${changedClasses.size} changed classes)",
-                    )
-                }
                 filtered
-            } else {
-                mutationsAfterInlined
             }
+        return filtered to ordered
+    }
 
-        // Check cache for previously tested mutations
-        val (mutationsToTest, cachedResults) = filterByCache(mutationsAfterIncremental)
-        if (cachedResults.isNotEmpty()) {
-            logger.info("Cache: ${cachedResults.size} mutations already tested")
+    /**
+     * Phase 3: execute the per-mutant test runs. Wraps the parallel
+     * execution in a try/finally so the per-thread JUnit Launchers held
+     * by the shared runner are released even on cancellation.
+     */
+    private fun executeMutants(
+        mutations: List<Pair<MutationInfo, ByteArray>>,
+        allClassFiles: Map<String, ByteArray>,
+        orderedTestNames: List<String>,
+        testClassLoader: ClassLoader?,
+    ): Pair<List<MutationResult>, Map<String, Set<String>>> =
+        try {
+            runMutants(mutations, allClassFiles, orderedTestNames, testClassLoader)
+        } finally {
+            // Release the per-thread JUnit Launchers held by the shared
+            // runner. Without this, every worker thread keeps its
+            // launcher alive for the JVM lifetime — a leak that grows
+            // with parallelism and prevents engine instances from being
+            // garbage-collected.
+            sharedTestRunner.cleanup()
         }
 
-        // Run tests against each mutant
-        val testStart = System.currentTimeMillis()
-        val (results, killSets) = runMutants(mutationsToTest, allClassFiles, orderedTestNames, testClassLoader)
-        val testTime = System.currentTimeMillis() - testStart
-        logger.info(
-            "Tested ${results.size} mutations in ${testTime}ms (${results.size * 1000 / maxOf(testTime, 1)} mutations/sec)",
-        )
-
-        // Merge cached results into final results so cache hits are reported
-        val allResults = results + cachedResults
-
-        // Update cache with new results
+    /**
+     * Phase 4: post-test bookkeeping. Updates the on-disk cache, the
+     * test-strength history, and the kill-set storage. Split from
+     * [runMutationTesting] so the main flow stays at one-screen height.
+     */
+    private fun recordPostTestResults(
+        results: List<MutationResult>,
+        filteredTestNames: List<String>,
+        killSets: Map<String, Set<String>>,
+    ) {
         if (enableCache && cache != null) {
             updateCache(results)
         }
-
-        // Update test strength ordering
         if (enableTestOrdering && testStrengthOrdering != null) {
             updateTestStrength(results, filteredTestNames, killSets)
             testStrengthOrdering.flushHistory()
         }
-
-        // Save kill sets for future subsumption analysis (merge on incremental runs)
         if (enableSubsumption && killSetStorage != null) {
             if (changedClasses.isNotEmpty()) {
                 killSetStorage.saveMerged(killSets)
@@ -308,35 +409,44 @@ class MutationEngine(
                 killSetStorage.save(killSets)
             }
         }
+    }
 
-        // Post-hoc subsumption analysis (identify redundant mutations after testing)
-        val finalResults =
-            if (enableSubsumption && allResults.size > 10) {
-                val mutations = allResults.map { it.mutation }
-                val (essential, subsumed) = subsumptionAnalyzer.analyze(mutations, killSets)
-                if (subsumed.isNotEmpty()) {
-                    logger.info("Subsumption: ${subsumed.size} redundant mutations identified")
-                    allResults.map { result ->
-                        if (result.mutation.id in subsumed) {
-                            result.copy(status = MutationStatus.SUBSUMED)
-                        } else {
-                            result
-                        }
-                    }
-                } else {
-                    allResults
-                }
+    /**
+     * Phase 5: post-hoc subsumption. Any mutation whose kill set is a
+     * strict subset of another mutation's kill set within the same
+     * (class, method) is marked [MutationStatus.SUBSUMED] rather than
+     * killed or survived — it adds no information beyond its
+     * subsuming sibling.
+     */
+    private fun applySubsumption(
+        allResults: List<MutationResult>,
+        killSets: Map<String, Set<String>>,
+    ): List<MutationResult> {
+        if (!enableSubsumption || allResults.size <= MIN_SUBSUMPTION_MUTATIONS) {
+            return allResults
+        }
+        val mutations = allResults.map { it.mutation }
+        val (_, subsumed) = subsumptionAnalyzer.analyze(mutations, killSets)
+        if (subsumed.isEmpty()) return allResults
+        logger.info("Subsumption: ${subsumed.size} redundant mutations identified")
+        return allResults.map { result ->
+            if (result.mutation.id in subsumed) {
+                result.copy(status = MutationStatus.SUBSUMED)
             } else {
-                allResults
+                result
             }
+        }
+    }
 
-        // Save baseline for future comparison (merge on incremental runs to avoid data loss)
+    /**
+     * Phase 6: persist the current run as a baseline for the next run.
+     * Incremental runs merge with the existing baseline so unchanged
+     * classes keep their prior results.
+     */
+    private fun saveBaselineIfNeeded(finalResults: List<MutationResult>) {
         if (baselineStorage != null) {
             saveBaseline(finalResults, useMerge = changedClasses.isNotEmpty())
         }
-
-        val totalTime = System.currentTimeMillis() - startTime
-        return buildReport(finalResults, totalTime)
     }
 
     private fun generateAllMutations(classFiles: Map<String, ByteArray>): List<Pair<MutationInfo, ByteArray>> {
@@ -373,25 +483,15 @@ class MutationEngine(
     }
 
     /**
-     * Get covered lines from JaCoCo execution data.
-     *
-     * Parses .exec files using JaCoCo API to determine which lines
-     * were actually executed by tests.
+     * Get covered lines from an already-parsed [CoverageAnalyzer.CoverageData.Valid].
+     * Kept as a private helper so the engine has a single place that
+     * logs the "weak mutation" summary.
      */
-    private fun getCoveredLines(coverageExecFile: File): Map<String, Set<Int>> {
-        if (!coverageExecFile.exists() || coverageExecFile.length() == 0L) {
-            return emptyMap()
-        }
-
-        return try {
-            val coveredLinesMap = coverageAnalyzer.getCoveredLines(coverageExecFile, classFilesMap)
-            val totalLines = coveredLinesMap.values.flatten().size
-            logger.info("Weak mutation: $totalLines covered lines across ${coveredLinesMap.size} classes")
-            coveredLinesMap
-        } catch (e: Exception) {
-            logger.warn("Failed to parse coverage data: ${e.message}")
-            emptyMap()
-        }
+    private fun getCoveredLines(coverageData: CoverageAnalyzer.CoverageData.Valid): Map<String, Set<Int>> {
+        val coveredLinesMap = coverageAnalyzer.getCoveredLines(coverageData, classFilesMap)
+        val totalLines = coveredLinesMap.values.flatten().size
+        logger.info("Weak mutation: $totalLines covered lines across ${coveredLinesMap.size} classes")
+        return coveredLinesMap
     }
 
     /**
@@ -447,13 +547,12 @@ class MutationEngine(
             val classBytes = getOriginalClassBytes(result.mutation.className)
             if (classBytes != null) {
                 val classHash = cache.computeClassHash(classBytes)
-                val occurrenceIndex = result.mutation.id.substringAfterLast("::").toIntOrNull() ?: 0
                 cache.store(
                     classHash,
                     result.mutation.operator.operatorName,
                     result.mutation.methodName,
                     result.mutation.lineNumber,
-                    occurrenceIndex,
+                    result.mutation.getOccurrenceIndex(),
                     result.status,
                 )
             }
@@ -520,41 +619,32 @@ class MutationEngine(
     private fun filterByCoverage(
         allMutations: List<Pair<MutationInfo, ByteArray>>,
         classFiles: Map<String, ByteArray>,
-        coverageExecFile: File,
+        coverageData: CoverageAnalyzer.CoverageData.Valid,
     ): List<Pair<MutationInfo, ByteArray>> {
-        val coverageData = coverageAnalyzer.loadExecutionData(coverageExecFile)
-        return when (coverageData) {
-            is CoverageAnalyzer.CoverageData.Empty -> {
-                logger.warn("Empty coverage data, skipping coverage filtering")
-                allMutations
+        val filtered = mutableListOf<Pair<MutationInfo, ByteArray>>()
+        for ((mutation, mutatedBytes) in allMutations) {
+            val classBytes = classFiles[mutation.className.replace('.', '/')]
+            if (classBytes == null) {
+                // Class bytes missing from the classpath map. We can't
+                // run the JaCoCo analyzer for this class, so we err on
+                // the side of testing the mutation rather than
+                // silently dropping it — a key-mismatch here would
+                // otherwise shrink the test set for no good reason.
+                filtered.add(mutation to mutatedBytes)
+                continue
             }
-            is CoverageAnalyzer.CoverageData.Valid -> {
-                val filtered = mutableListOf<Pair<MutationInfo, ByteArray>>()
-                for ((mutation, mutatedBytes) in allMutations) {
-                    val classBytes = classFiles[mutation.className.replace('.', '/')]
-                    if (classBytes == null) {
-                        // Class bytes missing from the classpath map. We can't
-                        // run the JaCoCo analyzer for this class, so we err on
-                        // the side of testing the mutation rather than
-                        // silently dropping it — a key-mismatch here would
-                        // otherwise shrink the test set for no good reason.
-                        filtered.add(mutation to mutatedBytes)
-                        continue
-                    }
-                    val coverage =
-                        coverageAnalyzer.analyzeCoverage(
-                            classBytes,
-                            mutation.className,
-                            coverageData,
-                            listOf(mutation),
-                        )
-                    if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
-                        filtered.add(mutation to mutatedBytes)
-                    }
-                }
-                filtered
+            val coverage =
+                coverageAnalyzer.analyzeCoverage(
+                    classBytes,
+                    mutation.className,
+                    coverageData,
+                    listOf(mutation),
+                )
+            if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
+                filtered.add(mutation to mutatedBytes)
             }
         }
+        return filtered
     }
 
     private fun runMutants(
@@ -606,7 +696,10 @@ class MutationEngine(
         try {
             val futures =
                 mutations.mapIndexed { index, (mutation, mutatedBytes) ->
-                    val baseLoader = baseLoaders[mutation.className]!!
+                    val baseLoader =
+                        requireNotNull(baseLoaders[mutation.className]) {
+                            "No BaseProjectClassLoader for ${mutation.className}"
+                        }
                     index to
                         executor.submit(
                             Callable {
@@ -656,16 +749,27 @@ class MutationEngine(
                         ),
                     )
                 } catch (e: InterruptedException) {
+                    // Re-raise the interrupt flag so callers further up
+                    // (e.g. a Gradle cancellation) can observe it, then
+                    // exit the result-collection loop. The outer
+                    // `finally` (executor.shutdown, base-loader close,
+                    // sharedTestRunner.cleanup) still runs, so the run
+                    // is left in a clean state before the exception
+                    // propagates out of `runMutants`.
                     logger.warn("Mutation testing interrupted at mutant index $index")
                     Thread.currentThread().interrupt()
                     break
                 } catch (e: Exception) {
-                    logger.error("Unexpected error processing mutant: ${mutations[index].first}", e)
+                    // Catch-all for unexpected failures (OOM, reflection
+                    // errors, etc.). Without the explicit log, the
+                    // mutation is silently converted to ERROR and the
+                    // stack trace is lost. Log first, then convert.
+                    logger.error("Mutant execution failed: ${mutations[index].first}", e)
                     results.add(
                         MutationResult(
                             mutation = toMutation(mutations[index].first, mutatedBytes = mutations[index].second),
                             status = MutationStatus.ERROR,
-                            errorMessage = e.message,
+                            errorMessage = "${e.javaClass.simpleName}: ${e.message}",
                         ),
                     )
                 }
@@ -751,7 +855,7 @@ class MutationEngine(
         // Reuse the engine-level ReflectionTestRunner so the per-thread
         // JUnit Launcher is cached and reused across mutants. Each mutant
         // passes its own per-mutant classloader as a run-time argument.
-        val results = sharedTestRunner.runTests(testClassNames, classLoader)
+        val results = sharedTestRunner.runTests(testClassNames, classLoader, includeTags, excludeTags)
 
         if (!results.hasTests) {
             return if (results.failureMessages.isNotEmpty()) {
@@ -763,6 +867,9 @@ class MutationEngine(
 
         val status =
             when {
+                // Load failures (no real test assertion failures) are infrastructure
+                // errors, not mutant kills. Distinguish before falling through to KILLED.
+                results.hasOnlyLoadFailures -> MutationStatus.ERROR
                 results.hasFailures -> MutationStatus.KILLED
                 results.failureMessages.isNotEmpty() -> MutationStatus.ERROR
                 else -> MutationStatus.SURVIVED
@@ -810,7 +917,45 @@ class MutationEngine(
         if (lineNumber <= 0) return null to null
         val relativePath = className.replace('.', '/') + ".kt"
         val javaPath = className.replace('.', '/') + ".java"
-        val srcDirs = listOf("src/main/kotlin", "src/main/java", "src/commonMain/kotlin")
+        // Covers pure-JVM (main/test) plus all common KMP source set
+        // directories (commonMain, jvmMain, androidMain, iosMain,
+        // linuxMain, macosMain, mingwX*, jsMain, wasm*Main). Each
+        // platform is checked with both `kotlin` and `java` source
+        // roots; the list is short enough that the extra stat() per
+        // mutation is negligible compared to the regex and ASM work.
+        val srcDirs =
+            listOf(
+                "src/main/kotlin",
+                "src/main/java",
+                "src/commonMain/kotlin",
+                "src/commonMain/java",
+                "src/jvmMain/kotlin",
+                "src/jvmMain/java",
+                "src/androidMain/kotlin",
+                "src/androidMain/java",
+                "src/iosMain/kotlin",
+                "src/iosMain/java",
+                "src/iosArm64Main/kotlin",
+                "src/iosArm64Main/java",
+                "src/iosX64Main/kotlin",
+                "src/iosX64Main/java",
+                "src/iosSimulatorArm64Main/kotlin",
+                "src/iosSimulatorArm64Main/java",
+                "src/linuxMain/kotlin",
+                "src/linuxMain/java",
+                "src/macosMain/kotlin",
+                "src/macosMain/java",
+                "src/mingwX64Main/kotlin",
+                "src/mingwX64Main/java",
+                "src/mingwX86Main/kotlin",
+                "src/mingwX86Main/java",
+                "src/jsMain/kotlin",
+                "src/jsMain/java",
+                "src/wasmJsMain/kotlin",
+                "src/wasmJsMain/java",
+                "src/wasmWasiMain/kotlin",
+                "src/wasmWasiMain/java",
+            )
         for (srcDir in srcDirs) {
             for (path in listOf(relativePath, javaPath)) {
                 val sourceFile = File(projectDir, "$srcDir/$path")

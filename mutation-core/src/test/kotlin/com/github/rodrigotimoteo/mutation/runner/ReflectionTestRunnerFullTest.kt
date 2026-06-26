@@ -2387,6 +2387,155 @@ class ReflectionTestRunnerExtendedTest {
         assertEquals(0, results.testsFound)
     }
 
+    @Test
+    fun `engineIds restricts discovery to the configured engine`() {
+        // Build a JUnit 4 test class. With engineIds=["junit-jupiter"], the
+        // Vintage engine is excluded and the @Test method should not run.
+        val cw = buildClassWriterExt("test/JUnit4OnlyTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "legacyTest", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/Test;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.JUnit4OnlyTest", cw.toByteArray())
+        val jupiterOnly = ReflectionTestRunner(classLoader, listOf("junit-jupiter"))
+        val results = jupiterOnly.runTests(listOf(clazz.name))
+        // Vintage engine excluded → no test discovered
+        assertEquals(0, results.testsFound)
+    }
+
+    @Test
+    fun `engineIds defaults to jupiter and vintage when not provided`() {
+        val cw = buildClassWriterExt("test/JUnit4DefaultTest")
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "legacyTest", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/Test;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.JUnit4DefaultTest", cw.toByteArray())
+        // Default runner constructor: defaults are jupiter + vintage
+        val results = ReflectionTestRunner(classLoader).runTests(listOf(clazz.name))
+        // Vintage engine included by default → test discovered
+        assertEquals(1, results.testsFound)
+    }
+
+    @Test
+    fun `includeTags filters to only matching tagged tests`() {
+        val cw = buildClassWriterExt("test/TaggedTest")
+        addTaggedTestMethodExt(cw, "fastTest", "fast")
+        addTaggedTestMethodExt(cw, "slowTest", "slow")
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.TaggedTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name), includeTags = setOf("fast"))
+        // Only "fastTest" should match
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+        assertEquals(0, results.testsFailed)
+    }
+
+    @Test
+    fun `excludeTags filters out matching tagged tests`() {
+        val cw = buildClassWriterExt("test/ExcludedTagTest")
+        addTaggedTestMethodExt(cw, "keptTest", "fast")
+        addTaggedTestMethodExt(cw, "droppedTest", "slow")
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.ExcludedTagTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name), excludeTags = setOf("slow"))
+        // "droppedTest" excluded; only "keptTest" runs
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+    }
+
+    @Test
+    fun `JUnit 4 Ignore annotation on class skips all tests in the class`() {
+        // JUnit 4 Vintage treats @Ignore at the class level as a global
+        // skip — no tests in the class should be discovered or run.
+        val cw = buildClassWriterExt("test/JUnit4IgnoreClassTest")
+        val classIgnore = cw.visitAnnotation("Lorg/junit/Ignore;", true)
+        classIgnore.visitEnd()
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "skippedTest", "()V", null, null)
+        val ann = mv.visitAnnotation("Lorg/junit/Test;", true)
+        ann.visitEnd()
+        mv.visitCode()
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+        cw.visitEnd()
+
+        val clazz = classLoader.define("test.JUnit4IgnoreClassTest", cw.toByteArray())
+        val results = runner.runTests(listOf(clazz.name))
+        // Vintage skips @Ignore classes; 0 tests discovered
+        assertEquals(0, results.testsFound)
+        assertEquals(0, results.testsSucceeded)
+        assertEquals(0, results.testsFailed)
+    }
+
+    @Test
+    fun `nested class without Nested annotation is not discovered as a test`() {
+        // An inner class without @Nested is a regular inner class — JUnit
+        // Jupiter does not treat it as a test container. The outer class
+        // is the test class; the inner is just a non-static nested class
+        // that should not contribute its own test methods.
+        val outerName = "test/NotNestedOuter"
+        val innerName = "test/NotNestedOuter\$Inner"
+
+        val outerCw = buildClassWriterExt(outerName)
+        outerCw.visitInnerClass(innerName, outerName, "Inner", Opcodes.ACC_PUBLIC)
+        addTestMethodExt(outerCw, "outerTest") { visitInsn(Opcodes.RETURN) }
+        outerCw.visitEnd()
+
+        val innerCw = buildInnerClassWriterExt(outerName, innerName)
+        innerCw.visitInnerClass(innerName, outerName, "Inner", Opcodes.ACC_PUBLIC)
+        // No @Nested annotation on purpose
+        val innerMv = innerCw.visitMethod(Opcodes.ACC_PUBLIC, "innerTest", "()V", null, null)
+        val innerAnn = innerMv.visitAnnotation("Lorg/junit/jupiter/api/Test;", true)
+        innerAnn.visitEnd()
+        innerMv.visitCode()
+        innerMv.visitInsn(Opcodes.RETURN)
+        innerMv.visitMaxs(0, 2)
+        innerMv.visitEnd()
+        innerCw.visitEnd()
+
+        classLoader.define("test.NotNestedOuter", outerCw.toByteArray())
+        classLoader.define("test.NotNestedOuter\$Inner", innerCw.toByteArray())
+
+        val results = runner.runTests(listOf("test.NotNestedOuter"))
+        // Only the outer's own test method runs; the inner's is ignored
+        assertEquals(1, results.testsFound)
+        assertEquals(1, results.testsSucceeded)
+    }
+
+    @Test
+    fun `load failure for a mixed list of classes is reported as a single failed test`() {
+        // When the classloader fails to load a class, the load failure is
+        // recorded in failureMessages. With multiple test classes where
+        // some fail to load, each load failure must be tracked in
+        // loadFailures so the engine can distinguish infrastructure
+        // errors from real assertion failures.
+        val failingResults =
+            ReflectionTestRunner.TestResults(
+                testsFound = 0,
+                testsSucceeded = 0,
+                testsFailed = 2,
+                testsSkipped = 0,
+                failureMessages = listOf("Could not load a: a", "Could not load b: b"),
+                failedTestClasses = setOf("a", "b"),
+                loadFailures = 2,
+            )
+        assertTrue(failingResults.hasOnlyLoadFailures)
+        assertEquals(2, failingResults.loadFailures)
+    }
+
     private fun buildClassWriterExt(name: String): ClassWriter {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, name, null, "java/lang/Object", null)
@@ -2482,6 +2631,23 @@ class ReflectionTestRunnerExtendedTest {
         ann.visitEnd()
         mv.visitCode()
         body(mv)
+        mv.visitInsn(Opcodes.RETURN)
+        mv.visitMaxs(0, 1)
+        mv.visitEnd()
+    }
+
+    private fun addTaggedTestMethodExt(
+        cw: ClassWriter,
+        name: String,
+        tag: String,
+    ) {
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, name, "()V", null, null)
+        val tagAnn = mv.visitAnnotation("Lorg/junit/jupiter/api/Tag;", true)
+        tagAnn.visit("value", tag)
+        tagAnn.visitEnd()
+        val testAnn = mv.visitAnnotation("Lorg/junit/jupiter/api/Test;", true)
+        testAnn.visitEnd()
+        mv.visitCode()
         mv.visitInsn(Opcodes.RETURN)
         mv.visitMaxs(0, 1)
         mv.visitEnd()

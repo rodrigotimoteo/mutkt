@@ -81,7 +81,6 @@ Test:        assertEquals(4, add(2, 2))  → FAILS → Mutant KILLED ✓
 | `RETURN_VALS` | Return values | `true` → `false`, `1` → `0` |
 | `NULL_RETURNS` | Null returns | `return value` → `return null` |
 | `EMPTY_RETURNS` | Empty collections | `return list` → `return emptyList()` |
-| `INVERT_NEGS` | ⚠️ Deprecated no-op | Removed from defaults |
 
 ### Kotlin-Specific Operators
 
@@ -136,11 +135,17 @@ mutationTest {
 ```kotlin
 @MutKtTest(
     timeoutMs = 30_000,           // Per-mutant timeout
-    operators = ["ARITHMETIC"],   // Specific operators only
-    maxMutations = 100,           // Limit mutations per class
 )
 class MyTest { ... }
 ```
+
+> `operators` and `maxMutations` are configured via the Gradle DSL, not the annotation:
+> ```kotlin
+> mutationTest {
+>     enabledOperators.set(setOf("ARITHMETIC"))
+>     maxMutationsPerClass.set(100)
+> }
+> ```
 
 ### Suppression
 
@@ -225,7 +230,8 @@ class Service {
 1. **JUnit dependency missing** — JUnit Jupiter 5.x or JUnit 4 must be on the test runtime classpath
 2. **Non-public test classes** — Test classes must be public
 3. **Test patterns mismatch** — Test classes must match the naming convention `*Test`, `*Tests`, `Test*`, or `*Spec` (e.g. `MyServiceTest`, `TestRunner`, `UserSpec`). Check `targetTestPatterns` and `excludeTestPatterns`.
-4. **Meta-annotations** — Only `@Test`, `@ParameterizedTest`, and `@RepeatedTest` are discovered. Custom composed annotations are not supported.
+4. **Meta-annotations** — JUnit Jupiter's standard discovery applies. `@Test`, `@ParameterizedTest`, `@RepeatedTest`, and any custom annotation meta-annotated with one of them are discovered via the JUnit Platform Launcher.
+5. **Inline-mock / instrumentation agents missing** — When using MockK inline, Mockito inline, or ByteBuddy, the test runtime classpath passed to the mutation test task MUST contain the inline agent jars, and any required `-javaagent` JVM args (e.g. `-javaagent:path/to/mockk-inline.jar`) MUST be set on the JVM. The Gradle plugin inherits these from the regular `test` task; if you override `classpath` or `jvmArgs` on the `mutationTest` task, copy them through.
 
 ### Plugin not found
 
@@ -247,14 +253,13 @@ apply(plugin = "io.github.rodrigotimoteo.mutation-kotlin")
 3. **Enable caching** — `enableCache.set(true)` for re-runs
 4. **Enable incremental** — `enableIncrementalAnalysis.set(true)` for PR branches
 5. **Limit scope** — Use `targetPackages`, `targetClassPatterns`, or `maxMutationsPerClass`
-6. **Increase timeout** — `mutantTimeoutMs.set(60000)` for integration tests
+6. **Increase timeout** — `timeoutMs.set(60000)` for integration tests
 
 ### HTML Report
 Generated at `build/reports/mutation/mutation-report.html`. Includes:
 - Summary statistics with mutation score badge (shields.io)
 - Per-mutation details with source code snippets at mutation point
 - Operator, class, method, line number
-- Real-time progress bar with mutations/sec throughput
 - Color-coded status (KILLED/SURVIVED/ERROR/TIMEOUT/NO_COVERAGE)
 - Per-class breakdown with mini kill-rate bars
 
@@ -263,7 +268,7 @@ Always printed to stdout with mutation score and per-class breakdown. Includes:
 - ASCII kill-rate bar
 - Survived mutations list with location
 - Error mutation details
-- Mutation score badge URL for README integration
+- Real-time progress bar with mutations/sec throughput
 
 ### Graph Report
 Interactive D3.js visualization of test-mutant relationships (when enabled).
@@ -301,7 +306,7 @@ mutationTest {
 ```
 
 ### Custom Mutators
-MutKt ships 17 built-in mutation operators grouped into MVP, Kotlin-specific, and Quick Win categories. Custom operator support is not currently implemented — operators are defined by the `MutationOperator` enum in the core module.
+MutKt ships 16 built-in mutation operators grouped into MVP, Kotlin-specific, and Quick Win categories. Custom operator support is not currently implemented — operators are defined by the `MutationOperator` enum in the core module.
 
 ## Architecture
 
@@ -329,16 +334,15 @@ MutKt ships 17 built-in mutation operators grouped into MVP, Kotlin-specific, an
 
 Generate API docs:
 ```bash
-./gradlew dokkaGenerate  # single module
-./gradlew dokkaHtmlMultiModule  # all modules aggregated
+./gradlew dokkaGenerate  # all modules aggregated (Dokka 2.2.0 V2)
 ```
 
-Output: `build/dokka/htmlMultiModule/index.html`
+Output: `build/dokka/html/index.html`
 
 ## Requirements
 
 - JDK 17+
-- Kotlin 2.0+
+- Kotlin 2.1.0+
 - Gradle 8.0+
 
 ## License

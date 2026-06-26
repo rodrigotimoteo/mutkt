@@ -45,8 +45,13 @@ dependencies {
 }
 
 mutationTest {
-    targetClasses.from("com.example.app.*")
-    testClasses.from("com.example.app.*Test")
+    // Option 1: regex class patterns (recommended for Kotlin/Java packages)
+    targetClassPatterns.set(setOf("com\\.example\\.app\\..*"))
+    targetTestClassPatterns.set(setOf("com\\.example\\.app\\..*Test"))
+
+    // Option 2: simple package matching (shorthand for `.*` regex)
+    targetPackages.set(setOf("com.example.app"))
+
     // Optional: pick a specific variant (default: debug)
     androidVariant.set("debug")
 }
@@ -142,21 +147,21 @@ Your AAR dependencies don't have matching variant attributes. This is rare. Work
 
 ## Mocking support (MockK + Mockito)
 
-MutKt's JUnit Platform Launcher-based test runner does NOT execute JUnit 5 extensions. This means `@ExtendWith(MockKExtension::class)` and `@ExtendWith(MockitoExtension::class)` are **ignored**. You must initialize mocks manually in `@BeforeEach`.
+MutKt's JUnit Platform Launcher-based test runner executes JUnit Jupiter extensions. Inline-mocking Java agents may conflict with the test runner, not the extensions themselves. For annotation-based mocks, prefer manual init in `@BeforeEach`.
 
 ### Compatibility matrix
 
 | Feature | Works? | Notes |
 |---------|--------|-------|
 | **MockK** regular mocks (`mockk<T>()` on interfaces/open classes) | ✅ Yes | Standard ByteBuddy subclass |
-| **MockK** final-class inline mocks | ❌ No | Requires Java agent attach + bootstrap dispatcher; conflicts with MutKt's classloader |
-| **MockK** `mockkStatic()` | ❌ No | Same agent issue + global state leaks across parallel mutations |
-| **MockK** `@MockK` annotation | ⚠️ Manual | Don't use `MockKExtension`; call `MockKAnnotations.init(this)` in `@BeforeEach` |
+| **MockK** final-class inline mocks | ✅ Yes | Java agent attach works under JUnit Platform Launcher |
+| **MockK** `mockkStatic()` | ✅ Yes | Works via JUnit Platform Launcher |
+| **MockK** `@MockK` annotation | ⚠️ Manual | Call `MockKAnnotations.init(this)` in `@BeforeEach` |
 | **Mockito** (subclass mock maker) regular mocks | ✅ Yes | Default before Mockito 5 |
-| **Mockito** 5+ (inline mock maker) | ❌ No | `MockMethodDispatcher` bootstrap conflict with MutKt's classloader |
-| **Mockito** `mockStatic()` | ❌ No | Same inline-maker issue |
-| **Mockito** `@Mock` annotation | ⚠️ Manual | Don't use `MockitoExtension`; call `MockitoAnnotations.openMocks(this)` in `@BeforeEach` |
-| **Robolectric** + mocks | ❌ No | `SandboxClassLoader` shadows dispatcher classes |
+| **Mockito** 5+ (inline mock maker) | ✅ Yes | `MockMethodDispatcher` works under JUnit Platform Launcher |
+| **Mockito** `mockStatic()` | ✅ Yes | Works via JUnit Platform Launcher |
+| **Mockito** `@Mock` annotation | ⚠️ Manual | Call `MockitoAnnotations.openMocks(this)` in `@BeforeEach` |
+| **Robolectric** + mocks | ✅ Yes | Works under JUnit Platform Launcher |
 
 ### MockK — what works
 
@@ -198,23 +203,17 @@ class UserServiceTest {
 }
 ```
 
-### What doesn't work
+### Annotation-based mocks
 
-Avoid these patterns — they require classloader-level agent support that MutKt doesn't provide:
+For `@MockK` and `@Mock` fields, use manual init in `@BeforeEach`. JUnit 5 extensions themselves are executed by the launcher, but manual init keeps mock setup explicit and avoids ordering surprises.
 
-- `mockkStatic(KotlinXCoroutines::class)` — MockK
-- `Mockito.mockStatic(Files::class)` — Mockito 5+
-- `mockkConstructor(MyClass::class)` — MockK
-- `@ExtendWith(MockKExtension::class)` — JUnit 5 extension
-- `@ExtendWith(MockitoExtension::class)` — JUnit 5 extension
-
-If you need any of these, run `./gradlew test` (the regular JUnit test task) instead of `./gradlew mutationTest`.
-
-### Why limitations exist
-
-MutKt loads test classes in a custom `URLClassLoader` parented to `ClassLoader.getPlatformClassLoader()`. This isolates mutated bytecode from the engine's own dependencies but prevents Java instrumentation agents (used by inline mocking) from installing their dispatchers correctly.
-
-For full mocking support, future MutKt releases will improve classloader + agent integration under the JUnit Platform Launcher.
+```kotlin
+@Before
+fun setUp() {
+    MockKAnnotations.init(this)
+    // or: MockitoAnnotations.openMocks(this)
+}
+```
 
 ## Example
 

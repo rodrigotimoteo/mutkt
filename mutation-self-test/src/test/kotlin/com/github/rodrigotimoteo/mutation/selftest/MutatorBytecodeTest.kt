@@ -10,11 +10,12 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
- * Self-test: runs mutation testing against mutation-core.
- * This verifies that mutation-core's test suite is comprehensive enough
- * to kill mutations in its own code.
+ * Smoke test for the mutator/engine against synthetic ASM-built bytecode.
+ * This does NOT run mutation testing against mutation-core's own classes
+ * — for that, use `./gradlew mutationTest` with a proper wiring of
+ * mutation-core's compiled classes and test suite.
  */
-class MutationCoreSelfTest {
+class MutatorBytecodeTest {
     @BeforeEach
     fun setup() {
         MutationRegistry.reset()

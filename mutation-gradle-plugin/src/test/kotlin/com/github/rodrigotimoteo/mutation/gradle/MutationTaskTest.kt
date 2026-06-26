@@ -427,11 +427,12 @@ class MutationTaskInternalMethodsTest {
                 "resolveClassesDir",
                 File::class.java,
                 Set::class.java,
+                Set::class.java,
                 Boolean::class.java,
             )
         method.isAccessible = true
         @Suppress("UNCHECKED_CAST")
-        return method.invoke(task, androidDir, files, isTestClasses) as File
+        return method.invoke(task, androidDir, emptySet<File>(), files, isTestClasses) as File
     }
 
     private fun invokeExpandAars(
@@ -669,6 +670,74 @@ class MutationTaskActionTest {
                 totalExecutionTimeMs = 0,
             )
 
+        invokeCheckFailConditions(task, report)
+    }
+
+    @Test
+    fun `deprecated failOnScoreThreshold is honored as a score threshold`() {
+        // Backward-compat: `failOnScoreThreshold` is marked @Deprecated in
+        // favor of `failOnMutationScoreThreshold`, but setting it on a
+        // pre-0.3.0 user script must still fail the build when the score
+        // is below the threshold. Verify the deprecated property feeds
+        // checkFailConditions without a regression.
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.failOnScoreThreshold.set(80)
+        // failOnMutationScoreThreshold stays at default (0) — the
+        // deprecated property alone must be enough to enforce the threshold.
+
+        val report =
+            MutationReport(
+                results = emptyList(),
+                totalMutations = 10,
+                // 50% — below 80
+                killedMutations = 5,
+                survivedMutations = 5,
+                errorMutations = 0,
+                timeoutMutations = 0,
+                noCoverageMutations = 0,
+                totalExecutionTimeMs = 0,
+            )
+
+        try {
+            invokeCheckFailConditions(task, report)
+            error("Expected GradleException for score below deprecated threshold")
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            val cause = e.cause
+            assertNotNull(cause, "Expected wrapped cause")
+            assertTrue(
+                cause is org.gradle.api.GradleException,
+                "Expected GradleException, got ${cause::class.java.name}: ${cause.message}",
+            )
+            assertTrue(
+                cause.message?.contains("80") == true,
+                "Expected threshold 80 in message, got: ${cause.message}",
+            )
+        }
+    }
+
+    @Test
+    fun `deprecated failOnScoreThreshold does not fire when score meets threshold`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.failOnScoreThreshold.set(50)
+
+        val report =
+            MutationReport(
+                results = emptyList(),
+                totalMutations = 10,
+                // 80% — above 50
+                killedMutations = 8,
+                survivedMutations = 2,
+                errorMutations = 0,
+                timeoutMutations = 0,
+                noCoverageMutations = 0,
+                totalExecutionTimeMs = 0,
+            )
+
+        // 80% >= 50% — must not throw
         invokeCheckFailConditions(task, report)
     }
 

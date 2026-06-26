@@ -9,6 +9,8 @@ package com.github.rodrigotimoteo.mutation.model
  * - [ERROR] - Error during mutant execution
  * - [TIMEOUT] - Mutant execution timed out
  * - [NO_COVERAGE] - Mutant not covered by any test
+ * - [WEAK_KILLED] - Mutant killed but mutation was never reached (killed by test side effect)
+ * - [SUBSUMED] - Mutant killed by same tests as another mutant (subsumed)
  *
  * @see MutationResult
  * @see MutationReport

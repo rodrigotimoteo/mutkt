@@ -46,6 +46,20 @@ class MutationTestRunner(
         // inheriting conflicting library versions (e.g. coroutines, dagger) from the
         // engine's classloader, which would cause LinkageError when the user's
         // bytecode (compiled against a different version) is linked.
+        //
+        // **Classpath requirements** (enforced by the caller — see plugin README):
+        //   1. The `classpath` argument MUST include the full test runtime
+        //      classpath (production + test sources + all transitive
+        //      dependencies) so that inline-mock agents and instrumented
+        //      classes (MockK inline, Mockito inline, ByteBuddy) can be
+        //      resolved by the test classloader. A truncated classpath
+        //      causes `ClassNotFoundException` at first use of a mocked
+        //      class and reports the mutation as `NO_COVERAGE`.
+        //   2. Any `-javaagent` JVM args that the test JVM needs (MockK
+        //      inline, Mockito inline, Jacoco) MUST already be set on the
+        //      calling process; MutKt does not append agents itself.
+        //      The Gradle plugin preserves the existing test JVM args
+        //      when wiring the mutation test task.
         val urls = classpath.map { it.toURI().toURL() }.toTypedArray()
         val testClassLoader =
             java.net.URLClassLoader(
@@ -95,8 +109,14 @@ class MutationTestRunner(
                             .replace("/", ".")
                             .replace("\\", ".")
                     val simpleName = className.substringAfterLast('.')
-                    // Exclude inner/nested classes (contain $) — ReflectionTestRunner discovers them via @Nested
-                    if (className.contains("$")) return@forEach
+                    // Allow static nested test classes (contain $) — JUnit 4 and Kotlin
+                    // `companion object` tests are compiled as `Outer$Inner` and need
+                    // to be discoverable here. Only exclude anonymous classes, which
+                    // have a numeric suffix (e.g. `Foo$1`, `Foo$2`).
+                    if (className.contains("$")) {
+                        val innerSegment = className.substringAfterLast('$')
+                        if (innerSegment.toIntOrNull() != null) return@forEach
+                    }
                     // Match classes named *Test, *Tests, Test*, or *Spec
                     if (simpleName.endsWith("Test") ||
                         simpleName.endsWith("Tests") ||
@@ -132,6 +152,8 @@ object MutationTestRunnerFactory {
         maxMutationsPerClass: Int = 0,
         targetTestPatterns: List<String> = emptyList(),
         excludeTestPatterns: List<String> = emptyList(),
+        includeTags: Set<String> = emptySet(),
+        excludeTags: Set<String> = emptySet(),
     ): MutationTestRunner {
         val engine =
             MutationEngine(
@@ -151,6 +173,8 @@ object MutationTestRunnerFactory {
                 maxMutationsPerClass = maxMutationsPerClass,
                 targetTestPatterns = targetTestPatterns,
                 excludeTestPatterns = excludeTestPatterns,
+                includeTags = includeTags,
+                excludeTags = excludeTags,
             )
         return MutationTestRunner(engine)
     }

@@ -13,11 +13,10 @@ class WeakMutationAnalyzer {
     /**
      * Checks if a mutation is reachable based on covered lines.
      *
-     * @param mutation The mutation to check
-     * @param coveredLines Set of line numbers that were executed
-     * @return true if the mutation's line is in the covered set
+     * Not part of the production pipeline — kept internal for in-module
+     * tests. The engine uses [filterUnreachable] for the actual filtering.
      */
-    fun isReachable(
+    internal fun isReachable(
         mutation: MutationInfo,
         coveredLines: Set<Int>,
     ): Boolean {
@@ -27,11 +26,10 @@ class WeakMutationAnalyzer {
     /**
      * Checks if a class is reachable based on covered classes.
      *
-     * @param className The class name to check
-     * @param coveredClasses Set of class names that were executed
-     * @return true if the class is in the covered set
+     * Not part of the production pipeline — kept internal for in-module
+     * tests. The engine uses [filterUnreachable] for the actual filtering.
      */
-    fun isClassReachable(
+    internal fun isClassReachable(
         className: String,
         coveredClasses: Set<String>,
     ): Boolean {
@@ -43,9 +41,7 @@ class WeakMutationAnalyzer {
     /**
      * Filters out mutations that are not on covered lines.
      *
-     * @param mutations List of mutations to filter
-     * @param coveredLinesMap Map of class name to set of covered line numbers
-     * @return List of mutations that are on covered lines
+     * Production entry point invoked by [com.github.rodrigotimoteo.mutation.engine.MutationEngine].
      */
     fun filterUnreachable(
         mutations: List<MutationInfo>,
@@ -65,11 +61,10 @@ class WeakMutationAnalyzer {
     /**
      * Filters out mutations in classes that were not covered.
      *
-     * @param mutations List of mutations to filter
-     * @param coveredClasses Set of class names that were executed
-     * @return List of mutations in covered classes
+     * Not part of the production pipeline — kept internal for in-module
+     * tests. The engine uses [filterUnreachable] for the actual filtering.
      */
-    fun filterUnreachableClasses(
+    internal fun filterUnreachableClasses(
         mutations: List<MutationInfo>,
         coveredClasses: Set<String>,
     ): List<MutationInfo> {
@@ -84,12 +79,10 @@ class WeakMutationAnalyzer {
     /**
      * Filters mutations by both line-level and class-level coverage.
      *
-     * @param mutations List of mutations to filter
-     * @param coveredLinesMap Map of class name to set of covered line numbers
-     * @param coveredClasses Set of class names that were executed
-     * @return List of mutations that pass both filters
+     * Not part of the production pipeline — kept internal for in-module
+     * tests. The engine uses [filterUnreachable] for the actual filtering.
      */
-    fun filter(
+    internal fun filter(
         mutations: List<MutationInfo>,
         coveredLinesMap: Map<String, Set<Int>>,
         coveredClasses: Set<String>,

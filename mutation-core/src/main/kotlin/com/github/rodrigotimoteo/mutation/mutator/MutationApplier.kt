@@ -7,6 +7,36 @@ import org.objectweb.asm.Opcodes
 import org.objectweb.asm.Type
 
 /**
+ * Dotted class names recognized as collections/arrays by EMPTY_RETURNS.
+ * Java + Kotlin collection interfaces. Used to pick a replacement empty
+ * instance (e.g. [java.util.Collections.emptyList]) via [COLLECTION_EMPTY_METHOD].
+ */
+private val COLLECTION_TYPES: Set<String> =
+    setOf(
+        "java.util.List",
+        "kotlin.collections.List",
+        "kotlin.collections.MutableList",
+        "java.util.Set",
+        "kotlin.collections.Set",
+        "kotlin.collections.MutableSet",
+        "java.util.Map",
+        "kotlin.collections.Map",
+        "kotlin.collections.MutableMap",
+    )
+
+/**
+ * Maps a collection interface short name to its [java.util.Collections] factory.
+ * Used by [MutationApplierMethodVisitor.applyEmptyReturn] to emit the right
+ * INVOKESTATIC call when the return type is in [COLLECTION_TYPES].
+ */
+private val COLLECTION_EMPTY_METHOD: Map<String, String> =
+    mapOf(
+        "List" to "emptyList",
+        "Set" to "emptySet",
+        "Map" to "emptyMap",
+    )
+
+/**
  * ClassVisitor that applies a specific mutation.
  */
 internal class MutationApplierVisitor(
@@ -167,11 +197,21 @@ internal class MutationApplierMethodVisitor(
                 (opcode == Opcodes.INVOKESPECIAL || opcode == Opcodes.INVOKEVIRTUAL) && name == "copy" ||
                     (opcode == Opcodes.INVOKESTATIC && name == "copy\$default")
             MutationOperator.COROUTINE ->
-                opcode == Opcodes.INVOKESTATIC &&
+                (
+                    opcode == Opcodes.INVOKESTATIC &&
+                        (
+                            owner == "kotlinx/coroutines/BuildersKt" ||
+                                owner == "kotlinx/coroutines/JobKt" ||
+                                owner == "kotlinx/coroutines/GlobalScope"
+                        )
+                ) ||
+                    descriptor.endsWith("Lkotlin/coroutines/Continuation;") ||
                     (
-                        owner == "kotlinx/coroutines/BuildersKt" ||
-                            owner == "kotlinx/coroutines/JobKt" ||
-                            owner == "kotlinx/coroutines/GlobalScope"
+                        name == "getCOROUTINE_SUSPENDED" &&
+                            (
+                                owner == "kotlin/coroutines/intrinsics/IntrinsicsKt" ||
+                                    owner == "kotlin/jvm/internal/Intrinsics"
+                            )
                     )
             MutationOperator.NULL_SAFETY ->
                 opcode == Opcodes.INVOKESTATIC &&
@@ -230,11 +270,15 @@ internal class MutationApplierMethodVisitor(
             opcode == targetMutation.originalOpcode &&
             checkAndCountOccurrence(isJumpInsnCandidate(opcode))
         ) {
-            // NULL_SAFETY mutations use the general jump mutation path
-            // to flip IFNULL↔IFNONNULL (handled by getMutatedOpcode below).
+            // NULL_SAFETY mutations: getMutatedOpcode has no NULL_SAFETY case,
+            // so the scanner-emitted targetMutation.mutatedOpcode is the source
+            // of truth. Fall back to it whenever the helper returns the input
+            // unchanged (i.e. no rule for this opcode under the current operator).
             val mutatedOpcode = getMutatedOpcode(opcode)
-            if (mutatedOpcode != opcode) {
-                super.visitJumpInsn(mutatedOpcode, label)
+            val effectiveOpcode =
+                if (mutatedOpcode == opcode) targetMutation.mutatedOpcode else mutatedOpcode
+            if (effectiveOpcode != opcode) {
+                super.visitJumpInsn(effectiveOpcode, label)
                 applied = true
                 return
             }
@@ -473,8 +517,15 @@ internal class MutationApplierMethodVisitor(
         name: String,
         descriptor: String,
     ): Boolean {
-        // Remove coroutine builder call (static — no receiver on stack)
+        // Static calls (e.g. BuildersKt.runBlocking, getCOROUTINE_SUSPENDED) have
+        // no receiver on the stack. Virtual/interface suspend calls do, so pop it
+        // before clearing args.
         popArgs(Type.getArgumentTypes(descriptor))
+        if (opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE ||
+            opcode == Opcodes.INVOKESPECIAL
+        ) {
+            mv.visitInsn(Opcodes.POP)
+        }
         pushDefaultValue(Type.getReturnType(descriptor))
         return true
     }
@@ -612,19 +663,34 @@ internal class MutationApplierMethodVisitor(
                 }
                 mv.visitInsn(Opcodes.ARETURN)
             }
-            className == "java.util.List" || className == "kotlin.collections.List" ||
-                className == "kotlin.collections.MutableList" -> {
-                mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/Collections", "emptyList", "()Ljava/util/List;", false)
-                mv.visitInsn(Opcodes.ARETURN)
-            }
-            className == "java.util.Set" || className == "kotlin.collections.Set" ||
-                className == "kotlin.collections.MutableSet" -> {
-                mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/Collections", "emptySet", "()Ljava/util/Set;", false)
-                mv.visitInsn(Opcodes.ARETURN)
-            }
-            className == "java.util.Map" || className == "kotlin.collections.Map" ||
-                className == "kotlin.collections.MutableMap" -> {
-                mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/Collections", "emptyMap", "()Ljava/util/Map;", false)
+            className in COLLECTION_TYPES -> {
+                // Pick the empty factory method by matching the short
+                // interface name (List/Set/Map) to COLLECTION_EMPTY_METHOD.
+                // The match must also accept Kotlin's "Mutable*" prefix —
+                // `kotlin.collections.MutableList` doesn't end with `.List`
+                // so a naive `endsWith(".List")` lookup throws NoSuchElement.
+                // We resolve by stripping the `Mutable` prefix first, then
+                // falling back to the original last-segment match for the
+                // non-Mutable interfaces.
+                val lastSegment = className.substringAfterLast('.')
+                val normalized =
+                    if (lastSegment.startsWith("Mutable")) {
+                        lastSegment.removePrefix("Mutable")
+                    } else {
+                        lastSegment
+                    }
+                val shortName =
+                    COLLECTION_EMPTY_METHOD.keys.firstOrNull { it == normalized }
+                        ?: COLLECTION_EMPTY_METHOD.keys.first { className.endsWith(".$it") }
+                val emptyMethod = COLLECTION_EMPTY_METHOD.getValue(shortName)
+                val internalName = className.replace('.', '/')
+                mv.visitMethodInsn(
+                    Opcodes.INVOKESTATIC,
+                    "java/util/Collections",
+                    emptyMethod,
+                    "()L$internalName;",
+                    false,
+                )
                 mv.visitInsn(Opcodes.ARETURN)
             }
             else -> mv.visitInsn(Opcodes.ARETURN)

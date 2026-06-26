@@ -19,6 +19,7 @@ import org.objectweb.asm.Opcodes
  * ```
  *
  * @property enabledOperators Set of mutation operators to apply
+ * @property excludedMethods Set of method names (exact match) to skip during scanning
  * @see MutationOperator for available operators
  * @see MutationInfo for mutation point details
  */
@@ -95,7 +96,7 @@ class Mutator(
                 ClassReader.SKIP_CODE or ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES,
             )
             name
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             null
         }
     }

@@ -2,6 +2,20 @@
 
 This guide helps you migrate between versions of the Kotlin Mutation Testing library.
 
+## From 0.2.0 to 0.3.0
+
+### Breaking Changes
+
+- **`INVERT_NEGS` removed** — This operator was deprecated in 0.2.1 as a no-op. It is no longer present in `MutationOperator` and will fail to parse in `reportFormats`/`enabledOperators` DSL. Remove any references.
+- **`failOnScoreThreshold` deprecated** — Use `failOnMutationScoreThreshold` instead. The old name still works but logs a deprecation warning and will be removed in 0.4.0.
+- **Test runner switched to JUnit Platform Launcher** — `ReflectionTestRunner` was rewritten on top of `LauncherFactory.create()` + `LauncherDiscoveryRequestBuilder` (698 → 215 lines). JUnit Vintage engine is now included, so JUnit 4 tests keep working. Custom JUnit setup (engines, listeners) should now be configured through the standard `Launcher` API rather than reflection.
+- **`@SuppressMutations(operators = [...])`** — Operator-specific suppression now works as documented. Previously the presence of the annotation suppressed ALL operators regardless of the `operators` list. If you relied on the old (broken) behavior, replace the annotation with `@SuppressMutations` (no operators) to keep the same effect.
+
+### Removed
+
+- `INVERT_NEGS` from `MutationOperator` and the default operator set.
+- Dead standalone mutator files (`CoroutineMutator.kt`, `DataClassCopyMutator.kt`, `NullSafetyMutator.kt`, `SealedClassWhenMutator.kt`) — logic inlined into `Mutator.kt` private visitors.
+
 ## From 0.1.0 to 0.2.0
 
 ### Gradle Plugin Configuration
@@ -45,7 +59,7 @@ mutationTest {
 
 ### New Operators
 
-Five new mutation operators are available:
+Six new mutation operators are available:
 
 ```kotlin
 mutationTest {
@@ -163,7 +177,7 @@ mutationTest {
 ```kotlin
 // Ensure correct plugin ID
 plugins {
-    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.2.0"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.3.0"
 }
 ```
 

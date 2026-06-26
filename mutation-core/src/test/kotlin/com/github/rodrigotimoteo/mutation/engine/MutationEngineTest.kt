@@ -82,27 +82,20 @@ class MutationEngineTest {
     }
 
     @Test
-    fun `class that fails to load returns ERROR`() {
+    fun `class that fails to load surfaces error`() {
         val engine = MutationEngine(enabledOperators = setOf(MutationOperator.ARITHMETIC))
-        // Engine may throw on bad bytes, or it may produce a report with ERROR status.
-        // Either way is acceptable; we just verify it doesn't produce a misleading SUCCESS.
-        try {
-            val report =
+        // Bad bytecode is not parseable by ASM's ClassReader — the engine
+        // must fail fast on invalid input rather than silently producing a
+        // misleading SUCCESS/KILLED report.
+        val ex =
+            kotlin.runCatching {
                 engine.runMutationTesting(
                     classFiles = mapOf("com/example/Bad" to ByteArray(20)),
                     testClassNames = listOf("com.example.BadTest"),
                     testClassBytes = mapOf("com/example/BadTest" to ByteArray(20)),
                 )
-            // If we get a report, no result should claim to be a valid KILLED/SURVIVED
-            report.results.forEach { result ->
-                assertTrue(
-                    result.status.name in listOf("ERROR", "NO_COVERAGE"),
-                    "Bad bytes should not produce valid status, got ${result.status.name}",
-                )
-            }
-        } catch (e: Exception) {
-            // Engine threw on bad bytes — also acceptable
-        }
+            }.exceptionOrNull()
+        assertNotNull(ex, "Engine should fail on unparseable bytecode")
     }
 
     @Test

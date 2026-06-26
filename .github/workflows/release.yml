@@ -33,8 +33,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
+          retention-days: 7
           path: |
             **/build/libs/*.jar
+            **/build/libs/*.pom
+            **/build/libs/*.module
+            **/build/publications/maven/**/*
 
   publish:
     name: Publish
@@ -58,75 +62,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify Sonatype credentials
+      - name: Publish to Maven Central via Central Portal
         run: |
-          echo "Testing Sonatype auth..."
-          RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
-            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/profiles" 2>&1)
-          HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
-          BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
-          echo "HTTP code: $HTTP_CODE"
-          if [ "$HTTP_CODE" = "401" ]; then
-            echo ""
-            echo "❌ 401 Unauthorized - credentials are OLD OSSRH tokens"
-            echo "   Need Central Portal User Tokens instead."
-            echo "   Generate at: https://central.sonatype.com/account"
-            echo "   Update GitHub secrets: SONATYPE_USERNAME, SONATYPE_PASSWORD"
-          elif [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Auth works! Profiles found:"
-            echo "$BODY" | jq '.data[].profileName' 2>/dev/null || echo "$BODY"
-          else
-            echo "Response: $BODY"
-          fi
-
-      - name: Publish to Sonatype staging
-        run: |
-          ./gradlew :mutation-gradle-plugin:publishAllPublicationsToMavenCentralRepository --no-daemon
-          ./gradlew :mutation-core:publishMavenPublicationToMavenCentralRepository --no-daemon
-          ./gradlew :mutation-report:publishMavenPublicationToMavenCentralRepository --no-daemon
-          ./gradlew :mutation-test-runner:publishMavenPublicationToMavenCentralRepository --no-daemon
+          ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository --no-daemon
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
-
-      - name: Close and release to Maven Central
-        run: |
-          set -e
-
-          echo "=== Transferring deployment to Central Publisher Portal ==="
-
-          # Generate Bearer token from User Token credentials
-          TOKEN=$(echo -n "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" | base64)
-
-          echo "Uploading to Portal with publishing_type=automatic..."
-          RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
-            -H "Authorization: Bearer $TOKEN" \
-            -X POST \
-            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/io.github.rodrigotimoteo?publishing_type=automatic" 2>&1)
-
-          HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
-          BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
-
-          echo "Response code: $HTTP_CODE"
-          echo "Response body: $BODY"
-
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
-            echo ""
-            echo "✅ Deployment transferred to Portal with auto-publish."
-            echo "Artifacts will appear on Maven Central in ~10-30 minutes."
-            echo "Check: https://central.sonatype.com/publishing/deployments"
-          else
-            echo ""
-            echo "⚠️ Portal transfer returned $HTTP_CODE"
-            echo "You may need to publish manually at:"
-            echo "  https://central.sonatype.com/publishing/deployments"
-          fi
-        env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
 
   release:
     name: Create Release
@@ -145,61 +88,14 @@ jobs:
           path: dist
 
       - name: Create GitHub Release
-        uses: actions/github-script@v7
+        uses: softprops/action-gh-release@v2
         with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const tag = context.ref.replace('refs/tags/', '');
-            
-            // Read changelog for this version
-            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
-            const versionMatch = changelog.match(/## \[${tag.replace('v', '')}\] - [\s\S]*?(?=## \[|$)/);
-            const body = versionMatch ? versionMatch[0].trim() : `Release ${tag}`;
-            
-            // Find JAR files using fs
-            function findJars(dir) {
-              const results = [];
-              const items = fs.readdirSync(dir, { withFileTypes: true });
-              for (const item of items) {
-                const fullPath = path.join(dir, item.name);
-                if (item.isDirectory()) {
-                  results.push(...findJars(fullPath));
-                } else if (item.name.endsWith('.jar')) {
-                  results.push(fullPath);
-                }
-              }
-              return results;
-            }
-            
-            const files = fs.existsSync('dist') ? findJars('dist') : [];
-            console.log(`Found ${files.length} JAR files`);
-            
-            await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tag,
-              name: tag,
-              body: body,
-              draft: false,
-              prerelease: false
-            });
-            
-            // Upload assets
-            const release = await github.rest.repos.getReleaseByTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag: tag
-            });
-            
-            for (const file of files) {
-              const name = path.basename(file);
-              console.log(`Uploading ${name}...`);
-              await github.rest.repos.uploadReleaseAsset({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: release.data.id,
-                name: name,
-                data: fs.readFileSync(file)
-              });
-            }
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: false
+          body_path: CHANGELOG.md
+          fail_on_unmatched_files: false
+          files: |
+            dist/**/*.jar
+            dist/**/*.pom
+            dist/**/*.module

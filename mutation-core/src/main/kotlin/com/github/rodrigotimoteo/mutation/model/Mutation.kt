@@ -38,6 +38,15 @@ data class Mutation(
     val mutatedBytecode: ByteArray = ByteArray(0),
     val description: String,
 ) {
+    /**
+     * Recover the zero-based occurrence index for this mutation within
+     * its (class, method, line) tuple. The [id] format encodes it as the
+     * last `::` segment so the value can be recovered without storing an
+     * extra constructor field (which would break data-class
+     * `equals`/`hashCode` for older callers using positional construction).
+     */
+    fun getOccurrenceIndex(): Int = id.substringAfterLast("::").toIntOrNull() ?: 0
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is Mutation) return false

@@ -49,7 +49,9 @@ class GeneratedClassFilterTest {
     fun `dollar Lambda pattern matches Kotlin synthetic lambda classes`() {
         val patterns = setOf("\$\$Lambda\$*")
         assertThat(GeneratedClassFilter.shouldExclude("\$\$Lambda\$1234", patterns)).isTrue()
-        assertThat(GeneratedClassFilter.shouldExclude("Outer\$\$Lambda\$7", patterns)).isTrue()
+        // Nested synthetic (Outer$$Lambda$7) does not start with $$Lambda$;
+        // the prefix pattern rejects it. Use `*$$Lambda$*` to match nested forms.
+        assertThat(GeneratedClassFilter.shouldExclude("Outer\$\$Lambda\$7", patterns)).isFalse()
         assertThat(GeneratedClassFilter.shouldExclude("Lambda", patterns)).isFalse()
     }
 

@@ -38,6 +38,12 @@ class MutatorKotlinApplierTest {
     private fun buildClassWithCopyMethod(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/DataClass", null, "java/lang/Object", null)
+        // @kotlin.Metadata with d1 protobuf flags = 0x10 (isData)
+        val meta = cw.visitAnnotation("Lkotlin/Metadata;", true)
+        meta.visit("mv", intArrayOf(1, 9, 0))
+        meta.visit("k", 1)
+        meta.visit("d1", byteArrayOf(0x0A.toByte(), 0x01, 0x08, 0x10))
+        meta.visitEnd()
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor.visitCode()
         ctor.visitVarInsn(Opcodes.ALOAD, 0)
@@ -229,6 +235,9 @@ class MutatorKotlinApplierTest {
         val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "handle", "(I)Ljava/lang/String;", null, null)
         mv.visitCode()
         mv.visitLineNumber(1, org.objectweb.asm.Label())
+        // Preceded by instanceof on same line so SEALED_WHEN guard allows mutation
+        mv.visitVarInsn(Opcodes.ALOAD, 0)
+        mv.visitTypeInsn(Opcodes.INSTANCEOF, "com/example/WhenExpr")
         val dflt = org.objectweb.asm.Label()
         val case0 = org.objectweb.asm.Label()
         val case1 = org.objectweb.asm.Label()

@@ -20,12 +20,15 @@ mutationKotlin/
 ### Module Dependencies
 
 ```
-mutation-gradle-plugin
-    ↓
-mutation-test-runner
-    ↓
-mutation-core
+mutation-gradle-plugin ──► mutation-test-runner ──► mutation-core
+        │                                                  ▲
+        └──────────────────────────────────────────────────┘
+mutation-report ──► mutation-core
 ```
+
+- `mutation-gradle-plugin` depends on `mutation-core` directly (DSL → engine) and on `mutation-test-runner` for the JUnit launcher integration.
+- `mutation-report` depends on `mutation-core` only.
+- `mutation-test-runner` depends on `mutation-core` for the mutation engine.
 
 ## Core Components
 
@@ -40,7 +43,8 @@ The core module provides the fundamental mutation testing infrastructure.
 - **`IncrementalAnalyzer`**: Manages incremental analysis via git diff
 - **`BaselineStorage`**: Persists mutation results for baseline comparison
 - **`MutationScannerVisitor`**: ASM visitor for scanning mutation points
-- **`MutationApplierVisitor`**: ASM visitor for applying mutations
+- **`MutationApplier`**: ASM visitor for applying mutations
+- **`MutationApplierMethodVisitor`**: ASM method-level visitor used by `MutationApplier`
 
 #### Mutation Operators
 
@@ -112,7 +116,7 @@ Used for different mutation operators:
 
 - Each operator implements specific mutation logic
 - Operators can be enabled/disabled via configuration
-- New operators can be added without modifying core code
+- Operators are enumerated in `MutationOperator`; adding a new operator requires changes to the enum, the scanner (`MutationScannerMethodVisitor`), and the applier (`MutationApplierMethodVisitor`) — not plug-and-play.
 
 ### 3. Factory Pattern
 
@@ -140,7 +144,8 @@ Used for progress reporting:
 ### Configuration Models
 
 - **`MutationPluginExtension`**: Gradle DSL configuration
-- **`MutationHistory`**: Incremental analysis history
+- **`BaselineStorage`**: Persists baseline mutation results for incremental comparison
+- **`KillSetStorage`**: Persists per-mutation kill sets for subsumption analysis
 
 ## Performance Considerations
 
@@ -158,7 +163,8 @@ Used for progress reporting:
 
 ### Incremental Analysis
 
-- SHA-256 hashing for change detection
+- SHA-256 is used for cache keys in `MutKtCache` (per-class content fingerprint).
+- Incremental analysis uses `git diff` for change detection (`IncrementalAnalyzer`), not SHA-256.
 - Class-level caching of mutation results
 - Test-level caching of execution results
 
@@ -181,8 +187,8 @@ Used for progress reporting:
 ### Adding New Operators
 
 1. Add enum value to `MutationOperator`
-2. Implement scanner logic in `Mutator`
-3. Implement applier logic in `MutationApplierVisitor`
+2. Implement scanner logic in `MutationScannerMethodVisitor`
+3. Implement applier logic in `MutationApplierMethodVisitor`
 4. Add tests
 
 ### Adding New Reporters

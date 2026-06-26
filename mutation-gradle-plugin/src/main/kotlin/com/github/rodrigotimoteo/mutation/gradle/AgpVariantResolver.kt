@@ -63,18 +63,39 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
         project: Project,
         captures: MutableList<VariantCapture>,
     ) {
+        // Idempotency guard. AGP's `onVariants` is additive: each call
+        // appends a new callback. The plugin wires five Android plugin
+        // types (App, Library, DynamicFeature, Test, InstantApp) and a
+        // Gradle project can normally only have one of them applied,
+        // but a defensive guard keeps the resolver safe against future
+        // plugin combos or accidental re-application. The flag lives on
+        // the project's extension container so it survives across the
+        // multiple `withType` callbacks in MutationPlugin.
+        val registeredKey = "mutkt.androidVariantsRegistered"
+        val extras = project.extensions.extraProperties
+        if (extras.has(registeredKey)) return
+        extras.set(registeredKey, true)
         try {
             val androidComponents =
                 project.extensions.findByType(AndroidComponentsExtension::class.java)
                     ?: return
             androidComponents.onVariants { variant ->
                 val cap = variant.name.replaceFirstChar { it.uppercaseChar() }
+                // KMP Android targets publish Kotlin compile tasks with an
+                // `Android` suffix (e.g. `compileDebugKotlinAndroid` /
+                // `compileDebugUnitTestKotlinAndroid`). Standard AGP
+                // produces `compileDebugKotlin` / `compileDebugUnitTestKotlin`.
+                // Detect the suffix at capture time so later lookups in
+                // `findByName(...)` match the task that actually exists.
+                val isKmp = isKmpAndroidTarget(project)
+                val compileSuffix = if (isKmp) "KotlinAndroid" else "Kotlin"
+                val unitTestSuffix = if (isKmp) "UnitTestKotlinAndroid" else "UnitTestKotlin"
                 captures.add(
                     VariantCapture(
                         name = variant.name,
                         runtimeConfiguration = variant.runtimeConfiguration,
-                        compileTask = "compile${cap}Kotlin",
-                        testCompileTask = "compile${cap}UnitTestKotlin",
+                        compileTask = "compile${cap}$compileSuffix",
+                        testCompileTask = "compile${cap}$unitTestSuffix",
                     ),
                 )
             }
@@ -170,11 +191,17 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
         capture: VariantCapture,
     ): Pair<File?, File?> {
         val cap = capture.name.replaceFirstChar { it.uppercaseChar() }
+        // Prefer the task name we captured (handles the KMP Android
+        // `KotlinAndroid` suffix), then fall back to the standard
+        // `compile<Variant>Kotlin` and the Javac fallback for plain-Java
+        // Android variants.
         val mainDir =
-            findJavaCompileDestination(project, "compile${cap}Kotlin")
+            findJavaCompileDestination(project, capture.compileTask)
+                ?: findJavaCompileDestination(project, "compile${cap}Kotlin")
                 ?: findJavaCompileDestination(project, "compile${cap}JavaWithJavac")
         val testDir =
-            findJavaCompileDestination(project, "compile${cap}UnitTestKotlin")
+            findJavaCompileDestination(project, capture.testCompileTask)
+                ?: findJavaCompileDestination(project, "compile${cap}UnitTestKotlin")
                 ?: findJavaCompileDestination(project, "compile${cap}UnitTestJavaWithJavac")
         return mainDir to testDir
     }
@@ -221,20 +248,130 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
             } catch (_: NoClassDefFoundError) {
                 null
             }
-        val compileSdk: String? = android?.compileSdkVersion
-        val targetSdk: Int? = android?.defaultConfig?.targetSdkVersion?.apiLevel
-        val jar = AndroidJarLocator().find(project, compileSdk, targetSdk)
+        // AGP 8.x deprecates BaseExtension.compileSdkVersion and
+        // defaultConfig.targetSdkVersion.apiLevel. Prefer the modern
+        // CommonExtension.compileSdk (Int) and targetSdk (Int) accessors
+        // when the AGP version exposes them; fall back to the legacy
+        // BaseExtension path for AGP 7.x. Lookups go through reflection
+        // so the plugin stays compatible with AGP variants resolved via
+        // `compileOnly` dependency declarations (no compile-time link
+        // against CommonExtension).
+        val compileSdk: String? = resolveCompileSdk(android)
+        val targetSdk: Int? = resolveTargetSdk(android)
+        // Robolectric-targeted Android projects pin a specific SDK
+        // level in `robolectric.properties`. Probe that file before
+        // falling back to compileSdk / targetSdk so Robolectric tests
+        // run against the matching android.jar.
+        val robolectricSdk = AndroidJarLocator().findRobolectricSdk(project)
+        val effectiveSdk = robolectricSdk ?: compileSdk
+        val jar = AndroidJarLocator().find(project, effectiveSdk, targetSdk)
         if (jar == null) {
-            logger.warn(
-                "android.jar not found in SDK. " +
-                    "Set ANDROID_HOME or add android.jar manually via " +
-                    "mutationTest { classpath.setFrom(...) }. " +
-                    "Falling back to no android.jar — " +
-                    "Android framework classes will fail to load.",
+            // Hard error for Android tasks. A missing android.jar causes
+            // a `ClassNotFoundException` deep inside the mutant
+            // classloader (the test runtime resolves `android.app.Activity`
+            // and friends) which is much harder to diagnose than a clear
+            // upfront failure. Users who genuinely want to skip the
+            // android.jar can opt out with `mutationTest {
+            // androidJar.set(null) }` in their build script.
+            throw org.gradle.api.GradleException(
+                "android.jar not found in SDK (looked for SDK " +
+                    "${effectiveSdk ?: "default"}). " +
+                    "Set ANDROID_HOME / ANDROID_SDK_ROOT, configure " +
+                    "`local.properties`'s `sdk.dir`, or wire the jar " +
+                    "manually with `mutationTest { androidJar.set(file(...)) }`. " +
+                    "To explicitly skip android.jar resolution, use " +
+                    "`mutationTest { androidJar.set(null) }`.",
             )
-        } else {
-            logger.info("Auto-detected android.jar: $jar")
         }
+        logger.info("Auto-detected android.jar: $jar")
         return jar
     }
+
+    /**
+     * Resolve the compileSdk as a String, preferring the modern
+     * [com.android.build.api.dsl.CommonExtension.compileSdk] (Int) over
+     * the deprecated [com.android.build.gradle.BaseExtension.compileSdkVersion]
+     * (String). Returns `null` when neither accessor is reachable.
+     */
+    private fun resolveCompileSdk(android: Any?): String? {
+        if (android == null) return null
+        val modern: Int? = readIntProperty(android, "getCompileSdk")
+        if (modern != null) return modern.toString()
+        return try {
+            android.javaClass.getMethod("getCompileSdkVersion").invoke(android)?.toString()
+        } catch (_: NoSuchMethodException) {
+            null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Resolve the targetSdk as an Int, preferring the modern
+     * [com.android.build.api.dsl.CommonExtension.targetSdk] (Int) over the
+     * deprecated `defaultConfig.targetSdkVersion.apiLevel` path. Returns
+     * `null` when neither accessor is reachable.
+     */
+    private fun resolveTargetSdk(android: Any?): Int? {
+        if (android == null) return null
+        val modern: Int? = readIntProperty(android, "getTargetSdk")
+        if (modern != null) return modern
+        return try {
+            val defaultConfig =
+                android.javaClass.getMethod("getDefaultConfig").invoke(android)
+                    ?: return null
+            val targetSdkVersion =
+                defaultConfig.javaClass.getMethod("getTargetSdkVersion").invoke(defaultConfig)
+                    ?: return null
+            targetSdkVersion.javaClass.getMethod("getApiLevel").invoke(targetSdkVersion) as? Int
+        } catch (_: NoSuchMethodException) {
+            null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Read an `Int` (or `Provider<Int>`) property by getter name via
+     * reflection. Returns `null` when the getter is absent or the value
+     * is not a usable Int — used to probe for AGP version-specific
+     * accessors without a compile-time dependency on
+     * `CommonExtension`.
+     */
+    private fun readIntProperty(
+        target: Any,
+        getterName: String,
+    ): Int? {
+        val value =
+            try {
+                target.javaClass.getMethod(getterName).invoke(target)
+            } catch (_: NoSuchMethodException) {
+                return null
+            } catch (_: Exception) {
+                return null
+            }
+        return when (value) {
+            is Int -> value
+            is org.gradle.api.provider.Provider<*> -> value.orNull as? Int
+            else -> null
+        }
+    }
+
+    /**
+     * Detect whether [project] is a Kotlin Multiplatform Android target.
+     *
+     * KMP Android targets publish Kotlin compile tasks with an
+     * `Android` suffix (`compileDebugKotlinAndroid`) which the standard
+     * AGP Android plugin does not produce. Heuristic: a project applies
+     * the Kotlin Multiplatform plugin (`org.jetbrains.kotlin.multiplatform`)
+     * and the AGP plugin. Probed reflectively so this code links when
+     * KGP is absent (pure-JVM / pure-Android builds). The Kotlin Gradle
+     * plugin is a `compileOnly` dependency of the mutation plugin.
+     */
+    private fun isKmpAndroidTarget(project: Project): Boolean =
+        try {
+            project.plugins.hasPlugin("org.jetbrains.kotlin.multiplatform")
+        } catch (_: Exception) {
+            false
+        }
 }

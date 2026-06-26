@@ -2,22 +2,12 @@ package com.github.rodrigotimoteo.mutation.sample
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 class ComputationResultTest {
-
-    companion object {
-        @BeforeAll
-        @JvmStatic
-        fun setupSuite() {
-            // @BeforeAll — runs once before all tests
-        }
-    }
 
     @Nested
     inner class SuccessTests {

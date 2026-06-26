@@ -5,9 +5,29 @@ import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.file.Path
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class AndroidJarLocatorTest {
+    /**
+     * Write a minimal but valid ZIP that passes [AndroidJarLocator]'s
+     * `isValidAndroidJar` check (must contain an `android/Manifest.class`
+     * entry). Tests previously used a 2-byte "ZIP magic" stub that
+     * happened to bypass the original (pre-validation) `exists()` check;
+     * with the proper ZIP validation in place, the stub is rejected.
+     */
+    private fun writeStubAndroidJar(file: File) {
+        FileOutputStream(file).use { fos ->
+            ZipOutputStream(fos).use { zos ->
+                zos.putNextEntry(ZipEntry("android/Manifest.class"))
+                zos.write(byteArrayOf(0xCA.toByte(), 0xFE.toByte(), 0xBA.toByte(), 0xBE.toByte()))
+                zos.closeEntry()
+            }
+        }
+    }
+
     @Test
     fun `returns null when nothing is configured and no SDK is present`(
         @TempDir tempDir: Path,
@@ -31,7 +51,7 @@ class AndroidJarLocatorTest {
     ) {
         val sdkDir = tempDir.resolve("sdk").toFile().apply { mkdirs() }
         val platforms = File(sdkDir, "platforms/android-34").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val project =
             ProjectBuilder.builder()
                 .withProjectDir(tempDir.resolve("proj").toFile())
@@ -57,7 +77,7 @@ class AndroidJarLocatorTest {
     ) {
         val sdkDir = tempDir.resolve("sdk").toFile().apply { mkdirs() }
         val platforms = File(sdkDir, "platforms/android-34").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val project =
             ProjectBuilder.builder()
                 .withProjectDir(tempDir.resolve("proj").toFile())
@@ -82,7 +102,7 @@ class AndroidJarLocatorTest {
     ) {
         val sdkDir = tempDir.resolve("sdk").toFile().apply { mkdirs() }
         val platforms = File(sdkDir, "platforms/android-34").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
         File(projectDir, "local.properties")
             .writeText("sdk.dir=${sdkDir.absolutePath}\nother.key=value")
@@ -108,7 +128,7 @@ class AndroidJarLocatorTest {
         val fakeHome = tempDir.resolve("fake-home").toFile().apply { mkdirs() }
         val sdkDir = File(fakeHome, ".android-sdk").apply { mkdirs() }
         val platforms = File(sdkDir, "platforms/android-34").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val project =
             ProjectBuilder.builder()
                 .withProjectDir(tempDir.resolve("proj").toFile())
@@ -133,7 +153,7 @@ class AndroidJarLocatorTest {
     ) {
         val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
         val platforms = File(projectDir, "platforms/android-34").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
         val locator = AndroidJarLocator()
         val result =
@@ -155,7 +175,7 @@ class AndroidJarLocatorTest {
     ) {
         val sdkDir = tempDir.resolve("sdk").toFile().apply { mkdirs() }
         val platforms = File(sdkDir, "platforms/android-33").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val project =
             ProjectBuilder.builder()
                 .withProjectDir(tempDir.resolve("proj").toFile())
@@ -179,7 +199,7 @@ class AndroidJarLocatorTest {
     ) {
         val sdkDir = tempDir.resolve("sdk").toFile().apply { mkdirs() }
         val platforms = File(sdkDir, "platforms/android-34").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val project =
             ProjectBuilder.builder()
                 .withProjectDir(tempDir.resolve("proj").toFile())
@@ -203,7 +223,7 @@ class AndroidJarLocatorTest {
     ) {
         val sdkDir = tempDir.resolve("sdk").toFile().apply { mkdirs() }
         val platforms = File(sdkDir, "platforms/android-35").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val project =
             ProjectBuilder.builder()
                 .withProjectDir(tempDir.resolve("proj").toFile())
@@ -391,7 +411,7 @@ class AndroidJarLocatorTest {
     ) {
         val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
         val platforms = File(projectDir, "platforms/android-34").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
         val locator = AndroidJarLocator()
         val result =
@@ -414,7 +434,7 @@ class AndroidJarLocatorTest {
         val fakeHome = tempDir.resolve("fake-home").toFile().apply { mkdirs() }
         val sdkDir = File(fakeHome, ".android-sdk").apply { mkdirs() }
         val platforms = File(sdkDir, "platforms/android-34").apply { mkdirs() }
-        File(platforms, "android.jar").writeBytes(byteArrayOf(0x50, 0x4B))
+        writeStubAndroidJar(File(platforms, "android.jar"))
         val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
         File(projectDir, "local.properties")
             .writeText("sdk.dir=/does/not/exist/${System.nanoTime()}")

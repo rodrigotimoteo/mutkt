@@ -30,42 +30,12 @@ class SubsumptionAnalyzer {
      * @return Set of mutation IDs likely to be subsumed (should be skipped)
      */
     fun predictSubsumed(
-        mutations: List<com.github.rodrigotimoteo.mutation.model.Mutation>,
+        mutations: List<Mutation>,
         historicalKillSets: Map<String, Set<String>>,
     ): Set<String> {
         if (mutations.size < 2 || historicalKillSets.isEmpty()) return emptySet()
 
-        val subsumed = mutableSetOf<String>()
-
-        // Group mutations by class+method (subsumption only within same method)
-        val grouped = mutations.groupBy { "${it.className}::${it.methodName}" }
-
-        for ((_, methodMutations) in grouped) {
-            if (methodMutations.size < 2) continue
-
-            // Only consider mutations with historical kill data
-            val withHistory = methodMutations.filter { historicalKillSets.containsKey(it.id) }
-
-            for (i in withHistory.indices) {
-                if (withHistory[i].id in subsumed) continue
-
-                val killSetI = historicalKillSets[withHistory[i].id] ?: continue
-
-                for (j in withHistory.indices) {
-                    if (i == j) continue
-                    if (withHistory[j].id in subsumed) continue
-
-                    val killSetJ = historicalKillSets[withHistory[j].id] ?: continue
-
-                    // If killSetJ ⊆ killSetI and killSetJ is a strict subset, then i subsumes j
-                    if (killSetJ.isNotEmpty() && killSetI != killSetJ && killSetI.containsAll(killSetJ)) {
-                        subsumed.add(withHistory[j].id)
-                    }
-                }
-            }
-        }
-
-        return subsumed
+        return findSubsumed(mutations) { id -> historicalKillSets[id] }
     }
 
     /**
@@ -81,6 +51,27 @@ class SubsumptionAnalyzer {
     ): Pair<List<Mutation>, Set<String>> {
         if (mutations.size < 2) return mutations to emptySet()
 
+        val subsumed = findSubsumed(mutations) { id -> killSets[id]?.takeIf { it.isNotEmpty() } }
+
+        val essential = mutations.filter { it.id !in subsumed }
+        return essential to subsumed
+    }
+
+    /**
+     * Compare kill sets for mutations within the same class+method group.
+     *
+     * For every pair (i, j) where i != j, mutation i "subsumes" j when
+     * `killSet(j) ⊂ killSet(i)` (strict subset, non-empty). The returned
+     * set contains the IDs of the subsumed side (j) of each pair.
+     *
+     * The [killSetProvider] abstracts over the source of kill sets
+     * (historical vs. actual), so both [predictSubsumed] and [analyze]
+     * share the comparison loop.
+     */
+    private fun findSubsumed(
+        mutations: List<Mutation>,
+        killSetProvider: (String) -> Set<String>?,
+    ): Set<String> {
         val subsumed = mutableSetOf<String>()
 
         // Group mutations by class+method (subsumption only within same method)
@@ -89,29 +80,29 @@ class SubsumptionAnalyzer {
         for ((_, methodMutations) in grouped) {
             if (methodMutations.size < 2) continue
 
-            // Only consider KILLED mutations for subsumption
-            val killedMutations = methodMutations.filter { killSets[it.id]?.isNotEmpty() == true }
+            // Only consider mutations with kill data available; the provider
+            // returns null for "no kill data" so the loop skips them.
+            val withKillData = methodMutations.filter { killSetProvider(it.id) != null }
 
-            for (i in killedMutations.indices) {
-                if (killedMutations[i].id in subsumed) continue
+            for (i in withKillData.indices) {
+                if (withKillData[i].id in subsumed) continue
 
-                val killSetI = killSets[killedMutations[i].id] ?: continue
+                val killSetI = killSetProvider(withKillData[i].id) ?: continue
 
-                for (j in killedMutations.indices) {
+                for (j in withKillData.indices) {
                     if (i == j) continue
-                    if (killedMutations[j].id in subsumed) continue
+                    if (withKillData[j].id in subsumed) continue
 
-                    val killSetJ = killSets[killedMutations[j].id] ?: continue
+                    val killSetJ = killSetProvider(withKillData[j].id) ?: continue
 
                     // If killSetJ ⊆ killSetI and killSetJ is a strict subset, then i subsumes j
                     if (killSetJ.isNotEmpty() && killSetI != killSetJ && killSetI.containsAll(killSetJ)) {
-                        subsumed.add(killedMutations[j].id)
+                        subsumed.add(withKillData[j].id)
                     }
                 }
             }
         }
 
-        val essential = mutations.filter { it.id !in subsumed }
-        return essential to subsumed
+        return subsumed
     }
 }

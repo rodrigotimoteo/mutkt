@@ -6,6 +6,7 @@ import org.junit.platform.engine.support.descriptor.ClassSource
 import org.junit.platform.engine.support.descriptor.MethodSource
 import org.junit.platform.launcher.EngineFilter
 import org.junit.platform.launcher.LauncherDiscoveryRequest
+import org.junit.platform.launcher.TagFilter
 import org.junit.platform.launcher.TestExecutionListener
 import org.junit.platform.launcher.TestIdentifier
 import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder
@@ -33,6 +34,14 @@ import org.slf4j.LoggerFactory
  */
 class ReflectionTestRunner(
     private val classLoader: ClassLoader? = null,
+    /**
+     * JUnit Platform engine IDs to include when discovering tests. Default
+     * covers both Jupiter (JUnit 5) and Vintage (JUnit 4) so a project
+     * mixing the two works out of the box. Pass a custom list to restrict
+     * discovery to a specific engine, e.g. `listOf("junit-jupiter")` to
+     * skip Vintage on a pure-Jupiter project.
+     */
+    private val engineIds: List<String> = listOf("junit-jupiter", "junit-vintage"),
 ) {
     private val logger = LoggerFactory.getLogger(ReflectionTestRunner::class.java)
 
@@ -48,6 +57,17 @@ class ReflectionTestRunner(
      */
     private val launcherCache = ThreadLocal.withInitial { LauncherFactory.create() }
 
+    /**
+     * Release the per-thread JUnit Launcher for the calling thread. The
+     * launcher holds engine-level resources that are otherwise retained
+     * for the lifetime of the worker thread, so callers that finish a
+     * mutation run must invoke this to avoid leaks. The launcher is
+     * recreated lazily on the next [runTests] call from the same thread.
+     */
+    fun cleanup() {
+        launcherCache.remove()
+    }
+
     data class TestResults(
         val testsFound: Int,
         val testsSucceeded: Int,
@@ -56,14 +76,21 @@ class ReflectionTestRunner(
         val failureMessages: List<String>,
         /** Which test classes failed (for per-test kill tracking). */
         val failedTestClasses: Set<String> = emptySet(),
+        /** Number of test classes that failed to LOAD (infrastructure errors, not test failures). */
+        val loadFailures: Int = 0,
     ) {
         val hasTests: Boolean get() = testsFound > 0
         val hasFailures: Boolean get() = testsFailed > 0
+
+        /** True when failures are all from class load errors (no real test assertion failures). */
+        val hasOnlyLoadFailures: Boolean get() = loadFailures > 0 && testsFailed == loadFailures
     }
 
     fun runTests(
         testClassNames: List<String>,
         classLoader: ClassLoader? = null,
+        includeTags: Set<String> = emptySet(),
+        excludeTags: Set<String> = emptySet(),
     ): TestResults {
         val effectiveLoader = classLoader ?: this.classLoader
         if (effectiveLoader == null) {
@@ -104,7 +131,24 @@ class ReflectionTestRunner(
                 val request: LauncherDiscoveryRequest =
                     LauncherDiscoveryRequestBuilder.request()
                         .selectors(DiscoverySelectors.selectClass(testClass))
-                        .filters(EngineFilter.includeEngines("junit-jupiter", "junit-vintage"))
+                        .filters(EngineFilter.includeEngines(*engineIds.toTypedArray()))
+                        .apply {
+                            // Honor @Tag / @Tags / @EnabledIf / @EnabledOnOs style
+                            // filtering that the user expresses through
+                            // `MutationEngineConfig.includeTags` /
+                            // `excludeTags`. JUnit Platform applies
+                            // includeTags as a positive match and excludeTags
+                            // as a negative match; both compose with the
+                            // engine filter above. TagFilter on its own
+                            // filters by JUnit 5 @Tag; @EnabledIf / @EnabledOnOs
+                            // resolve at execution time and remain honored.
+                            if (includeTags.isNotEmpty()) {
+                                filters(TagFilter.includeTags(*includeTags.toTypedArray()))
+                            }
+                            if (excludeTags.isNotEmpty()) {
+                                filters(TagFilter.excludeTags(*excludeTags.toTypedArray()))
+                            }
+                        }
                         .build()
                 val testPlan = launcher.discover(request)
                 launcher.execute(testPlan, listener)
@@ -127,6 +171,7 @@ class ReflectionTestRunner(
         var succeeded = 0
         var failed = 0
         var skipped = 0
+        var loadFailures = 0
         val failureMessages = mutableListOf<String>()
         val failedTestClasses = mutableSetOf<String>()
         val loadedTestClasses = mutableSetOf<String>()
@@ -135,7 +180,12 @@ class ReflectionTestRunner(
             className: String,
             message: String,
         ) {
+            // Load failures are tracked separately so the engine can distinguish
+            // infrastructure errors (load failures) from real test assertion
+            // failures. Keep `failed` incremented for backward compatibility with
+            // callers that only inspect `testsFailed` / `hasFailures`.
             failed++
+            loadFailures++
             failureMessages.add(message)
             failedTestClasses.add(className)
         }
@@ -209,7 +259,12 @@ class ReflectionTestRunner(
             // Jupiter formats disabled reasons as
             // "public void com.example.Foo.disabledTest() is @Disabled"
             // or with the @Disabled message suffix.
-            return reason.contains("@Disabled") || reason.endsWith(" is @Disabled")
+            // JUnit 4 (@Ignore) and JUnit 5 (@Disabled, @Ignored) all surface
+            // as SKIPPED with a reason string containing the annotation name.
+            if (reason.contains("@Disabled") || reason.endsWith(" is @Disabled")) return true
+            if (reason.contains("@Ignored") || reason.endsWith(" is @Ignored")) return true
+            if (reason.contains("@Ignore") || reason.endsWith(" is @Ignore")) return true
+            return false
         }
 
         private fun describe(throwable: Throwable?): String {
@@ -225,17 +280,14 @@ class ReflectionTestRunner(
                 testsSkipped = skipped,
                 failureMessages = failureMessages.toList(),
                 failedTestClasses = failedTestClasses.toSet(),
+                loadFailures = loadFailures,
             )
 
         private fun TestIdentifier.className(): String? {
-            if (!isTest) {
-                val source = source.orElse(null) ?: return null
-                return when (source) {
-                    is ClassSource -> source.className
-                    is MethodSource -> source.className
-                    else -> null
-                }
-            }
+            // `source` is an Optional; `isTest` only affects whether the
+            // identifier is a test method or a container. The mapping to a
+            // class name is the same in both cases, so we collapse the
+            // previously-duplicated `when` branches.
             val source = source.orElse(null) ?: return null
             return when (source) {
                 is ClassSource -> source.className

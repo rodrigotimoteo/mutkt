@@ -132,6 +132,58 @@ class MutatorKotlinOperatorTest {
         }
     }
 
+    /**
+     * Build class WITH @kotlin.Metadata whose d1 protobuf flags bit 4 is set,
+     * marking it as a data class. Use this for DATA_CLASS_COPY tests.
+     *
+     * Protobuf structure: outer field 1 (Class, LEN) -> 0x0A, then length, then
+     * inner field 1 (flags, VARINT) -> 0x08, then flag value.
+     * For isData: flag = 0x10.
+     */
+    private fun buildKotlinDataClass(
+        className: String = "com/example/DataClass",
+        methodName: String = "test",
+        descriptor: String = "()V",
+        lineNumber: Int = 1,
+        body: (MethodVisitor) -> Unit,
+    ): ByteArray {
+        val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, className, null, "java/lang/Object", null)
+        val meta = cw.visitAnnotation("Lkotlin/Metadata;", true)
+        meta.visit("mv", intArrayOf(1, 9, 0))
+        meta.visit("k", 1)
+        // d1 = [0x0A, length=1, 0x08, flag=0x10] -> KotlinClassMetadata.Class with isData flag
+        meta.visit("d1", byteArrayOf(0x0A.toByte(), 0x01, 0x08, 0x10))
+        meta.visitEnd()
+        val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        ctor.visitCode()
+        ctor.visitVarInsn(Opcodes.ALOAD, 0)
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        ctor.visitInsn(Opcodes.RETURN)
+        ctor.visitMaxs(1, 1)
+        ctor.visitEnd()
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, methodName, descriptor, null, null)
+        mv.visitCode()
+        mv.visitLineNumber(lineNumber, Label())
+        body(mv)
+        val returnType = descriptor.substringAfterLast(")")
+        when (returnType) {
+            "V" -> mv.visitInsn(Opcodes.RETURN)
+            "I", "Z", "B", "S", "C" -> {
+                mv.visitInsn(Opcodes.ICONST_0)
+                mv.visitInsn(Opcodes.IRETURN)
+            }
+            else -> {
+                mv.visitInsn(Opcodes.ACONST_NULL)
+                mv.visitInsn(Opcodes.ARETURN)
+            }
+        }
+        mv.visitMaxs(10, 10)
+        mv.visitEnd()
+        cw.visitEnd()
+        return cw.toByteArray()
+    }
+
     // ===========================================================================
     // SEALED_WHEN — instanceof chain tests
     // ===========================================================================
@@ -257,7 +309,7 @@ class MutatorKotlinOperatorTest {
     @Test
     fun `DATA_CLASS_COPY scans INVOKESTATIC copy$default`() {
         val bytes =
-            buildJavaClass { mv ->
+            buildKotlinDataClass { mv ->
                 mv.visitVarInsn(Opcodes.ALOAD, 0)
                 mv.visitInsn(Opcodes.ICONST_1)
                 mv.visitMethodInsn(
@@ -281,7 +333,7 @@ class MutatorKotlinOperatorTest {
     @Test
     fun `DATA_CLASS_COPY still scans INVOKEVIRTUAL copy`() {
         val bytes =
-            buildJavaClass { mv ->
+            buildKotlinDataClass { mv ->
                 mv.visitVarInsn(Opcodes.ALOAD, 0)
                 mv.visitMethodInsn(
                     Opcodes.INVOKEVIRTUAL,
@@ -304,7 +356,7 @@ class MutatorKotlinOperatorTest {
     @Test
     fun `DATA_CLASS_COPY ignores non-copy INVOKESTATIC`() {
         val bytes =
-            buildJavaClass { mv ->
+            buildKotlinDataClass { mv ->
                 mv.visitMethodInsn(
                     Opcodes.INVOKESTATIC,
                     "com/example/Utils",
@@ -320,7 +372,7 @@ class MutatorKotlinOperatorTest {
     @Test
     fun `DATA_CLASS_COPY copy$default applier produces valid bytecode`() {
         val bytes =
-            buildJavaClass { mv ->
+            buildKotlinDataClass { mv ->
                 mv.visitVarInsn(Opcodes.ALOAD, 0)
                 mv.visitInsn(Opcodes.ICONST_0)
                 mv.visitMethodInsn(
@@ -337,7 +389,7 @@ class MutatorKotlinOperatorTest {
     @Test
     fun `DATA_CLASS_COPY copy$default mutation metadata is correct`() {
         val bytes =
-            buildJavaClass { mv ->
+            buildKotlinDataClass { mv ->
                 mv.visitVarInsn(Opcodes.ALOAD, 0)
                 mv.visitInsn(Opcodes.ICONST_0)
                 mv.visitMethodInsn(
@@ -352,6 +404,49 @@ class MutatorKotlinOperatorTest {
         val copyDefault = mutations.find { it.description.contains("copy\$default") }
         assertNotNull(copyDefault)
         assertEquals(Opcodes.NOP, copyDefault.mutatedOpcode)
+    }
+
+    @Test
+    fun `DATA_CLASS_COPY ignores copy on non-data Kotlin class`() {
+        // Kotlin class (has @Metadata) but d1 does not set the isData flag.
+        val bytes =
+            buildKotlinClass { mv ->
+                mv.visitVarInsn(Opcodes.ALOAD, 0)
+                mv.visitMethodInsn(
+                    Opcodes.INVOKEVIRTUAL,
+                    "com/example/User",
+                    "copy",
+                    "()Lcom/example/User;",
+                    false,
+                )
+            }
+        val mutations = Mutator(setOf(MutationOperator.DATA_CLASS_COPY)).scanMutations(bytes)
+        assertEquals(
+            0,
+            mutations.size,
+            "copy() in non-data Kotlin class must not trigger DATA_CLASS_COPY",
+        )
+    }
+
+    @Test
+    fun `DATA_CLASS_COPY ignores copy on non-Kotlin class`() {
+        val bytes =
+            buildJavaClass { mv ->
+                mv.visitVarInsn(Opcodes.ALOAD, 0)
+                mv.visitMethodInsn(
+                    Opcodes.INVOKEVIRTUAL,
+                    "com/example/User",
+                    "copy",
+                    "()Lcom/example/User;",
+                    false,
+                )
+            }
+        val mutations = Mutator(setOf(MutationOperator.DATA_CLASS_COPY)).scanMutations(bytes)
+        assertEquals(
+            0,
+            mutations.size,
+            "copy() in non-Kotlin class must not trigger DATA_CLASS_COPY",
+        )
     }
 
     // ===========================================================================

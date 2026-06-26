@@ -15,6 +15,7 @@ internal class MutationScannerVisitor(
 ) : ClassVisitor(Opcodes.ASM9) {
     private var currentClassName = ""
     private var isKotlinClass = false
+    private var isKotlinDataClass = false
     private var classSuppressed = false
     private var suppressedOperators = emptySet<String>()
     private var currentMethodName = ""
@@ -39,6 +40,17 @@ internal class MutationScannerVisitor(
     ): org.objectweb.asm.AnnotationVisitor? {
         if (desc == "Lkotlin/Metadata;") {
             isKotlinClass = true
+            // Capture d1 byte array to detect data class via protobuf `flags` field.
+            return object : org.objectweb.asm.AnnotationVisitor(Opcodes.ASM9) {
+                override fun visit(
+                    name: String?,
+                    value: Any?,
+                ) {
+                    if (name == "d1" && value is ByteArray) {
+                        isKotlinDataClass = KotlinMetadataUtils.isKotlinDataClass(value)
+                    }
+                }
+            }
         }
         // Check for @SuppressMutations annotation
         if (desc == "Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;") {
@@ -108,6 +120,7 @@ internal class MutationScannerVisitor(
             classSuppressed = classSuppressed,
             suppressedOperators = suppressedOperators,
             isKotlinClass = isKotlinClass,
+            isKotlinDataClass = isKotlinDataClass,
         )
     }
 }
@@ -124,6 +137,7 @@ internal class MutationScannerMethodVisitor(
     private val classSuppressed: Boolean = false,
     private val suppressedOperators: Set<String> = emptySet(),
     private val isKotlinClass: Boolean = false,
+    private val isKotlinDataClass: Boolean = false,
 ) : MethodVisitor(Opcodes.ASM9) {
     private var currentLineNumber = -1
     private var instanceofCount = 0
@@ -314,6 +328,7 @@ internal class MutationScannerMethodVisitor(
     /**
      * DATA_CLASS_COPY: call to copy() or copy$default() method (data class generated).
      * Kotlin data classes use INVOKEVIRTUAL for copy() and INVOKESTATIC for copy$default().
+     * Only fires on actual data classes — detected via @kotlin.Metadata d1 flags bit.
      */
     private fun checkDataClassCopy(
         opcode: Int,
@@ -322,6 +337,7 @@ internal class MutationScannerMethodVisitor(
         descriptor: String,
     ) {
         if (MutationOperator.DATA_CLASS_COPY !in enabledOperators) return
+        if (!isKotlinClass || !isKotlinDataClass) return
         if ((opcode == Opcodes.INVOKESPECIAL || opcode == Opcodes.INVOKEVIRTUAL) && name == "copy") {
             tryAddMutation(
                 MutationInfo(
@@ -364,13 +380,24 @@ internal class MutationScannerMethodVisitor(
     ) {
         if (MutationOperator.COROUTINE !in enabledOperators) return
         // Coroutine builder calls: kotlinx coroutines builders
-        if (opcode == Opcodes.INVOKESTATIC &&
-            (
-                owner == "kotlinx/coroutines/BuildersKt" ||
-                    owner == "kotlinx/coroutines/JobKt" ||
-                    owner == "kotlinx/coroutines/GlobalScope"
+        val isBuilderCall =
+            opcode == Opcodes.INVOKESTATIC &&
+                (
+                    owner == "kotlinx/coroutines/BuildersKt" ||
+                        owner == "kotlinx/coroutines/JobKt" ||
+                        owner == "kotlinx/coroutines/GlobalScope"
+                )
+        // Suspend function call: descriptor terminates with Continuation parameter
+        // (compiler lowers suspend funcs to state machines passing a Continuation).
+        val isSuspendCall =
+            descriptor.endsWith("Lkotlin/coroutines/Continuation;")
+        // COROUTINE_SUSPENDED marker: kotlin.coroutines.intrinsics.IntrinsicsKt.getCOROUTINE_SUSPENDED
+        val isSuspendedMarker =
+            name == "getCOROUTINE_SUSPENDED" && (
+                owner == "kotlin/coroutines/intrinsics/IntrinsicsKt" ||
+                    owner == "kotlin/jvm/internal/Intrinsics"
             )
-        ) {
+        if (isBuilderCall || isSuspendCall || isSuspendedMarker) {
             tryAddMutation(
                 MutationInfo(
                     operator = MutationOperator.COROUTINE,
@@ -378,7 +405,7 @@ internal class MutationScannerMethodVisitor(
                     methodName = methodName,
                     methodDescriptor = methodDescriptor,
                     lineNumber = currentLineNumber,
-                    description = "Coroutine builder call: $owner.$name",
+                    description = "Coroutine call: $owner.$name",
                     originalOpcode = opcode,
                     mutatedOpcode = Opcodes.NOP,
                 ),
@@ -402,7 +429,9 @@ internal class MutationScannerMethodVisitor(
                 name == "checkNotNull" ||
                     name == "checkNotNullParameter" ||
                     name == "checkNotNullExpressionValue" ||
-                    name == "throwUninitializedPropertyAccessException"
+                    name == "throwUninitializedPropertyAccessException" ||
+                    name == "throwNpe" ||
+                    name == "throwJavaNpe"
             )
         ) {
             tryAddMutation(
@@ -423,32 +452,34 @@ internal class MutationScannerMethodVisitor(
     /**
      * Detect sealed class when expressions and create mutations.
      * When expressions compile to tableswitch/lookupswitch instructions.
+     * Restrict to switches preceded by an INSTANCEOF check on the same line
+     * — guards against mutating unrelated enum/int/string when expressions.
      */
     private fun checkSealedWhenMutations(
         opcode: Int,
         branchCount: Int,
     ) {
-        if (MutationOperator.SEALED_WHEN in enabledOperators && isKotlinClass) {
-            // Create a mutation for each branch: remove it by redirecting to default
-            for (i in 0 until branchCount) {
-                tryAddMutation(
-                    MutationInfo(
-                        operator = MutationOperator.SEALED_WHEN,
-                        className = className,
-                        methodName = methodName,
-                        methodDescriptor = methodDescriptor,
-                        lineNumber = currentLineNumber,
-                        description = "Remove when branch $i of $branchCount",
-                        originalOpcode = opcode,
-                        mutatedOpcode = opcode,
-                        metadata =
-                            mapOf(
-                                "branchIndex" to i.toString(),
-                                "branchCount" to branchCount.toString(),
-                            ),
-                    ),
-                )
-            }
+        if (MutationOperator.SEALED_WHEN !in enabledOperators || !isKotlinClass) return
+        if (instanceofCount <= 0) return
+        // Create a mutation for each branch: remove it by redirecting to default
+        for (i in 0 until branchCount) {
+            tryAddMutation(
+                MutationInfo(
+                    operator = MutationOperator.SEALED_WHEN,
+                    className = className,
+                    methodName = methodName,
+                    methodDescriptor = methodDescriptor,
+                    lineNumber = currentLineNumber,
+                    description = "Remove when branch $i of $branchCount",
+                    originalOpcode = opcode,
+                    mutatedOpcode = opcode,
+                    metadata =
+                        mapOf(
+                            "branchIndex" to i.toString(),
+                            "branchCount" to branchCount.toString(),
+                        ),
+                ),
+            )
         }
     }
 
@@ -549,20 +580,28 @@ internal class MutationScannerMethodVisitor(
             }
         }
         if (MutationOperator.NEGATE_CONDITIONALS in enabledOperators) {
-            val mutated = ConditionalMutator.mutateNegateStatic(opcode)
-            if (mutated != opcode) {
-                tryAddMutation(
-                    MutationInfo(
-                        operator = MutationOperator.NEGATE_CONDITIONALS,
-                        className = className,
-                        methodName = methodName,
-                        methodDescriptor = methodDescriptor,
-                        lineNumber = currentLineNumber,
-                        description = "Negate: $opcode -> $mutated",
-                        originalOpcode = opcode,
-                        mutatedOpcode = mutated,
-                    ),
-                )
+            // Skip IFNULL/IFNONNULL when NULL_SAFETY is enabled — NULL_SAFETY
+            // already emits the same IFNULL<->IFNONNULL flip, so NEGATE_CONDITIONALS
+            // would produce a duplicate equivalent mutant.
+            val skipNullFlip =
+                MutationOperator.NULL_SAFETY in enabledOperators &&
+                    (opcode == Opcodes.IFNULL || opcode == Opcodes.IFNONNULL)
+            if (!skipNullFlip) {
+                val mutated = ConditionalMutator.mutateNegateStatic(opcode)
+                if (mutated != opcode) {
+                    tryAddMutation(
+                        MutationInfo(
+                            operator = MutationOperator.NEGATE_CONDITIONALS,
+                            className = className,
+                            methodName = methodName,
+                            methodDescriptor = methodDescriptor,
+                            lineNumber = currentLineNumber,
+                            description = "Negate: $opcode -> $mutated",
+                            originalOpcode = opcode,
+                            mutatedOpcode = mutated,
+                        ),
+                    )
+                }
             }
         }
     }

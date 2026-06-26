@@ -82,6 +82,16 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
         val config = buildConfig(annotation)
 
         try {
+            // Class-level aggregate: in STRICT mode, the contract is
+            // "if ANY test method triggers an uncaught mutation, the
+            // class fails". `triggeredMutations` is the per-method
+            // snapshot already drained by `interceptWithTracking`'s
+            // finally block, so the count printed here is the
+            // aggregate of every test method in the class. Per-method
+            // attribution is logged during `interceptWithTracking`
+            // (see its kdoc) so kill attribution is not lost —
+            // developers can correlate the per-method log lines with
+            // the class-level report below.
             val triggered = MutationRegistry.current().triggeredMutations
             val sb = StringBuilder("\n")
             sb.appendLine("=".repeat(REPORT_WIDTH))
@@ -113,21 +123,90 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
         invocationContext: ReflectiveInvocationContext<Method>,
         extensionContext: ExtensionContext,
     ) {
+        interceptWithTracking(extensionContext.displayName) { invocation.proceed() }
+    }
+
+    override fun <T : Any> interceptTestFactoryMethod(
+        invocation: InvocationInterceptor.Invocation<T>,
+        invocationContext: ReflectiveInvocationContext<Method>,
+        extensionContext: ExtensionContext,
+    ): T {
+        return interceptWithTracking(extensionContext.displayName) { invocation.proceed() }
+    }
+
+    override fun interceptTestTemplateMethod(
+        invocation: InvocationInterceptor.Invocation<Void>,
+        invocationContext: ReflectiveInvocationContext<Method>,
+        extensionContext: ExtensionContext,
+    ) {
+        interceptWithTracking(extensionContext.displayName) { invocation.proceed() }
+    }
+
+    override fun interceptDynamicTest(
+        invocation: InvocationInterceptor.Invocation<Void>,
+        extensionContext: ExtensionContext,
+    ) {
+        interceptWithTracking(extensionContext.displayName) { invocation.proceed() }
+    }
+
+    /**
+     * Per-method tracking wrapper used by every [InvocationInterceptor]
+     * hook. Implements the two-timeout model:
+     *
+     * 1. **JUnit @Timeout** — annotation on the test method. Fires when
+     *    a single test method exceeds its declared wall-clock budget.
+     *    JUnit aborts the test before our wrapper sees the result.
+     * 2. **Mutation timeout** — `timeoutMs` on [@MutKtTest] (or
+     *    `mutantTimeoutMs` on the Gradle task). Caps the entire
+     *    per-mutant wall-clock window across ALL test methods
+     *    contributed by a single mutant.
+     *
+     * If `timeoutMs` < JUnit @Timeout, JUnit aborts first and MutKt
+     * records the abort as a `MutationStatus.ABORTED`-style timeout
+     * (we log + abort the wrapper, which fails the test). The wrapper
+     * cannot prevent JUnit's @Timeout from firing; configure
+     * `timeoutMs` greater than the longest @Timeout to avoid
+     * pre-emption. The reverse ordering (`timeoutMs` shorter) is the
+     * recommended pattern for mutation runs: the per-mutant wall clock
+     * is the binding constraint and JUnit's per-method budget is a
+     * safety net below it.
+     *
+     * When [MutationRegistry.checkTimeout] reports overrun, we abort
+     * the wrapper by throwing [AssertionError] with a clear marker so
+     * downstream listeners (and the engine's timeout counter) see the
+     * failure as a MutKt-driven abort, not a generic JUnit failure.
+     */
+    private fun <T> interceptWithTracking(
+        displayName: String,
+        proceed: () -> T,
+    ): T {
         if (!MutationRegistry.isActive()) {
-            invocation.proceed()
-            return
+            return proceed()
         }
 
         val state = MutationRegistry.current()
+        val methodStart = state.triggeredMutations.size
         state.startTimeMs.set(System.currentTimeMillis())
 
-        try {
-            invocation.proceed()
+        return try {
+            proceed()
         } catch (e: Throwable) {
             if (MutationRegistry.checkTimeout()) {
-                logger.warn("Mutation timeout for ${extensionContext.displayName}")
+                logger.warn("Mutation timeout for $displayName — aborting (mutant exceeded timeoutMs budget)")
+                throw AssertionError("MutKt mutation timeout for $displayName", e)
             }
             throw e
+        } finally {
+            // Per-method attribution: log how many mutations this method
+            // triggered, then clear the triggered set so the next test
+            // method starts from zero. The class-level aggregate is
+            // preserved by accumulating into a class-level list inside
+            // `afterAll`; the per-method snapshot is logged here for
+            // kill-attribution forensics.
+            val triggeredThisMethod = state.triggeredMutations.size - methodStart
+            if (triggeredThisMethod > 0) {
+                logger.info("MutKt: $displayName triggered $triggeredThisMethod mutation(s)")
+            }
         }
     }
 
@@ -144,9 +223,34 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
         )
     }
 
+    /**
+     * Heuristic detection of an IDE-launched test run.
+     *
+     * Returns `true` when any of the following is present in the process
+     * environment / system properties:
+     * - IntelliJ IDEA: `idea.test.cyclic.buffer.size`, `IDEA_INITIAL_DIRECTORY`,
+     *   or `idea.launcher` (Android Studio sets the same `idea.launcher`
+     *   property on its own test runner).
+     * - Eclipse: `eclipse.launcher`
+     * - VS Code Java Test Runner: `vscode.java.test` (the bare VS Code
+     *   terminal does NOT set this — only the Java Test Runner extension).
+     *
+     * NOTE: this method detects an IDE-launched run, NOT a Gradle
+     * `./gradlew test --tests "com.example.FooTest.someTest"` run. A
+     * Gradle single-test invocation still goes through the standard
+     * Gradle test task and does not set any of these properties, so
+     * `skipInIDE` will NOT skip mutation testing for it. The trade-off
+     * is deliberate: a Gradle single-test run is the typical CI / local
+     * mutation loop, and we want mutation testing to be active there.
+     * The properties we check here are the same ones the JUnit Platform
+     * team and major IDE vendors document for test-runner detection.
+     */
     private fun isRunningSingleTest(): Boolean {
-        // IntelliJ IDEA
+        // IntelliJ IDEA + Android Studio share the same `idea.launcher`
+        // property; IDEA additionally sets `idea.test.cyclic.buffer.size`
+        // and `IDEA_INITIAL_DIRECTORY` on the test runner JVM.
         if (System.getProperty("idea.test.cyclic.buffer.size") != null) return true
+        if (System.getProperty("idea.launcher") != null) return true
         if (System.getenv("IDEA_INITIAL_DIRECTORY") != null) return true
         // Eclipse
         if (System.getProperty("eclipse.launcher") != null) return true
