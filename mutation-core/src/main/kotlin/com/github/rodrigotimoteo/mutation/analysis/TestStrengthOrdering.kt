@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutation.analysis
 
 import com.github.rodrigotimoteo.mutation.MUTKT_DIR
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
@@ -26,7 +27,13 @@ import java.util.concurrent.ConcurrentHashMap
  * // Tests that historically kill more mutations come first
  * ```
  */
-class TestStrengthOrdering(private val projectDir: File) {
+class TestStrengthOrdering(
+    private val projectDir: File,
+    // Injectable clock for deterministic tests. Defaults to wall clock;
+    // pass a fixed supplier in unit tests to assert ordering by `lastRun`.
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
+    private val logger = LoggerFactory.getLogger(TestStrengthOrdering::class.java)
     private val historyFile = File(projectDir, "$MUTKT_DIR/test-strength.json")
     private val inMemoryCache: ConcurrentHashMap<String, TestStrengthEntry> = ConcurrentHashMap()
     private var cacheLoaded = false
@@ -67,7 +74,7 @@ class TestStrengthOrdering(private val projectDir: File) {
                 totalKills = current.totalKills + killedMutations,
                 totalRuns = current.totalRuns + 1,
                 totalMutations = current.totalMutations + totalMutations,
-                lastRun = System.currentTimeMillis(),
+                lastRun = clock(),
             )
         }
     }
@@ -127,64 +134,183 @@ class TestStrengthOrdering(private val projectDir: File) {
     private fun loadHistory(): Map<String, TestStrengthEntry> {
         if (!historyFile.exists()) return emptyMap()
 
-        val content = historyFile.readText()
+        val content =
+            runCatching { historyFile.readText() }
+                .getOrElse { e ->
+                    // I/O error reading history should not poison the run —
+                    // log and start from an empty history.
+                    logger.warn("Failed to read test strength history", e)
+                    return emptyMap()
+                }
+        return parseHistoryJson(content)
+    }
+
+    /**
+     * Parse the JSON history written by [saveHistory]. Uses a small
+     * tokenizer + recursive-descent parser rather than regex-on-raw-text:
+     * the previous regex parser broke on test class names that contained
+     * `}` or `"` characters, since it scanned line-by-line and could
+     * not distinguish a closing brace inside a string from one that
+     * terminated the object. The new parser tokenizes the full input
+     * with proper escape handling, so embedded braces, quotes, and
+     * commas in test class names no longer corrupt the read.
+     *
+     * Falls back to an empty map on malformed input — a torn history
+     * file should not kill the run, the next `flushHistory` will rewrite
+     * it from the in-memory cache.
+     */
+    private fun parseHistoryJson(content: String): Map<String, TestStrengthEntry> {
+        val tokens = tokenizeJson(content)
+        if (tokens.isEmpty()) return emptyMap()
+        var pos = 0
+        // Expect top-level `{`
+        if (tokens[pos].type != JsonTokenType.LBRACE) return emptyMap()
+        pos++
+
         val entries = mutableMapOf<String, TestStrengthEntry>()
 
-        // Field detection uses regex anchored at line start so partial
-        // matches in string values (e.g. a test class name containing
-        // "totalKills") cannot corrupt a numeric field. Field order is
-        // arbitrary: each line is classified independently and the
-        // entry is committed when the closing `}` is seen.
-        val fieldRegex = Regex("\"(totalKills|totalRuns|totalMutations|lastRun)\"\\s*:\\s*(-?\\d+)")
+        while (pos < tokens.size && tokens[pos].type != JsonTokenType.RBRACE) {
+            // Test class name (string key)
+            if (tokens[pos].type != JsonTokenType.STRING) return entries
+            val testName = tokens[pos].value
+            pos++
+            if (pos >= tokens.size || tokens[pos].type != JsonTokenType.COLON) return entries
+            pos++
+            if (pos >= tokens.size || tokens[pos].type != JsonTokenType.LBRACE) return entries
+            pos++
 
-        var currentTest: String? = null
-        var totalKills = 0
-        var totalRuns = 0
-        var totalMutations = 0
-        var lastRun = 0L
+            var totalKills = 0
+            var totalRuns = 0
+            var totalMutations = 0
+            var lastRun = 0L
 
-        fun commit() {
-            val test = currentTest ?: return
-            entries[test] =
-                TestStrengthEntry(
-                    totalKills = totalKills,
-                    totalRuns = totalRuns,
-                    totalMutations = totalMutations,
-                    lastRun = lastRun,
-                )
-        }
-
-        for (line in content.lines()) {
-            val trimmed = line.trim()
-            when {
-                // Opening of an entry: "test class name": {
-                trimmed.startsWith("\"") && trimmed.endsWith("{") -> {
-                    val testName = trimmed.substringAfter("\"").substringBeforeLast("\"")
-                    if (testName.isNotEmpty()) {
-                        currentTest = testName
-                        totalKills = 0
-                        totalRuns = 0
-                        totalMutations = 0
-                        lastRun = 0L
-                    }
-                }
-                trimmed == "}," || trimmed == "}" -> commit().also { currentTest = null }
-                else -> {
-                    val match = fieldRegex.find(trimmed) ?: continue
-                    val (name, raw) = match.destructured
-                    when (name) {
+            while (pos < tokens.size && tokens[pos].type != JsonTokenType.RBRACE) {
+                if (tokens[pos].type != JsonTokenType.STRING) return entries
+                val fieldName = tokens[pos].value
+                pos++
+                if (pos >= tokens.size || tokens[pos].type != JsonTokenType.COLON) return entries
+                pos++
+                // Tolerant value parsing: a missing or non-numeric value
+                // (e.g. `"totalKills": notanumber`) defaults to 0 instead
+                // of aborting the whole load. The previous regex parser
+                // had the same fall-back via `toIntOrNull() ?: 0`; the
+                // new tokenizer-based parser must reproduce it so a single
+                // corrupted field does not lose the rest of the entry.
+                // We still advance `pos` by one so a stray STRING value
+                // token does not get misread as the next field name.
+                if (pos >= tokens.size || tokens[pos].type != JsonTokenType.NUMBER) {
+                    if (pos < tokens.size) pos++
+                } else {
+                    val raw = tokens[pos].value
+                    pos++
+                    when (fieldName) {
                         "totalKills" -> totalKills = raw.toIntOrNull() ?: 0
                         "totalRuns" -> totalRuns = raw.toIntOrNull() ?: 0
                         "totalMutations" -> totalMutations = raw.toIntOrNull() ?: 0
                         "lastRun" -> lastRun = raw.toLongOrNull() ?: 0L
                     }
                 }
+                // Optional comma between fields
+                if (pos < tokens.size && tokens[pos].type == JsonTokenType.COMMA) pos++
             }
+            // Consume the closing `}` of the entry
+            if (pos < tokens.size && tokens[pos].type == JsonTokenType.RBRACE) pos++
+
+            entries[testName] =
+                TestStrengthEntry(
+                    totalKills = totalKills,
+                    totalRuns = totalRuns,
+                    totalMutations = totalMutations,
+                    lastRun = lastRun,
+                )
+
+            // Optional comma between top-level entries
+            if (pos < tokens.size && tokens[pos].type == JsonTokenType.COMMA) pos++
         }
-        // File may end without a trailing newline + `}`; commit any open entry.
-        commit()
 
         return entries
+    }
+
+    private enum class JsonTokenType { LBRACE, RBRACE, COLON, COMMA, STRING, NUMBER }
+
+    private data class JsonToken(
+        val type: JsonTokenType,
+        val value: String,
+    )
+
+    /**
+     * Tokenize a JSON document. Handles `{}`, `:`, `,`, string literals
+     * (with `\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`, and `\uXXXX`
+     * escape sequences), and integer literals. Unknown characters are
+     * skipped defensively so a partial / corrupted file does not throw
+     * during tokenization — the parser will then return early on a
+     * structural mismatch.
+     */
+    private fun tokenizeJson(content: String): List<JsonToken> {
+        val tokens = mutableListOf<JsonToken>()
+        var i = 0
+        while (i < content.length) {
+            val c = content[i]
+            when {
+                c.isWhitespace() -> i++
+                c == '{' -> {
+                    tokens.add(JsonToken(JsonTokenType.LBRACE, "{"))
+                    i++
+                }
+                c == '}' -> {
+                    tokens.add(JsonToken(JsonTokenType.RBRACE, "}"))
+                    i++
+                }
+                c == ':' -> {
+                    tokens.add(JsonToken(JsonTokenType.COLON, ":"))
+                    i++
+                }
+                c == ',' -> {
+                    tokens.add(JsonToken(JsonTokenType.COMMA, ","))
+                    i++
+                }
+                c == '"' -> {
+                    val sb = StringBuilder()
+                    i++ // skip opening quote
+                    while (i < content.length && content[i] != '"') {
+                        if (content[i] == '\\' && i + 1 < content.length) {
+                            when (val esc = content[i + 1]) {
+                                '"' -> sb.append('"')
+                                '\\' -> sb.append('\\')
+                                '/' -> sb.append('/')
+                                'b' -> sb.append('\b')
+                                'f' -> sb.append('')
+                                'n' -> sb.append('\n')
+                                'r' -> sb.append('\r')
+                                't' -> sb.append('\t')
+                                'u' -> {
+                                    if (i + 5 < content.length) {
+                                        val hex = content.substring(i + 2, i + 6)
+                                        sb.append(hex.toInt(16).toChar())
+                                        i += 4
+                                    }
+                                }
+                                else -> sb.append(esc)
+                            }
+                            i += 2
+                        } else {
+                            sb.append(content[i])
+                            i++
+                        }
+                    }
+                    if (i < content.length) i++ // skip closing quote
+                    tokens.add(JsonToken(JsonTokenType.STRING, sb.toString()))
+                }
+                c == '-' || c in '0'..'9' -> {
+                    val start = i
+                    if (c == '-') i++
+                    while (i < content.length && content[i] in '0'..'9') i++
+                    tokens.add(JsonToken(JsonTokenType.NUMBER, content.substring(start, i)))
+                }
+                else -> i++ // skip unknown chars defensively
+            }
+        }
+        return tokens
     }
 
     private fun saveHistory(history: Map<String, TestStrengthEntry>) {

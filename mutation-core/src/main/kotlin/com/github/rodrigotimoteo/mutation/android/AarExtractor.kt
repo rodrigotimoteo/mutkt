@@ -78,7 +78,13 @@ class AarExtractor(private val tempDir: File) {
             var entry = zip.nextEntry
             while (entry != null) {
                 if (entry.name == "classes.jar") {
-                    outFile.outputStream().use { output -> zip.copyTo(output) }
+                    try {
+                        outFile.outputStream().use { output -> zip.copyTo(output) }
+                    } catch (t: Throwable) {
+                        // Delete partial jar so the next run doesn't reuse a truncated file.
+                        if (outFile.exists()) outFile.delete()
+                        throw t
+                    }
                     return outFile
                 }
                 entry = zip.nextEntry
@@ -151,12 +157,22 @@ class AarExtractor(private val tempDir: File) {
                 when {
                     name == "classes.jar" -> {
                         val outFile = File(outDir, "classes.jar")
-                        outFile.outputStream().use { output -> zip.copyTo(output) }
+                        try {
+                            outFile.outputStream().use { output -> zip.copyTo(output) }
+                        } catch (t: Throwable) {
+                            if (outFile.exists()) outFile.delete()
+                            throw t
+                        }
                         results.add(outFile)
                     }
                     name.startsWith("libs/") && name.endsWith(".jar") -> {
                         val outFile = File(outDir, name.substringAfterLast('/'))
-                        outFile.outputStream().use { output -> zip.copyTo(output) }
+                        try {
+                            outFile.outputStream().use { output -> zip.copyTo(output) }
+                        } catch (t: Throwable) {
+                            if (outFile.exists()) outFile.delete()
+                            throw t
+                        }
                         results.add(outFile)
                     }
                 }

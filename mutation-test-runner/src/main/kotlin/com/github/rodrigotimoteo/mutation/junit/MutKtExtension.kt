@@ -169,7 +169,7 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
             logger.info(sb.toString())
 
             if (config.mode == VerificationMode.STRICT && triggered.isNotEmpty()) {
-                logger.info("Mutation testing: PASSED (all triggered mutations caught)")
+                logger.info("STRICT: ${triggered.size} triggered mutation(s) caught in $className")
             }
         } finally {
             // Clean up this class's thread state

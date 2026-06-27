@@ -104,7 +104,7 @@ class MutationTestRunner(
                     val relativePath = dir.toPath().relativize(path)
                     val className =
                         relativePath.toString()
-                            .replace(".class", "")
+                            .removeSuffix(".class")
                             .replace("/", ".")
                             .replace("\\", ".")
                     val bytes = Files.readAllBytes(path)
@@ -128,7 +128,7 @@ class MutationTestRunner(
                     val relativePath = dir.toPath().relativize(path)
                     val className =
                         relativePath.toString()
-                            .replace(".class", "")
+                            .removeSuffix(".class")
                             .replace("/", ".")
                             .replace("\\", ".")
                     val simpleName = className.substringAfterLast('.')

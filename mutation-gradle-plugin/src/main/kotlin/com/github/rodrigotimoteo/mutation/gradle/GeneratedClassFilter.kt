@@ -44,53 +44,12 @@ object GeneratedClassFilter {
      * Match a slashed path (segment-separated) against a glob pattern that
      * may contain `**`. The double-star matches zero or more path segments,
      * single `*` matches any chars within one segment (not crossing `/`),
-     * and `?` matches a single character within a segment. A `**` followed
-     * by `/` in the middle of a pattern emits a non-capturing group with
-     * an optional trailing slash so the simple class name matches with or
-     * without a package prefix.
+     * and `?` matches a single character within a segment. Implementation
+     * is delegated to the shared [globToRegex] helper to keep glob semantics
+     * consistent with [MutationTask]'s excluded-class matcher.
      */
     private fun matchesGlob(
         path: String,
         glob: String,
-    ): Boolean {
-        val regex = StringBuilder("^")
-        var i = 0
-        while (i < glob.length) {
-            val c = glob[i]
-            when {
-                c == '*' && i + 1 < glob.length && glob[i + 1] == '*' -> {
-                    i += 2
-                    if (i < glob.length && glob[i] == '/') {
-                        i++
-                        if (i == glob.length) {
-                            // Trailing **/ — match any remaining path.
-                            regex.append(".*")
-                        } else {
-                            // **/X in the middle — zero or more path segments
-                            // then a segment separator, leaving X as the
-                            // simple class name matcher.
-                            regex.append("(?:.*/)?")
-                        }
-                    } else {
-                        // Bare ** (no following slash) — match any chars.
-                        regex.append(".*")
-                    }
-                }
-                c == '*' -> {
-                    regex.append("[^/]*")
-                    i++
-                }
-                c == '?' -> {
-                    regex.append("[^/]")
-                    i++
-                }
-                else -> {
-                    regex.append(Regex.escape(c.toString()))
-                    i++
-                }
-            }
-        }
-        regex.append("$")
-        return Regex(regex.toString()).matches(path)
-    }
+    ): Boolean = Regex(globToRegex(glob)).matches(path)
 }

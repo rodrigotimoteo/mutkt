@@ -33,13 +33,24 @@ class MutKtCache(private val projectDir: File) {
     }
 
     /**
+     * Per-thread [MessageDigest] cache. `MessageDigest.getInstance` is
+     * non-trivial (provider lookup + algorithm init) and `computeClassHash`
+     * can be called thousands of times per run; allocating a fresh instance
+     * per call was a measurable cost. The digest is reset before each use
+     * so the cached instance is safe across calls.
+     */
+    private val digestThreadLocal: ThreadLocal<MessageDigest> =
+        ThreadLocal.withInitial { MessageDigest.getInstance("SHA-256") }
+
+    /**
      * Compute SHA-256 hash of class bytecode.
      *
      * @param classBytes Original class bytecode
      * @return Hex-encoded hash string
      */
     fun computeClassHash(classBytes: ByteArray): String {
-        val digest = MessageDigest.getInstance("SHA-256")
+        val digest = digestThreadLocal.get()
+        digest.reset()
         val hash = digest.digest(classBytes)
         return hash.joinToString("") { "%02x".format(it) }
     }
@@ -121,12 +132,13 @@ class MutKtCache(private val projectDir: File) {
      *
      * @return Pair of (total entries, cache size in bytes)
      */
-    fun stats(): Pair<Int, Long> {
-        val files = cacheDir.walkTopDown().filter { it.isFile && it.extension == "cache" }.toList()
-        val totalEntries = files.sumOf { it.readLines().size }
-        val totalSize = files.sumOf { it.length() }
-        return totalEntries to totalSize
-    }
+    fun stats(): Pair<Int, Long> =
+        withFileLock(File(cacheDir, ".dirlock")) {
+            val files = cacheDir.walkTopDown().filter { it.isFile && it.extension == "cache" }.toList()
+            val totalEntries = files.sumOf { it.readLines().size }
+            val totalSize = files.sumOf { it.length() }
+            totalEntries to totalSize
+        }
 
     /**
      * Clear all cached data.
@@ -137,9 +149,11 @@ class MutKtCache(private val projectDir: File) {
      * `clear()` (or the next successful run) reclaims them.
      */
     fun clear() {
-        cacheDir.walkTopDown()
-            .filter { it.isFile && (it.extension == "cache" || it.name.endsWith(".lock")) }
-            .forEach { it.delete() }
+        withFileLock(File(cacheDir, ".dirlock")) {
+            cacheDir.walkTopDown()
+                .filter { it.isFile && (it.extension == "cache" || it.name.endsWith(".lock")) }
+                .forEach { it.delete() }
+        }
     }
 
     private fun getCacheFile(classHash: String): File {

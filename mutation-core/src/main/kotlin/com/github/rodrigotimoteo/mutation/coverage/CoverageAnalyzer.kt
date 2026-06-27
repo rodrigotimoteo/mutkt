@@ -61,7 +61,7 @@ class CoverageAnalyzer {
                 executionDataStore = loader.executionDataStore,
             )
         } catch (e: Exception) {
-            logger.warn("Failed to load execution data from ${execFile.absolutePath}: ${e.message}")
+            logger.warn("Failed to load execution data from ${execFile.absolutePath}", e)
             CoverageData.Empty
         }
     }

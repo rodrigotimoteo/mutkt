@@ -329,6 +329,17 @@ abstract class MutationTask
                 logger.lifecycle("$LOG_PREFIX CI mode enabled — console + XML reports will be generated")
             }
 
+            // Auto-add graph to report formats if generateGraph is set.
+            // Done up-front (before generateReports reads the property) so
+            // the graph branch in generateReports actually fires — the
+            // previous placement after runner.run() was a dead write.
+            if (generateGraph.get()) {
+                val currentFormats = reportFormats.getOrElse(emptySet()).toMutableSet()
+                currentFormats.add("graph")
+                reportFormats.set(currentFormats)
+                logger.lifecycle("$LOG_PREFIX Graph report enabled via generateGraph option")
+            }
+
             logger.lifecycle("=".repeat(REPORT_WIDTH))
             logger.lifecycle("  Kotlin Mutation Testing - PITest-style")
             logger.lifecycle("=".repeat(REPORT_WIDTH))
@@ -352,6 +363,29 @@ abstract class MutationTask
                     testClasses.files,
                     isTestClasses = true,
                 )
+            // Translate the null contract from resolveClassesDir into a
+            // clear, actionable error. The old behaviour returned a
+            // non-existent fallback (build/classes/java/main) and
+            // surfaced the same "directory not found" string at the
+            // classloader layer; users couldn't tell whether to run
+            // compileKotlin, wire targetClasses, or fix the AGP variant.
+            val buildDirFile = buildDirectory.asFile.get()
+            val triedMain = listOf("classes/kotlin/main", "classes/kotlin/jvm/main", "classes/java/main")
+            val triedTest = listOf("classes/kotlin/test", "classes/kotlin/jvm/test", "classes/java/test")
+            val tried = if (androidCtx != null) triedMain + "AGP variant output" else triedMain
+            val triedTestList = if (androidCtx != null) triedTest + "AGP variant output" else triedTest
+            classesDir ?: error(
+                "No classes directory found for project. Tried: ${tried.joinToString { "$buildDirFile/$it" }}" +
+                    " (and any AGP variant output). Check that 'compileKotlin' (or 'compileKotlinJvm' for KMP) " +
+                    "has run, or wire targetClasses manually:\n" +
+                    "  mutationTest { targetClasses.from(file(\"build/classes/kotlin/main\")) }",
+            )
+            testClassesDir ?: error(
+                "No test classes directory found for project. Tried: " +
+                    "${triedTestList.joinToString { "$buildDirFile/$it" }} (and any AGP variant output). " +
+                    "Check that 'compileTestKotlin' has run, or wire testClasses manually:\n" +
+                    "  mutationTest { testClasses.from(file(\"build/classes/kotlin/test\")) }",
+            )
             val rawClasspathFiles =
                 if (androidCtx != null) {
                     logger.lifecycle("Using Android variant '${androidCtx.variantName}' runtime classpath")
@@ -385,7 +419,6 @@ abstract class MutationTask
                     coverageExecFile.get().asFile
                 } else {
                     // Auto-detect coverage file using buildDirectory captured at config time
-                    val buildDirFile = buildDirectory.asFile.get()
                     val possiblePaths =
                         listOf(
                             File(buildDirFile, "jacoco/test.exec"),
@@ -400,33 +433,6 @@ abstract class MutationTask
             logger.lifecycle("Classpath size: ${classpathFiles.size}")
             if (coverageFile != null) {
                 logger.lifecycle("Coverage file: $coverageFile")
-            }
-
-            // Validate directories exist
-            if (!classesDir.exists()) {
-                val msg =
-                    buildString {
-                        appendLine("Classes directory not found: $classesDir")
-                        appendLine("Fix: Run 'gradlew compileKotlin' (or 'compileKotlinJvm' for KMP) first, or set targetClasses manually:")
-                        appendLine("  mutationTest {")
-                        appendLine("    targetClasses.from(file(\"build/classes/kotlin/main\"))")
-                        appendLine("  }")
-                    }
-                logger.error(msg)
-                throw IllegalStateException("Classes directory not found: $classesDir")
-            }
-
-            if (!testClassesDir.exists()) {
-                val msg =
-                    buildString {
-                        appendLine("Test classes directory not found: $testClassesDir")
-                        appendLine("Fix: Run 'gradlew compileTestKotlin' first, or set testClasses manually:")
-                        appendLine("  mutationTest {")
-                        appendLine("    testClasses.from(file(\"build/classes/kotlin/test\"))")
-                        appendLine("  }")
-                    }
-                logger.error(msg)
-                throw IllegalStateException("Test classes directory not found: $testClassesDir")
             }
 
             if (classpathFiles.isEmpty()) {
@@ -547,14 +553,6 @@ abstract class MutationTask
                     coverageExecFile = coverageFile,
                 )
 
-            // Auto-add graph to report formats if generateGraph is set
-            if (generateGraph.get()) {
-                val currentFormats = reportFormats.getOrElse(emptySet()).toMutableSet()
-                currentFormats.add("graph")
-                reportFormats.set(currentFormats)
-                logger.lifecycle("$LOG_PREFIX Graph report enabled via generateGraph option")
-            }
-
             // Generate reports
             generateReports(report)
 
@@ -595,52 +593,6 @@ abstract class MutationTask
                     "Mutation score ${report.killedPercentage}% is below threshold $threshold%. Build failed.",
                 )
             }
-        }
-
-        /**
-         * Convert a glob pattern to a regex matched against the slashed
-         * class name. Supports double `*` (zero or more path segments),
-         * single `*` (zero or more chars within one segment), and `?`
-         * (one char within one segment). A double `*` followed by `/` in
-         * the middle of a pattern emits a non-capturing group with an
-         * optional trailing slash so the trailing simple class name
-         * matches with or without a package prefix.
-         */
-        private fun globToRegex(pattern: String): String {
-            val regex = StringBuilder("^")
-            var i = 0
-            while (i < pattern.length) {
-                val c = pattern[i]
-                when {
-                    c == '*' && i + 1 < pattern.length && pattern[i + 1] == '*' -> {
-                        i += 2
-                        if (i < pattern.length && pattern[i] == '/') {
-                            i++
-                            if (i == pattern.length) {
-                                regex.append(".*")
-                            } else {
-                                regex.append("(?:.*/)?")
-                            }
-                        } else {
-                            regex.append(".*")
-                        }
-                    }
-                    c == '*' -> {
-                        regex.append("[^/]*")
-                        i++
-                    }
-                    c == '?' -> {
-                        regex.append("[^/]")
-                        i++
-                    }
-                    else -> {
-                        regex.append(Regex.escape(c.toString()))
-                        i++
-                    }
-                }
-            }
-            regex.append("$")
-            return regex.toString()
         }
 
         /**
@@ -701,7 +653,7 @@ abstract class MutationTask
         private fun findClassesDir(
             files: Set<File>,
             isTestClasses: Boolean = false,
-        ): File {
+        ): File? {
             // Find the first directory that contains .class files
             for (file in files) {
                 if (file.isDirectory) {
@@ -712,11 +664,9 @@ abstract class MutationTask
             // Fallback to build directory — use buildDirectory captured at config time
             val subDir = if (isTestClasses) "test" else "main"
             val buildDirFile = buildDirectory.asFile.get()
-            return File(buildDirFile, "classes/kotlin/$subDir")
-                .takeIf { it.exists() }
-                ?: File(buildDirFile, "classes/kotlin/jvm/$subDir")
-                    .takeIf { it.exists() }
-                ?: File(buildDirFile, "classes/java/$subDir")
+            return File(buildDirFile, "classes/kotlin/$subDir").takeIf { it.exists() }
+                ?: File(buildDirFile, "classes/kotlin/jvm/$subDir").takeIf { it.exists() }
+                ?: File(buildDirFile, "classes/java/$subDir").takeIf { it.exists() }
         }
 
         /**
@@ -736,18 +686,23 @@ abstract class MutationTask
          *    `testClasses` file collection (existing behavior for
          *    manually-wired projects).
          * 4. JVM fallback search (kotlin/main, kotlin/jvm/main, java/main).
+         *
+         * Returns `null` when no candidate exists on disk. Callers
+         * translate that into a clear "compileKotlin has not run" error
+         * — a missing dir should not silently fall through to a
+         * non-existent path that explodes later in the classloader.
          */
         private fun resolveClassesDir(
             androidDir: File?,
             androidFiles: Set<File>,
             configuredFiles: Set<File>,
             isTestClasses: Boolean,
-        ): File {
+        ): File? {
             if (androidDir != null && androidDir.exists()) {
                 return androidDir
             }
             val androidPick = findClassesDir(androidFiles, isTestClasses)
-            if (androidPick.exists()) {
+            if (androidPick != null && androidPick.exists()) {
                 return androidPick
             }
             return findClassesDir(configuredFiles, isTestClasses)

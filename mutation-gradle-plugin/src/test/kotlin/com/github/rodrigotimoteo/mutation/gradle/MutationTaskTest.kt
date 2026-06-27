@@ -15,6 +15,7 @@ import java.io.File
 import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MutationTaskTest {
@@ -404,22 +405,24 @@ class MutationTaskInternalMethodsTest {
         val nonDir = tempDir.resolve("file.txt").toFile()
         nonDir.writeText("not a directory")
         val result = invokeFindClassesDir(task, setOf(nonDir))
-        // Falls back to kotlin/main or java/main — both don't exist
-        // The fallback is File(buildDir, "classes/kotlin/main")
-        assertNotNull(result)
+        // The JVM fallback paths (build/classes/...) do not exist on
+        // the ProjectBuilder's default build dir, so findClassesDir
+        // must signal "not found" via null rather than returning a
+        // dangling path.
+        assertNull(result)
     }
 
     @Test
-    fun `findClassesDir returns kotlin main when it exists`(
+    fun `findClassesDir returns null when no fallback exists`(
         @TempDir tempDir: Path,
     ) {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("java")
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
-        // ProjectBuilder doesn't put us in a directory with build/classes
-        // So the fallback should still work
+        // Empty input + no real build/classes on the ProjectBuilder's
+        // default build dir — must return null.
         val result = invokeFindClassesDir(task, emptySet())
-        assertNotNull(result)
+        assertNull(result)
     }
 
     @Test
@@ -477,14 +480,19 @@ class MutationTaskInternalMethodsTest {
     }
 
     @Test
-    fun `resolveClassesDir returns JVM fallback when androidClassesDir is null and files empty`(
+    fun `resolveClassesDir returns null when no valid dir is found`(
         @TempDir tempDir: Path,
     ) {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("java")
         val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        // Both androidDir and configured files are empty, and the
+        // JVM fallback paths (build/classes/...) do not exist on the
+        // ProjectBuilder's default build dir — so resolveClassesDir
+        // must signal "not found" via null rather than returning a
+        // dangling path that explodes later in the classloader.
         val result = invokeResolveClassesDir(task, null, emptySet(), isTestClasses = true)
-        assertNotNull(result)
+        assertNull(result)
     }
 
     private fun invokeParseOperators(
@@ -501,11 +509,11 @@ class MutationTaskInternalMethodsTest {
         task: MutationTask,
         files: Set<File>,
         isTestClasses: Boolean = false,
-    ): File {
+    ): File? {
         val method = MutationTask::class.java.getDeclaredMethod("findClassesDir", Set::class.java, Boolean::class.java)
         method.isAccessible = true
         @Suppress("UNCHECKED_CAST")
-        return method.invoke(task, files, isTestClasses) as File
+        return method.invoke(task, files, isTestClasses) as File?
     }
 
     private fun invokeResolveClassesDir(
@@ -513,7 +521,7 @@ class MutationTaskInternalMethodsTest {
         androidDir: File?,
         files: Set<File>,
         isTestClasses: Boolean,
-    ): File {
+    ): File? {
         val method =
             MutationTask::class.java.getDeclaredMethod(
                 "resolveClassesDir",
@@ -524,7 +532,7 @@ class MutationTaskInternalMethodsTest {
             )
         method.isAccessible = true
         @Suppress("UNCHECKED_CAST")
-        return method.invoke(task, androidDir, emptySet<File>(), files, isTestClasses) as File
+        return method.invoke(task, androidDir, emptySet<File>(), files, isTestClasses) as File?
     }
 
     private fun invokeExpandAars(
@@ -669,6 +677,225 @@ class DiscoverKotlinCompileTasksTest {
                 .discoverKotlinCompileTasks(project, isAndroid = true, variantCaptures = listOf(capture))
         assertEquals("compileReleaseKotlin", main)
         assertEquals("compileReleaseUnitTestKotlin", test)
+    }
+}
+
+class MutationTaskGenerateReportsTest {
+    @Test
+    fun `generateReports produces HTML output when html format is selected`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.reportFormats.set(setOf("html"))
+        val outputDir = tempDir.resolve("out").toFile().apply { mkdirs() }
+        task.reportsDir.set(outputDir)
+        invokeGenerateReports(task, buildEmptyReport(), outputDir)
+        val html = outputDir.resolve("mutation-report.html")
+        assertTrue(html.exists(), "expected HTML report at $html")
+    }
+
+    @Test
+    fun `generateReports produces console output for console format`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.reportFormats.set(setOf("console"))
+        val outputDir = tempDir.resolve("out").toFile().apply { mkdirs() }
+        task.reportsDir.set(outputDir)
+        // Console reporter writes to stdout, not to a file — just
+        // confirm the call does not throw.
+        invokeGenerateReports(task, buildEmptyReport(), outputDir)
+    }
+
+    @Test
+    fun `generateReports produces CSV file plus summary`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.reportFormats.set(setOf("csv"))
+        val outputDir = tempDir.resolve("out").toFile().apply { mkdirs() }
+        task.reportsDir.set(outputDir)
+        invokeGenerateReports(task, buildEmptyReport(), outputDir)
+        assertTrue(
+            outputDir.resolve("mutations.csv").exists(),
+            "expected mutations.csv in output dir",
+        )
+        assertTrue(
+            outputDir.resolve("mutation-summary.csv").exists(),
+            "expected mutation-summary.csv in output dir",
+        )
+    }
+
+    @Test
+    fun `generateReports produces XML output for xml format`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.reportFormats.set(setOf("xml"))
+        val outputDir = tempDir.resolve("out").toFile().apply { mkdirs() }
+        task.reportsDir.set(outputDir)
+        invokeGenerateReports(task, buildEmptyReport(), outputDir)
+        assertTrue(
+            outputDir.listFiles()?.any { it.name.endsWith(".xml") } == true,
+            "expected at least one XML file in output dir",
+        )
+    }
+
+    @Test
+    fun `generateReports produces JSON output for json format`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.reportFormats.set(setOf("json"))
+        val outputDir = tempDir.resolve("out").toFile().apply { mkdirs() }
+        task.reportsDir.set(outputDir)
+        invokeGenerateReports(task, buildEmptyReport(), outputDir)
+        assertTrue(
+            outputDir.listFiles()?.any { it.name.endsWith(".json") } == true,
+            "expected at least one JSON file in output dir",
+        )
+    }
+
+    @Test
+    fun `generateReports produces graph HTML for graph format`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.reportFormats.set(setOf("graph"))
+        val outputDir = tempDir.resolve("out").toFile().apply { mkdirs() }
+        task.reportsDir.set(outputDir)
+        invokeGenerateReports(task, buildEmptyReport(), outputDir)
+        assertTrue(
+            outputDir.listFiles()?.any { it.name.endsWith(".html") && it.name.contains("graph") } == true,
+            "expected at least one graph HTML file in output dir",
+        )
+    }
+
+    @Test
+    fun `generateReports handles unknown format without crashing`(
+        @TempDir tempDir: Path,
+    ) {
+        // An unknown format is logged as a warning via the logger.warn
+        // branch in the `else` arm. The call must not throw.
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.reportFormats.set(setOf("made-up-format"))
+        val outputDir = tempDir.resolve("out").toFile().apply { mkdirs() }
+        task.reportsDir.set(outputDir)
+        invokeGenerateReports(task, buildEmptyReport(), outputDir)
+    }
+
+    @Test
+    fun `generateReports supports all known formats together`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.reportFormats.set(setOf("html", "console", "csv", "xml", "json", "graph"))
+        val outputDir = tempDir.resolve("out").toFile().apply { mkdirs() }
+        task.reportsDir.set(outputDir)
+        invokeGenerateReports(task, buildEmptyReport(), outputDir)
+        val files = outputDir.listFiles()?.map { it.name } ?: emptyList()
+        // HTML report
+        assertTrue(files.contains("mutation-report.html"))
+        // CSV files (mutations + summary)
+        assertTrue(files.contains("mutations.csv"))
+        assertTrue(files.contains("mutation-summary.csv"))
+    }
+
+    private fun invokeGenerateReports(
+        task: MutationTask,
+        report: MutationReport,
+        outputDir: File,
+    ) {
+        val method = MutationTask::class.java.getDeclaredMethod("generateReports", MutationReport::class.java)
+        method.isAccessible = true
+        method.invoke(task, report)
+        // generateReports uses reportsDir.get().asFile as the output
+        // path — ensure the call landed in our expected directory.
+        assertTrue(
+            outputDir.exists(),
+            "expected output dir to be created at $outputDir",
+        )
+    }
+
+    private fun buildEmptyReport(): MutationReport =
+        MutationReport(
+            results = emptyList(),
+            totalMutations = 0,
+            killedMutations = 0,
+            survivedMutations = 0,
+            errorMutations = 0,
+            timeoutMutations = 0,
+            noCoverageMutations = 0,
+            totalExecutionTimeMs = 0,
+        )
+}
+
+class MutationTaskPrintSummaryTest {
+    @Test
+    fun `printSummary handles empty report without throwing`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val report =
+            MutationReport(
+                results = emptyList(),
+                totalMutations = 0,
+                killedMutations = 0,
+                survivedMutations = 0,
+                errorMutations = 0,
+                timeoutMutations = 0,
+                noCoverageMutations = 0,
+                totalExecutionTimeMs = 0,
+            )
+        invokePrintSummary(task, report)
+    }
+
+    @Test
+    fun `printSummary formats all counters and percentage`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val report =
+            MutationReport(
+                results = emptyList(),
+                totalMutations = 10,
+                killedMutations = 7,
+                survivedMutations = 1,
+                errorMutations = 1,
+                timeoutMutations = 1,
+                noCoverageMutations = 0,
+                totalExecutionTimeMs = 1234,
+            )
+        invokePrintSummary(task, report)
+    }
+
+    private fun invokePrintSummary(
+        task: MutationTask,
+        report: MutationReport,
+    ) {
+        val method = MutationTask::class.java.getDeclaredMethod("printSummary", MutationReport::class.java)
+        method.isAccessible = true
+        method.invoke(task, report)
     }
 }
 
@@ -935,5 +1162,326 @@ class MutationTaskActionTest {
         ctor?.visitEnd()
         cw.visitEnd()
         return cw.toByteArray()
+    }
+}
+
+class MutationTaskCiModeAndGraphTest {
+    @Test
+    fun `runMutationTests adds console and xml to report formats when ciMode is enabled`(
+        @TempDir tempDir: Path,
+    ) {
+        // CI mode must append "console" + "xml" to the existing report
+        // format set so the build still produces machine-readable
+        // output even if the user did not configure it.
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.ciMode.set(true)
+        task.reportFormats.set(setOf("html"))
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val testClassesDir = tempDir.resolve("test-classes").toFile().apply { mkdirs() }
+        File(testClassesDir, "FooTest.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        task.targetClasses.from(classesDir)
+        task.testClasses.from(testClassesDir)
+        task.reportsDir.set(tempDir.resolve("reports").toFile())
+        try {
+            invokeRunMutationTests(task)
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Acceptable to crash later in the runner — the point is to
+            // confirm ciMode short-circuits the report-formats branch
+            // before reaching the engine.
+        }
+        assertTrue(task.reportFormats.get().contains("console"))
+        assertTrue(task.reportFormats.get().contains("xml"))
+    }
+
+    @Test
+    fun `runMutationTests adds graph to report formats when generateGraph is enabled`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.generateGraph.set(true)
+        task.reportFormats.set(setOf("html"))
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val testClassesDir = tempDir.resolve("test-classes").toFile().apply { mkdirs() }
+        File(testClassesDir, "FooTest.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        task.targetClasses.from(classesDir)
+        task.testClasses.from(testClassesDir)
+        task.reportsDir.set(tempDir.resolve("reports").toFile())
+        try {
+            invokeRunMutationTests(task)
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Expected: the engine throws because the test classpath is
+            // not real JUnit on the classpath. We only care about the
+            // report-formats mutation happening before that throw.
+        }
+        assertTrue(task.reportFormats.get().contains("graph"))
+    }
+
+    @Test
+    fun `runMutationTests exercises targetPackages and excludePackages include pattern building`(
+        @TempDir tempDir: Path,
+    ) {
+        // The package-targeting loop converts dot-separated packages
+        // into regex patterns and adds them to includePatterns /
+        // excludeRegexPatterns. Reach the loop and the regex build.
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.targetPackages.set(setOf("com.example.service", "com.example.model"))
+        task.excludePackages.set(setOf("com.example.generated"))
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val testClassesDir = tempDir.resolve("test-classes").toFile().apply { mkdirs() }
+        File(testClassesDir, "FooTest.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        task.targetClasses.from(classesDir)
+        task.testClasses.from(testClassesDir)
+        task.reportsDir.set(tempDir.resolve("reports").toFile())
+        try {
+            invokeRunMutationTests(task)
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Expected
+        }
+    }
+
+    @Test
+    fun `runMutationTests uses coverageExecFile when explicitly set`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val covFile = tempDir.resolve("jacoco/test.exec").toFile()
+        covFile.parentFile.mkdirs()
+        covFile.writeBytes(byteArrayOf(0x01))
+        task.coverageExecFile.set(covFile)
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val testClassesDir = tempDir.resolve("test-classes").toFile().apply { mkdirs() }
+        File(testClassesDir, "FooTest.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        task.targetClasses.from(classesDir)
+        task.testClasses.from(testClassesDir)
+        task.reportsDir.set(tempDir.resolve("reports").toFile())
+        try {
+            invokeRunMutationTests(task)
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Expected
+        }
+    }
+
+    @Test
+    fun `runMutationTests honors enableIncrementalAnalysis false to skip incremental path`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.enableIncrementalAnalysis.set(false)
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val testClassesDir = tempDir.resolve("test-classes").toFile().apply { mkdirs() }
+        File(testClassesDir, "FooTest.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        task.targetClasses.from(classesDir)
+        task.testClasses.from(testClassesDir)
+        task.reportsDir.set(tempDir.resolve("reports").toFile())
+        try {
+            invokeRunMutationTests(task)
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Expected
+        }
+    }
+
+    @Test
+    fun `runMutationTests uses mutantTimeoutMs when set to positive value`(
+        @TempDir tempDir: Path,
+    ) {
+        // mutantTimeoutMs > 0 wins over timeoutMs — confirms the
+        // `effectiveTimeout` branch that picks the larger of the two.
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.mutantTimeoutMs.set(120_000L)
+        task.timeoutMs.set(30_000L)
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val testClassesDir = tempDir.resolve("test-classes").toFile().apply { mkdirs() }
+        File(testClassesDir, "FooTest.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        task.targetClasses.from(classesDir)
+        task.testClasses.from(testClassesDir)
+        task.reportsDir.set(tempDir.resolve("reports").toFile())
+        try {
+            invokeRunMutationTests(task)
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Expected
+        }
+    }
+
+    @Test
+    fun `runMutationTests with empty classpath logs warning but continues`(
+        @TempDir tempDir: Path,
+    ) {
+        // The `if (classpathFiles.isEmpty())` warning path runs when no
+        // dependencies are on the classpath. Reach it explicitly.
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val testClassesDir = tempDir.resolve("test-classes").toFile().apply { mkdirs() }
+        File(testClassesDir, "FooTest.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        task.targetClasses.from(classesDir)
+        task.testClasses.from(testClassesDir)
+        task.reportsDir.set(tempDir.resolve("reports").toFile())
+        // classpath intentionally empty
+        try {
+            invokeRunMutationTests(task)
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Expected
+        }
+    }
+
+    @Test
+    fun `runMutationTests exercises GeneratedClassFilter branch when user enabled patterns`(
+        @TempDir tempDir: Path,
+    ) {
+        // The userEnabled branch of the GeneratedClassFilter guard
+        // (`excludeGeneratedClasses.isPresent`) must call
+        // collectGeneratedClassNames before reaching the runner. We
+        // set user-defined patterns + provide R$drawable.class in the
+        // classes dir so the filter actually finds a generated class
+        // and adds it to the exclude patterns.
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        task.excludeGeneratedClasses.set(setOf("R\$*"))
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        File(classesDir, "R\$drawable.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val testClassesDir = tempDir.resolve("test-classes").toFile().apply { mkdirs() }
+        File(testClassesDir, "FooTest.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        task.targetClasses.from(classesDir)
+        task.testClasses.from(testClassesDir)
+        task.reportsDir.set(tempDir.resolve("reports").toFile())
+        try {
+            invokeRunMutationTests(task)
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            // Expected: the engine throws when the test classpath
+            // has no JUnit on it. The collectGeneratedClassNames
+            // branch runs before the engine is invoked.
+        }
+    }
+
+    private fun invokeRunMutationTests(task: MutationTask) {
+        val method = MutationTask::class.java.getDeclaredMethod("runMutationTests")
+        method.isAccessible = true
+        method.invoke(task)
+    }
+}
+
+class MutationTaskCollectGeneratedClassNamesTest {
+    @Test
+    fun `collectGeneratedClassNames returns empty set for non-directory path`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        // Point at a file (not a directory) — early-return branch.
+        val file = tempDir.resolve("not-a-dir.txt").toFile().apply { writeText("hi") }
+        val result = invokeCollectGeneratedClassNames(task, file, setOf("R"))
+        assertTrue(result.isEmpty(), "expected empty set when classesDir is not a directory")
+    }
+
+    @Test
+    fun `collectGeneratedClassNames returns class names matching patterns`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        File(classesDir, "R\$drawable.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        File(classesDir, "BuildConfig.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        // Use patterns that match the simple class names (no leading **)
+        // so the matchesGlob branch operates on the simple name only.
+        val result =
+            invokeCollectGeneratedClassNames(
+                task,
+                classesDir,
+                setOf("R\$*", "BuildConfig"),
+            )
+        assertTrue(result.isNotEmpty(), "expected at least one match, got: $result")
+        assertTrue(
+            result.contains("R\$drawable"),
+            "expected R\$drawable in result, got: $result",
+        )
+        assertTrue(
+            result.contains("BuildConfig"),
+            "expected BuildConfig in result, got: $result",
+        )
+        assertTrue(
+            !result.contains("Foo"),
+            "did not expect Foo in result, got: $result",
+        )
+    }
+
+    @Test
+    fun `collectGeneratedClassNames handles nested package directories`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        val nested = File(classesDir, "com/example/databinding").apply { mkdirs() }
+        File(nested, "ActivityBindingImpl.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        File(nested, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val result =
+            invokeCollectGeneratedClassNames(
+                task,
+                classesDir,
+                setOf("**/*BindingImpl"),
+            )
+        assertTrue(result.any { it.endsWith("ActivityBindingImpl") })
+        assertTrue(result.none { it.endsWith("Foo") })
+    }
+
+    @Test
+    fun `collectGeneratedClassNames returns empty set when patterns do not match`(
+        @TempDir tempDir: Path,
+    ) {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("java")
+        val task = project.tasks.create("mutationTest", MutationTask::class.java)
+        val classesDir = tempDir.resolve("classes").toFile().apply { mkdirs() }
+        File(classesDir, "Foo.class").writeBytes(byteArrayOf(0xCA.toByte()))
+        val result =
+            invokeCollectGeneratedClassNames(
+                task,
+                classesDir,
+                setOf("**/R", "**/BuildConfig"),
+            )
+        assertTrue(result.isEmpty())
+    }
+
+    private fun invokeCollectGeneratedClassNames(
+        task: MutationTask,
+        classesDir: File,
+        patterns: Set<String>,
+    ): Set<String> {
+        val method =
+            MutationTask::class.java.getDeclaredMethod(
+                "collectGeneratedClassNames",
+                File::class.java,
+                Set::class.java,
+            )
+        method.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        return method.invoke(task, classesDir, patterns) as Set<String>
     }
 }

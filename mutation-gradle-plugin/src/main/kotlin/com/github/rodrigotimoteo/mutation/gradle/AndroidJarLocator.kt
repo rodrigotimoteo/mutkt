@@ -31,6 +31,16 @@ import java.util.zip.ZipFile
  * touching the real process environment.
  */
 internal class AndroidJarLocator {
+    companion object {
+        /**
+         * Default Android API level used when neither `compileSdk` nor
+         * `targetSdk` is provided by the consuming project. Matches
+         * the most recent stable Android SDK that AGP installs by
+         * default; bump in lockstep with the project's AGP baseline.
+         */
+        private const val DEFAULT_SDK = 34
+    }
+
     fun find(
         project: Project,
         compileSdk: String?,
@@ -89,7 +99,7 @@ internal class AndroidJarLocator {
             return "android-$compileSdk"
         }
         if (targetSdk != null) return "android-$targetSdk"
-        return "android-34"
+        return "android-$DEFAULT_SDK"
     }
 
     /**

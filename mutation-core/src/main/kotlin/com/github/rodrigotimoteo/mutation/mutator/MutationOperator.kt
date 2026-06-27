@@ -125,13 +125,21 @@ enum class MutationOperator(val operatorName: String, val description: String) {
         val ALL_OPERATORS = MVP_OPERATORS + KOTLIN_OPERATORS + QUICK_WIN_OPERATORS
 
         /**
+         * Precomputed lookup table for [fromName]. Building the map once at
+         * class-load time replaces the previous `values().firstOrNull` linear
+         * scan, which was O(N) per call and is hit on every mutation's
+         * config resolution (e.g. from `MutationTask` reading user-supplied
+         * operator names from the Gradle DSL).
+         */
+        private val NAME_TO_OP: Map<String, MutationOperator> =
+            entries.associate { it.operatorName to it }
+
+        /**
          * Convert an operator name string to the enum, returns null if not recognized.
          *
          * @param name The string form (typically [operatorName]) to look up
          * @return Matching [MutationOperator] or `null` when no enum value has that name
          */
-        fun fromName(name: String): MutationOperator? {
-            return values().firstOrNull { it.operatorName == name }
-        }
+        fun fromName(name: String): MutationOperator? = NAME_TO_OP[name]
     }
 }

@@ -112,25 +112,45 @@ class ReflectionTestRunner(
             // but JUnit 1.10.2 provides no unregister counterpart, so
             // using a fresh listener per execute() is the only way to
             // avoid accumulating N listeners per worker thread.
+
+            // Phase 1: load every requested test class. Load failures are
+            // recorded on the listener so the result aggregation still
+            // reports them as a `loadFailures` count and surfaces the
+            // error message — matching the previous per-class loop's
+            // behavior.
+            val loadedClasses = mutableListOf<Class<*>>()
             for (testClassName in testClassNames) {
-                val testClass: Class<*> =
-                    try {
-                        effectiveLoader.loadClass(testClassName)
-                    } catch (e: Exception) {
-                        val cause =
-                            if (e is java.lang.reflect.InvocationTargetException) {
-                                e.targetException?.message
-                            } else {
-                                e.message
-                            }
-                        val errorMsg = "Could not load test class $testClassName: $cause"
-                        logger.warn(errorMsg)
-                        listener.recordLoadFailure(testClassName, errorMsg)
-                        continue
-                    }
+                try {
+                    loadedClasses.add(effectiveLoader.loadClass(testClassName))
+                } catch (e: Exception) {
+                    val cause =
+                        if (e is java.lang.reflect.InvocationTargetException) {
+                            e.targetException?.message
+                        } else {
+                            e.message
+                        }
+                    val errorMsg = "Could not load test class $testClassName: $cause"
+                    logger.warn(errorMsg)
+                    listener.recordLoadFailure(testClassName, errorMsg)
+                }
+            }
+
+            // Phase 2: a single LauncherDiscoveryRequest covering all
+            // loaded classes, a single discover(), a single execute().
+            // The previous per-class loop paid the cost of N discovery
+            // passes (engine introspection, classpath scanning) for N
+            // test classes; with many test classes that overhead
+            // dominated the runner's wall time. Engine and tag filters
+            // are applied once on the same request builder and
+            // propagate to every selector uniformly.
+            if (loadedClasses.isNotEmpty()) {
+                val selectors =
+                    loadedClasses
+                        .map { DiscoverySelectors.selectClass(it) }
+                        .toTypedArray()
                 val request: LauncherDiscoveryRequest =
                     LauncherDiscoveryRequestBuilder.request()
-                        .selectors(DiscoverySelectors.selectClass(testClass))
+                        .selectors(*selectors)
                         .filters(EngineFilter.includeEngines(*engineIds.toTypedArray()))
                         .apply {
                             // Honor @Tag / @Tags / @EnabledIf / @EnabledOnOs style

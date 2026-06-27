@@ -452,4 +452,93 @@ class AndroidJarLocatorTest {
         assertThat(result!!.absolutePath)
             .isEqualTo(File(sdkDir, "platforms/android-34/android.jar").absolutePath)
     }
+
+    @Test
+    fun `findRobolectricSdk reads sdk from src-test-resources robolectric properties`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
+        val resourcesDir = File(projectDir, "src/test/resources").apply { mkdirs() }
+        File(resourcesDir, "robolectric.properties").writeText("sdk=33\nother=ignored")
+        val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
+        val locator = AndroidJarLocator()
+        val result = locator.findRobolectricSdk(project)
+        assertThat(result).isEqualTo("android-33")
+    }
+
+    @Test
+    fun `findRobolectricSdk falls back to project-root robolectric properties`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
+        File(projectDir, "robolectric.properties").writeText("sdk=30")
+        val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
+        val locator = AndroidJarLocator()
+        val result = locator.findRobolectricSdk(project)
+        assertThat(result).isEqualTo("android-30")
+    }
+
+    @Test
+    fun `findRobolectricSdk returns null when no robolectric properties file is present`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
+        val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
+        val locator = AndroidJarLocator()
+        val result = locator.findRobolectricSdk(project)
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `findRobolectricSdk returns null when sdk key is missing from properties`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
+        val resourcesDir = File(projectDir, "src/test/resources").apply { mkdirs() }
+        File(resourcesDir, "robolectric.properties").writeText("other.key=irrelevant")
+        val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
+        val locator = AndroidJarLocator()
+        val result = locator.findRobolectricSdk(project)
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `findRobolectricSdk returns null when sdk value is not a valid integer`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
+        val resourcesDir = File(projectDir, "src/test/resources").apply { mkdirs() }
+        File(resourcesDir, "robolectric.properties").writeText("sdk=not-a-number")
+        val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
+        val locator = AndroidJarLocator()
+        val result = locator.findRobolectricSdk(project)
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `findRobolectricSdk tolerates whitespace around the sdk value`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
+        val resourcesDir = File(projectDir, "src/test/resources").apply { mkdirs() }
+        File(resourcesDir, "robolectric.properties").writeText("sdk=  28  ")
+        val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
+        val locator = AndroidJarLocator()
+        val result = locator.findRobolectricSdk(project)
+        assertThat(result).isEqualTo("android-28")
+    }
+
+    @Test
+    fun `findRobolectricSdk prefers resources over project-root file`(
+        @TempDir tempDir: Path,
+    ) {
+        val projectDir = tempDir.resolve("proj").toFile().apply { mkdirs() }
+        val resourcesDir = File(projectDir, "src/test/resources").apply { mkdirs() }
+        File(resourcesDir, "robolectric.properties").writeText("sdk=33")
+        File(projectDir, "robolectric.properties").writeText("sdk=29")
+        val project = ProjectBuilder.builder().withProjectDir(projectDir).build()
+        val locator = AndroidJarLocator()
+        val result = locator.findRobolectricSdk(project)
+        assertThat(result).isEqualTo("android-33")
+    }
 }

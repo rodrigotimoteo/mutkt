@@ -6,6 +6,7 @@ import org.gradle.api.Project
 import org.gradle.api.file.FileCollection
 import org.gradle.api.model.ObjectFactory
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Resolves an [AndroidMutationContext] for a given AGP variant.
@@ -27,6 +28,17 @@ import java.io.File
  * are safe no-ops and the plugin falls back to standard JVM detection.
  */
 class AgpVariantResolver(private val objectFactory: ObjectFactory) {
+    /**
+     * Memoize the KMP-Android probe per [Project]. `onVariants` is
+     * called once per Android variant (typically debug + release), so
+     * without this cache the reflective `hasPlugin` lookup runs on
+     * every variant even though the result is invariant for the
+     * lifetime of the project. ConcurrentHashMap is overkill for a
+     * single build but keeps the resolver safe if a future caller
+     * invokes it from parallel configuration blocks.
+     */
+    private val kmpAndroidCache = ConcurrentHashMap<Project, Boolean>()
+
     /**
      * Raw info captured during the AGP `onVariants` callback. Holds the
      * variant's [FileCollection] references (which are safe to query
@@ -369,9 +381,11 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
      * plugin is a `compileOnly` dependency of the mutation plugin.
      */
     private fun isKmpAndroidTarget(project: Project): Boolean =
-        try {
-            project.plugins.hasPlugin("org.jetbrains.kotlin.multiplatform")
-        } catch (_: Exception) {
-            false
+        kmpAndroidCache.getOrPut(project) {
+            try {
+                project.plugins.hasPlugin("org.jetbrains.kotlin.multiplatform")
+            } catch (_: Exception) {
+                false
+            }
         }
 }

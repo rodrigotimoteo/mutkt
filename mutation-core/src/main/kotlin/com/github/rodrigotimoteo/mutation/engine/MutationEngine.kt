@@ -1,11 +1,11 @@
 package com.github.rodrigotimoteo.mutation.engine
 
 import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
-import com.github.rodrigotimoteo.mutation.LOG_PREFIX
 import com.github.rodrigotimoteo.mutation.analysis.KillSetStorage
 import com.github.rodrigotimoteo.mutation.analysis.SubsumptionAnalyzer
 import com.github.rodrigotimoteo.mutation.analysis.TestStrengthOrdering
 import com.github.rodrigotimoteo.mutation.analysis.WeakMutationAnalyzer
+import com.github.rodrigotimoteo.mutation.baseline.BaselineEntry
 import com.github.rodrigotimoteo.mutation.baseline.BaselineStorage
 import com.github.rodrigotimoteo.mutation.cache.MutKtCache
 import com.github.rodrigotimoteo.mutation.classloader.MutantClassLoaderFactory
@@ -720,16 +720,30 @@ class MutationEngine
             for (testClass in testClassNames) {
                 totals[testClass] = intArrayOf(0, 0)
             }
+            // O(total-kills) instead of O(results × testClasses): for each
+            // result, only the tests in its kill set get a kill credit; the
+            // runs/mutations denominator is bumped by `results.size` once
+            // per test class at the end (every test class was exercised
+            // against every result). The previous implementation iterated
+            // every (result, testClass) pair to count both numerator and
+            // denominator, which is quadratic in the product of those two
+            // sizes.
             for (result in results) {
                 val killingTests = killSets[result.mutation.id] ?: emptySet()
-                for (testClass in testClassNames) {
-                    val entry = totals.getValue(testClass)
-                    if (testClass in killingTests) entry[0] = entry[0] + 1
+                for (testClass in killingTests) {
+                    val entry = totals[testClass] ?: continue
+                    entry[0] = entry[0] + 1
                     entry[1] = entry[1] + 1
                 }
             }
             for ((testClass, entry) in totals) {
-                testStrengthOrdering.recordResults(testClass, entry[0], entry[1])
+                // entry[1] currently counts (result, testClass) pairs where
+                // testClass killed the result. The denominator is "mutations
+                // this test class was exercised against" = results.size for
+                // every test class (each result was tested against every
+                // test class). Add the difference.
+                val totalMutations = entry[1] + (results.size - entry[0])
+                testStrengthOrdering.recordResults(testClass, entry[0], totalMutations)
             }
         }
 
@@ -753,7 +767,7 @@ class MutationEngine
                 results.groupBy { it.mutation.className }
                     .mapValues { (_, classResults) ->
                         classResults.map { result ->
-                            com.github.rodrigotimoteo.mutation.baseline.BaselineEntry(
+                            BaselineEntry(
                                 operator = result.mutation.operator.operatorName,
                                 lineNumber = result.mutation.lineNumber,
                                 occurrenceIndex = result.mutation.getOccurrenceIndex(),
@@ -834,8 +848,10 @@ class MutationEngine
             // classpath — resulting in ClassNotFoundException and `testsFound=0`
             // (i.e. all mutations reported as NO_COVERAGE).
             val testClassByteMap =
-                allTestClassBytes.filterKeys { key ->
-                    testClassNames.any { it.replace('.', '/') == key }
+                run {
+                    val requested =
+                        testClassNames.mapTo(HashSet(testClassNames.size)) { it.replace('.', '/') }
+                    allTestClassBytes.filterKeys { it in requested }
                 }
 
             // Group mutations by target class. Each group shares a BaseProjectClassLoader
@@ -907,8 +923,8 @@ class MutationEngine
                         val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
                         val rate = if (elapsed > 0.0) count / elapsed else 0.0
                         val pct = count * 100 / mutations.size
-                        System.err.print(
-                            "\r$LOG_PREFIX Progress: $count/${mutations.size} ($pct%) ${elapsed}s ${rate.toInt()} mut/s",
+                        logger.info(
+                            "Progress: $count/${mutations.size} ($pct%) ${elapsed}s ${rate.toInt()} mut/s",
                         )
                     } catch (e: java.util.concurrent.TimeoutException) {
                         future.cancel(true)
@@ -1182,7 +1198,19 @@ class MutationEngine
                         // from disk for every one, wasting N×file I/O.
                         val lines =
                             sourceFileCache.getOrPut(cacheKey) {
-                                if (sourceFile.exists()) sourceFile.readLines() else emptyList()
+                                if (sourceFile.exists()) {
+                                    // Wrap in runCatching: a transient I/O
+                                    // error (file deleted between exists()
+                                    // and readLines, EACCES, etc.) must not
+                                    // crash the worker thread mid-run. Cache
+                                    // the empty-list result so the next
+                                    // mutation in the same class does not
+                                    // retry the failing read.
+                                    runCatching { sourceFile.readLines() }
+                                        .getOrElse { emptyList() }
+                                } else {
+                                    emptyList()
+                                }
                             }
                         if (lines.isEmpty()) continue
                         if (lineNumber <= lines.size) {
@@ -1326,9 +1354,12 @@ class MutationEngine
                 closeMethod.invoke(classLoader)
             } catch (_: NoSuchMethodException) {
                 // JVM predates Java 7 — no close support, nothing to do.
-            } catch (_: java.lang.reflect.InvocationTargetException) {
-                // The loader's close threw — surface as debug noise.
-                logger.debug("ClassLoader.close() threw for $classLoader")
+            } catch (e: java.lang.reflect.InvocationTargetException) {
+                // The loader's close threw — surface as debug noise with
+                // the underlying cause so the original failure is visible
+                // (without `e.cause` we would log only "InvocationTargetException"
+                // and lose the real stack trace).
+                logger.debug("ClassLoader.close() threw for $classLoader", e.cause)
             } catch (_: IllegalAccessException) {
                 // Should not happen for ClassLoader.close, but stay defensive.
             }

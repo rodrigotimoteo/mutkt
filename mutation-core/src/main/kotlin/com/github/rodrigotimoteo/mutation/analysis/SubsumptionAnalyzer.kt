@@ -93,13 +93,7 @@ class SubsumptionAnalyzer {
             // pair loop would otherwise call the provider twice per pair
             // (O(n²) provider calls). Sort by ascending kill-set size so
             // the larger set is `i` (the candidate subsumer) and the
-            // smaller set is `j` (the candidate subsumed). Bail the pair
-            // as soon as |J| >= |I| — a superset can never be subsumed
-            // by a subset-or-equal set.
-            data class Entry(
-                val id: String,
-                val killSet: Set<String>,
-            )
+            // smaller set is `j` (the candidate subsumed).
             val entries =
                 methodMutations
                     .mapNotNull { m ->
@@ -111,15 +105,14 @@ class SubsumptionAnalyzer {
                 val entryI = entries[i]
                 if (entryI.id in subsumed) continue
 
-                for (j in entries.indices) {
-                    if (i == j) continue
+                // Entries are sorted ascending by killSet size, so every
+                // j < i has |J| <= |I|; iterating only the lower-index
+                // half halves the pair count vs. the previous full
+                // O(n²) loop. The break-on-catch-up check is no longer
+                // needed because j is always <= i by construction.
+                for (j in 0 until i) {
                     val entryJ = entries[j]
                     if (entryJ.id in subsumed) continue
-                    // |J| <= |I| by sort; if equal the strict-subset
-                    // check below excludes them anyway. Bail when J
-                    // catches up — every remaining j has |J| >= |I|,
-                    // and a superset cannot be subsumed.
-                    if (entryJ.killSet.size >= entryI.killSet.size) break
                     if (entryJ.killSet.isNotEmpty() &&
                         entryI.killSet != entryJ.killSet &&
                         entryI.killSet.containsAll(entryJ.killSet)
@@ -133,3 +126,14 @@ class SubsumptionAnalyzer {
         return subsumed
     }
 }
+
+/**
+ * Lightweight pair used during the pair-comparison loop in
+ * [SubsumptionAnalyzer.findSubsumed]. Hoisted to file level so a single
+ * class definition is reused across calls instead of being recreated
+ * inside the function on every invocation.
+ */
+private data class Entry(
+    val id: String,
+    val killSet: Set<String>,
+)

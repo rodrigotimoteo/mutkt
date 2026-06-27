@@ -76,10 +76,10 @@ data class MutationReport
         val weakKilledMutations: Int = 0,
     ) {
         val killedPercentage: Int get() =
-            if (totalMutations > 0) (killedMutations * 100) / totalMutations else 0
+            if (totalMutations > 0) Math.round(killedMutations * 100.0 / totalMutations).toInt() else 0
 
         val survivedPercentage: Int get() =
-            if (totalMutations > 0) (survivedMutations * 100) / totalMutations else 0
+            if (totalMutations > 0) Math.round(survivedMutations * 100.0 / totalMutations).toInt() else 0
 
         /**
          * Mutations removed by post-hoc subsumption analysis. Reported as a
@@ -88,7 +88,7 @@ data class MutationReport
          * numerator (killed / survived) excludes them.
          */
         val subsumedPercentage: Int get() =
-            if (totalMutations > 0) (subsumedMutations * 100) / totalMutations else 0
+            if (totalMutations > 0) Math.round(subsumedMutations * 100.0 / totalMutations).toInt() else 0
 
         /** Mutation score (percentage of mutations killed). */
         val mutationScore: Int get() = killedPercentage

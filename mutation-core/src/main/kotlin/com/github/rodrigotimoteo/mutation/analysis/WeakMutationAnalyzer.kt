@@ -58,9 +58,14 @@ class WeakMutationAnalyzer {
             return mutations
         }
         return mutations.filter { mutation ->
+            // Cache the slashed form once per mutation. The previous code
+            // called `replace('.', '/')` for the fallback lookup; with
+            // covered-line lookups running for every mutation, the per-call
+            // allocation added up. Compute once, reuse for both lookups.
+            val dottedName = mutation.className
+            val slashedName = dottedName.replace('.', '/')
             val classLines =
-                coveredLinesMap[mutation.className]
-                    ?: coveredLinesMap[mutation.className.replace('.', '/')]
+                coveredLinesMap[dottedName] ?: coveredLinesMap[slashedName]
             classLines != null && (mutation.lineNumber <= 0 || mutation.lineNumber in classLines)
         }
     }

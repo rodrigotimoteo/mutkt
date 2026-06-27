@@ -58,6 +58,12 @@ object MutKt {
         try {
             return block()
         } finally {
+            /**
+             * Advisory timeout warning — logged when a test's mutation
+             * execution exceeds the configured timeout. Advisory only;
+             * does not throw or mark the test as failed. The actual
+             * timeout enforcement happens in the engine runner.
+             */
             val elapsed = System.currentTimeMillis() - startTime
             if (elapsed > MutationRegistry.getTimeoutMs()) {
                 logger.warn("Mutation execution exceeded timeout: ${elapsed}ms > ${MutationRegistry.getTimeoutMs()}ms")

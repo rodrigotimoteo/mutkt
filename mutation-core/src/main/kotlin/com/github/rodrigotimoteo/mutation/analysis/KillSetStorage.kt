@@ -41,7 +41,7 @@ class KillSetStorage(private val projectDir: File) {
                     id to tests
                 }
         } catch (e: Exception) {
-            logger.warn("Failed to load kill sets: ${e.message}")
+            logger.warn("Failed to load kill sets", e)
             emptyMap()
         }
     }
@@ -62,7 +62,7 @@ class KillSetStorage(private val projectDir: File) {
                         },
                 )
             } catch (e: Exception) {
-                logger.warn("Failed to save kill sets: ${e.message}")
+                logger.warn("Failed to save kill sets", e)
             }
         }
     }
@@ -86,7 +86,7 @@ class KillSetStorage(private val projectDir: File) {
                         },
                 )
             } catch (e: Exception) {
-                logger.warn("Failed to save merged kill sets: ${e.message}")
+                logger.warn("Failed to save merged kill sets", e)
             }
         }
     }

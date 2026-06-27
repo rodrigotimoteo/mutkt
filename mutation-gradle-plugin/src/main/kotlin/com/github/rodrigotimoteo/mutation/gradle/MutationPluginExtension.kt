@@ -69,7 +69,6 @@ open class MutationPluginExtension(project: Project) {
     /**
      * List of mutation operators to enable (use MVP_OPERATORS by default).
      */
-
     val enabledOperators: SetProperty<String> =
         project.objects.setProperty(String::class.java).convention(
             MutationOperator.MVP_OPERATORS.map { it.operatorName }.toSet(),
@@ -78,13 +77,11 @@ open class MutationPluginExtension(project: Project) {
     /**
      * Timeout in milliseconds for each mutant test execution.
      */
-
     val timeoutMs: Property<Long> = project.objects.property(Long::class.java).convention(DEFAULT_TIMEOUT_MS)
 
     /**
      * Number of parallel mutant test executions.
      */
-
     val maxParallelMutants: Property<Int> =
         project.objects.property(Int::class.java)
             .convention(4)
@@ -92,7 +89,6 @@ open class MutationPluginExtension(project: Project) {
     /**
      * Output directory for mutation test reports.
      */
-
     val outputDir: DirectoryProperty =
         project.objects.directoryProperty()
             .convention(project.layout.buildDirectory.dir("reports/mutation"))
@@ -100,14 +96,12 @@ open class MutationPluginExtension(project: Project) {
     /**
      * Whether to fail the build if any mutants survive.
      */
-
     val failOnSurvived: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 
     /**
      * Classes to exclude from mutation testing.
      * Patterns: ** for any path, * for any name, exact names.
      */
-
     val excludedClasses: SetProperty<String> =
         project.objects.setProperty(String::class.java).convention(
             setOf(
@@ -132,7 +126,6 @@ open class MutationPluginExtension(project: Project) {
     /**
      * Methods to exclude from mutation testing.
      */
-
     val excludedMethods: SetProperty<String> =
         project.objects.setProperty(String::class.java).convention(
             setOf(
@@ -172,19 +165,16 @@ open class MutationPluginExtension(project: Project) {
      * Note: previously named `failOnCoverageThreshold` — the legacy name
      * compared the mutation score (not line coverage) and was misleading.
      */
-
     val failOnMutationScoreThreshold: Property<Int> = project.objects.property(Int::class.java).convention(0)
 
     /**
      * Maximum mutations per class. 0 = no limit.
      */
-
     val maxMutationsPerClass: Property<Int> = project.objects.property(Int::class.java).convention(0)
 
     /**
      * Enable incremental analysis (cache mutation results).
      */
-
     val enableIncrementalAnalysis: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 
     /**
@@ -204,7 +194,6 @@ open class MutationPluginExtension(project: Project) {
      * If empty, all classes are targeted.
      * Example: listOf("com\\.example\\..*")
      */
-
     val targetClassPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
 
     /**
@@ -212,21 +201,18 @@ open class MutationPluginExtension(project: Project) {
      * If empty, all tests are run.
      * Example: listOf("com\\.example\\..*Test")
      */
-
     val targetTestPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
 
     /**
      * Exclude classes matching these patterns.
      * Example: listOf("com\\.example\\.generated\\..*")
      */
-
     val excludeClassPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
 
     /**
      * Exclude tests matching these patterns.
      * Example: listOf("com\\.example\\.Generated.*")
      */
-
     val excludeTestPatterns: SetProperty<String> = project.objects.setProperty(String::class.java).convention(emptySet())
 
     // === Speed Optimizations ===
@@ -234,25 +220,21 @@ open class MutationPluginExtension(project: Project) {
     /**
      * Enable subsumption detection (skip redundant mutants).
      */
-
     val enableSubsumption: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 
     /**
      * Enable weak mutant detection (skip mutations never reached).
      */
-
     val enableWeakMutation: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 
     /**
      * Enable inlined finally detection (skip inlined finally blocks).
      */
-
     val enableInlinedFinally: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 
     /**
      * Enable test ordering (run most effective tests first).
      */
-
     val enableTestOrdering: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 
     // === Report Options ===
@@ -260,7 +242,6 @@ open class MutationPluginExtension(project: Project) {
     /**
      * Report formats to generate: "html", "xml", "json", "csv", "console", "graph"
      */
-
     val reportFormats: SetProperty<String> =
         project.objects.setProperty(String::class.java).convention(
             setOf("html"),
@@ -269,7 +250,6 @@ open class MutationPluginExtension(project: Project) {
     /**
      * Generate per-class mutation scores in reports.
      */
-
     val showClassScores: Property<Boolean> = project.objects.property(Boolean::class.java).convention(true)
 
     /**
@@ -291,7 +271,6 @@ open class MutationPluginExtension(project: Project) {
      * Enable file-based caching of mutation results.
      * Skips previously tested mutations on re-run.
      */
-
     val enableCache: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 
     // === Power Features ===

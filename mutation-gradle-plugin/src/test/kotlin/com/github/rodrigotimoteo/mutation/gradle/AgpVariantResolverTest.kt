@@ -323,4 +323,135 @@ class AgpVariantResolverTest {
         assertThat(ctx.mainClassesDir).isEqualTo(mainOut)
         assertThat(ctx.testClassesDir).isEqualTo(testOut)
     }
+
+    @Test
+    fun `buildContext adds debugUnitTestRuntimeClasspath when present on project`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        val mainOut = tempDir.resolve("kotlin-classes/debug").toFile().apply { mkdirs() }
+        val mainTask =
+            localProject.tasks.register("compileDebugKotlin", JavaCompile::class.java)
+        mainTask.get().destinationDirectory.set(mainOut)
+
+        // Create a test-runtime classpath configuration with a real file
+        // inside it so the runtime classpath entry is observable.
+        val cfg = localProject.configurations.create("debugUnitTestRuntimeClasspath")
+        val fakeDep = tempDir.resolve("mockk.jar").toFile()
+        fakeDep.writeBytes(byteArrayOf(0x50, 0x4B, 0x03, 0x04))
+        cfg.dependencies.add(localProject.dependencies.create(localProject.files(fakeDep)))
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val ctx = r.buildContext(localProject, capture)
+        // The configuration's file should now be on the resolved runtime
+        // classpath alongside the (empty) AGP-provided one.
+        val files = ctx.runtimeClasspath.files
+        assertThat(files).contains(fakeDep)
+    }
+
+    @Test
+    fun `buildContext adds DebugUnitTestRuntimeClasspath when present on project`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        val mainOut = tempDir.resolve("kotlin-classes/debug").toFile().apply { mkdirs() }
+        val mainTask =
+            localProject.tasks.register("compileDebugKotlin", JavaCompile::class.java)
+        mainTask.get().destinationDirectory.set(mainOut)
+
+        // Use the capitalized form ("Debug...") — the resolver
+        // deduplicates via `.distinct()` so either name is enough to
+        // reach the add-to-runtime-classpath branch.
+        val cfg = localProject.configurations.create("DebugUnitTestRuntimeClasspath")
+        val fakeDep = tempDir.resolve("junit.jar").toFile()
+        fakeDep.writeBytes(byteArrayOf(0x50, 0x4B, 0x03, 0x04))
+        cfg.dependencies.add(localProject.dependencies.create(localProject.files(fakeDep)))
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val ctx = r.buildContext(localProject, capture)
+        assertThat(ctx.runtimeClasspath.files).contains(fakeDep)
+    }
+
+    @Test
+    fun `buildContext does not throw when no test runtime classpath configuration exists`(
+        @TempDir tempDir: Path,
+    ) {
+        // No `debugUnitTestRuntimeClasspath` / `DebugUnitTestRuntimeClasspath`
+        // configuration — the forEach loop over distinct names must
+        // silently no-op so users without test dependencies configured
+        // do not get a build failure.
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+
+        val mainOut = tempDir.resolve("kotlin-classes/debug").toFile().apply { mkdirs() }
+        val mainTask =
+            localProject.tasks.register("compileDebugKotlin", JavaCompile::class.java)
+        mainTask.get().destinationDirectory.set(mainOut)
+
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val ctx = r.buildContext(localProject, capture)
+        assertThat(ctx).isNotNull
+        assertThat(ctx.mainClassesDir).isEqualTo(mainOut)
+    }
+
+    @Test
+    fun `isKmpAndroidTarget returns true when kotlin multiplatform plugin is applied`() {
+        val localProject = ProjectBuilder.builder().build()
+        localProject.plugins.apply("org.jetbrains.kotlin.multiplatform")
+        val r = AgpVariantResolver(localProject.objects)
+        val result = invokeIsKmpAndroidTarget(r, localProject)
+        assertThat(result).isTrue
+    }
+
+    @Test
+    fun `isKmpAndroidTarget returns false when no Kotlin plugins are applied`() {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val result = invokeIsKmpAndroidTarget(r, localProject)
+        assertThat(result).isFalse
+    }
+
+    @Test
+    fun `isKmpAndroidTarget caches the result across invocations on the same project`() {
+        val localProject = ProjectBuilder.builder().build()
+        localProject.plugins.apply("org.jetbrains.kotlin.multiplatform")
+        val r = AgpVariantResolver(localProject.objects)
+        val first = invokeIsKmpAndroidTarget(r, localProject)
+        val second = invokeIsKmpAndroidTarget(r, localProject)
+        assertThat(first).isTrue
+        assertThat(second).isTrue
+    }
+
+    private fun invokeIsKmpAndroidTarget(
+        resolver: AgpVariantResolver,
+        project: org.gradle.api.Project,
+    ): Boolean {
+        val method =
+            AgpVariantResolver::class.java
+                .getDeclaredMethod("isKmpAndroidTarget", org.gradle.api.Project::class.java)
+        method.isAccessible = true
+        return method.invoke(resolver, project) as Boolean
+    }
 }

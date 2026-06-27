@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutation.mutator
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.Opcodes
+import org.slf4j.LoggerFactory
 
 /**
  * Main mutation engine that applies mutations to class bytecode.
@@ -29,6 +30,8 @@ class Mutator
         private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
         private val excludedMethods: Set<String> = emptySet(),
     ) {
+        private val logger = LoggerFactory.getLogger(Mutator::class.java)
+
         /**
          * Scans a class for mutation points without applying mutations.
          * Returns list of potential mutations.
@@ -109,7 +112,12 @@ class Mutator
                     ClassReader.SKIP_CODE or ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES,
                 )
                 name
-            } catch (e: Exception) {
+            } catch (e: RuntimeException) {
+                // `ClassReader.accept` only throws RuntimeException for malformed
+                // bytecode; checked exceptions are not part of its signature.
+                // Narrow the catch so IO/parse failures surface as debug logs
+                // instead of being silently swallowed.
+                logger.debug("readInternalName failed for ${name ?: "<unnamed>"}", e)
                 null
             }
         }

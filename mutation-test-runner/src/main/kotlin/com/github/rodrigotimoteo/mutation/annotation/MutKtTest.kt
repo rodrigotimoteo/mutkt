@@ -19,6 +19,9 @@ import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
  *     }
  * }
  * ```
+ *
+ * @see MutKtExtension for automatic test execution wiring
+ * @see MutKt for test scoping API
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
