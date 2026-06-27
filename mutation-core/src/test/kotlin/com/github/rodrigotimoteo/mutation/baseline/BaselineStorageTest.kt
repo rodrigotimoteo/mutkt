@@ -26,8 +26,8 @@ class BaselineStorageTest {
             mapOf(
                 "com.example.Foo" to
                     listOf(
-                        Triple("ARITHMETIC", 42, MutationStatus.KILLED),
-                        Triple("RETURN_VALS", 43, MutationStatus.SURVIVED),
+                        BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED),
+                        BaselineEntry("RETURN_VALS", 43, 1, MutationStatus.SURVIVED),
                     ),
             )
 
@@ -48,11 +48,11 @@ class BaselineStorageTest {
     fun `save overwrites existing baseline`() {
         val data1 =
             mapOf(
-                "com.example.Foo" to listOf(Triple("ARITHMETIC", 42, MutationStatus.KILLED)),
+                "com.example.Foo" to listOf(BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED)),
             )
         val data2 =
             mapOf(
-                "com.example.Bar" to listOf(Triple("RETURN_VALS", 43, MutationStatus.SURVIVED)),
+                "com.example.Bar" to listOf(BaselineEntry("RETURN_VALS", 43, 0, MutationStatus.SURVIVED)),
             )
 
         baseline.save(data1)
@@ -67,7 +67,7 @@ class BaselineStorageTest {
     fun `compareWithBaseline detects new mutations`() {
         val baselineData =
             mapOf(
-                "com.example.Foo" to listOf(Triple("ARITHMETIC", 42, MutationStatus.KILLED)),
+                "com.example.Foo" to listOf(BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED)),
             )
         baseline.save(baselineData)
 
@@ -75,8 +75,8 @@ class BaselineStorageTest {
             mapOf(
                 "com.example.Foo" to
                     listOf(
-                        Triple("ARITHMETIC", 42, MutationStatus.KILLED),
-                        Triple("RETURN_VALS", 43, MutationStatus.SURVIVED),
+                        BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED),
+                        BaselineEntry("RETURN_VALS", 43, 0, MutationStatus.SURVIVED),
                     ),
             )
 
@@ -90,13 +90,13 @@ class BaselineStorageTest {
     fun `compareWithBaseline detects changed status`() {
         val baselineData =
             mapOf(
-                "com.example.Foo" to listOf(Triple("ARITHMETIC", 42, MutationStatus.KILLED)),
+                "com.example.Foo" to listOf(BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED)),
             )
         baseline.save(baselineData)
 
         val currentResults =
             mapOf(
-                "com.example.Foo" to listOf(Triple("ARITHMETIC", 42, MutationStatus.SURVIVED)),
+                "com.example.Foo" to listOf(BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.SURVIVED)),
             )
 
         val diff = baseline.compareWithBaseline(currentResults)
@@ -110,15 +110,15 @@ class BaselineStorageTest {
             mapOf(
                 "com.example.Foo" to
                     listOf(
-                        Triple("ARITHMETIC", 42, MutationStatus.KILLED),
-                        Triple("RETURN_VALS", 43, MutationStatus.SURVIVED),
+                        BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED),
+                        BaselineEntry("RETURN_VALS", 43, 0, MutationStatus.SURVIVED),
                     ),
             )
         baseline.save(baselineData)
 
         val currentResults =
             mapOf(
-                "com.example.Foo" to listOf(Triple("ARITHMETIC", 42, MutationStatus.KILLED)),
+                "com.example.Foo" to listOf(BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED)),
             )
 
         val diff = baseline.compareWithBaseline(currentResults)
@@ -130,7 +130,7 @@ class BaselineStorageTest {
     fun `compareWithBaseline returns no changes when identical`() {
         val data =
             mapOf(
-                "com.example.Foo" to listOf(Triple("ARITHMETIC", 42, MutationStatus.KILLED)),
+                "com.example.Foo" to listOf(BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED)),
             )
         baseline.save(data)
 
@@ -142,7 +142,7 @@ class BaselineStorageTest {
     fun `clear removes baseline file`() {
         val data =
             mapOf(
-                "com.example.Foo" to listOf(Triple("ARITHMETIC", 42, MutationStatus.KILLED)),
+                "com.example.Foo" to listOf(BaselineEntry("ARITHMETIC", 42, 0, MutationStatus.KILLED)),
             )
         baseline.save(data)
         baseline.clear()

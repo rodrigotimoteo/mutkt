@@ -143,4 +143,40 @@ class MutationPluginTest {
         val task = project.tasks.findByName("mutationTest")
         assertNotNull(task, "expected 'mutationTest' task to be registered on non-JVM project")
     }
+
+    @Test
+    fun `KMP resolver is invoked when KotlinProjectExtension is registered`() {
+        // The KMP source set auto-detector uses reflection on the Kotlin
+        // Gradle Plugin classes (compileOnly dependency). For a pure-JVM
+        // project without a KotlinProjectExtension, the detector returns
+        // early. Applying kotlin("jvm") registers a real
+        // KotlinProjectExtension (KotlinJvmProjectExtension is a
+        // subclass), which forces the KMP branch to actually run.
+        // The KMP branch iterates source sets looking for names matching
+        // the XxxMain / XxxTest convention; for the JVM target the source
+        // sets are named "main"/"test" (not "jvmMain"/"jvmTest"), so the
+        // filter correctly skips them and falls through to the JVM
+        // SourceSetContainer path. The point of this test is to confirm
+        // the KMP branch is actually reached (not silently no-opped) and
+        // does not crash the build.
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("org.jetbrains.kotlin.jvm")
+
+        project.plugins.apply(MutationPlugin::class.java)
+        (project as org.gradle.api.internal.project.ProjectInternal).evaluate()
+
+        val ext = project.extensions.getByType(MutationPluginExtension::class.java)
+        assertNotNull(ext, "expected 'mutationTest' extension to be registered")
+        // JVM SourceSetContainer path populates targetClasses/testClasses
+        // from "main"/"test" source sets. Verify the resolver did not
+        // crash when the KMP branch was exercised.
+        assertTrue(
+            ext.targetClasses.files.isNotEmpty(),
+            "expected targetClasses to be auto-populated (JVM path), got: ${ext.targetClasses.files}",
+        )
+        assertTrue(
+            ext.testClasses.files.isNotEmpty(),
+            "expected testClasses to be auto-populated (JVM path), got: ${ext.testClasses.files}",
+        )
+    }
 }

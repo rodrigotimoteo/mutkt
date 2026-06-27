@@ -256,11 +256,14 @@ class ReflectionTestRunner(
 
         private fun isDisabledReason(reason: String?): Boolean {
             if (reason == null) return false
-            // Jupiter formats disabled reasons as
-            // "public void com.example.Foo.disabledTest() is @Disabled"
-            // or with the @Disabled message suffix.
-            // JUnit 4 (@Ignore) and JUnit 5 (@Disabled, @Ignored) all surface
-            // as SKIPPED with a reason string containing the annotation name.
+            // NOTE: this matches by reason-string substring (e.g. "is
+            // @Disabled", "is @Ignore") rather than by reflecting on
+            // `TestIdentifier.source` for the @Disabled / @Ignore
+            // annotation. Substring matching is sufficient for current
+            // JUnit 5 / JUnit 4 releases and avoids the cost of a
+            // per-skipped-test classloader lookup. If a future JUnit
+            // release changes the skip-reason format, the substring
+            // constants below are the only thing to update.
             if (reason.contains("@Disabled") || reason.endsWith(" is @Disabled")) return true
             if (reason.contains("@Ignored") || reason.endsWith(" is @Ignored")) return true
             if (reason.contains("@Ignore") || reason.endsWith(" is @Ignore")) return true

@@ -15,7 +15,14 @@ internal class MutationScannerVisitor(
 ) : ClassVisitor(Opcodes.ASM9) {
     private var currentClassName = ""
     private var isKotlinClass = false
-    private var isKotlinDataClass = false
+
+    // Set true once we see a `component$N` method while visiting this class's
+    // methods. Used as the data-class signal because @kotlin.Metadata.d1 is
+    // exposed by ASM as String[] (not ByteArray) and cannot be parsed with the
+    // raw protobuf path. The data class's own generated `component1`,
+    // `component2`, ... methods are a stable, low-false-positive indicator
+    // that the compiler emitted a real data class.
+    private var hasComponentN = false
     private var classSuppressed = false
     private var suppressedOperators = emptySet<String>()
     private var currentMethodName = ""
@@ -40,17 +47,10 @@ internal class MutationScannerVisitor(
     ): org.objectweb.asm.AnnotationVisitor? {
         if (desc == "Lkotlin/Metadata;") {
             isKotlinClass = true
-            // Capture d1 byte array to detect data class via protobuf `flags` field.
-            return object : org.objectweb.asm.AnnotationVisitor(Opcodes.ASM9) {
-                override fun visit(
-                    name: String?,
-                    value: Any?,
-                ) {
-                    if (name == "d1" && value is ByteArray) {
-                        isKotlinDataClass = KotlinMetadataUtils.isKotlinDataClass(value)
-                    }
-                }
-            }
+            // d1 ByteArray parsing is unreliable: ASM's AnnotationVisitor passes
+            // the d1 String[] element type, not ByteArray. Data class detection
+            // is deferred to `visitMethod` via the `component$N` method scan.
+            return null
         }
         // Check for @SuppressMutations annotation
         if (desc == "Lcom/github/rodrigotimoteo/mutation/annotation/SuppressMutations;") {
@@ -109,6 +109,16 @@ internal class MutationScannerVisitor(
         // Skip excluded methods
         if (excludedMethods.any { name.contains(it) }) return null
 
+        // Mark class as a data class as soon as we see a `component$N` method.
+        // Kotlin's compiler emits these for every primary-constructor property
+        // of a `data class` (e.g. component1, component2, ...). Non-data
+        // classes never have them. Detection happens in method order: the
+        // first `component1` visit arms the flag for any subsequent method
+        // (typically the user method that calls `copy()`).
+        if (isKotlinClass && isKotlinComponentNMethod(name)) {
+            hasComponentN = true
+        }
+
         currentMethodName = name
 
         return MutationScannerMethodVisitor(
@@ -120,7 +130,7 @@ internal class MutationScannerVisitor(
             classSuppressed = classSuppressed,
             suppressedOperators = suppressedOperators,
             isKotlinClass = isKotlinClass,
-            isKotlinDataClass = isKotlinDataClass,
+            isKotlinDataClass = isKotlinClass && hasComponentN,
         )
     }
 }
@@ -492,26 +502,27 @@ internal class MutationScannerMethodVisitor(
         type: String,
     ) {
         if (opcode == Opcodes.INSTANCEOF && MutationOperator.SEALED_WHEN in enabledOperators && isKotlinClass) {
-            // Track instanceof instructions — if we see multiple instanceof on the same line,
-            // it's likely a when-expression branch chain
+            // Track instanceof count per source line. Kotlin emits one
+            // INSTANCEOF per sealed subclass on the same source line for
+            // `when (x) { is Foo -> ... is Bar -> ... }` chains. A single
+            // INSTANCEOF on a line is not a sealed-when (it's a regular
+            // `if (x is Foo)` check) so we require >= 2 instanceof on the
+            // same line before mutating.
             instanceofCount++
-            if (instanceofCount >= 2) {
-                // Create mutation: remove this instanceof branch by replacing with pop+iconst_0
-                // This effectively makes the branch always false (skips it)
-                tryAddMutation(
-                    MutationInfo(
-                        operator = MutationOperator.SEALED_WHEN,
-                        className = className,
-                        methodName = methodName,
-                        methodDescriptor = methodDescriptor,
-                        lineNumber = currentLineNumber,
-                        description = "Remove when branch: instanceof ${type.substringAfterLast('/')}",
-                        originalOpcode = Opcodes.INSTANCEOF,
-                        mutatedOpcode = Opcodes.NOP,
-                        metadata = mapOf("type" to type),
-                    ),
-                )
-            }
+            if (instanceofCount < 2) return
+            tryAddMutation(
+                MutationInfo(
+                    operator = MutationOperator.SEALED_WHEN,
+                    className = className,
+                    methodName = methodName,
+                    methodDescriptor = methodDescriptor,
+                    lineNumber = currentLineNumber,
+                    description = "Remove when branch: instanceof ${type.substringAfterLast('/')}",
+                    originalOpcode = Opcodes.INSTANCEOF,
+                    mutatedOpcode = Opcodes.NOP,
+                    metadata = mapOf("type" to type),
+                ),
+            )
         }
     }
 

@@ -27,12 +27,14 @@ class MutKtExtensionTest {
         extension = MutKtExtension()
         MutationRegistry.reset()
         MutationRegistry.disable()
+        MutKtExtension.resetForTests()
     }
 
     @AfterEach
     fun cleanup() {
         MutationRegistry.reset()
         MutationRegistry.disable()
+        MutKtExtension.resetForTests()
     }
 
     private fun makeContext(testClass: Class<*>?): ExtensionContext {
@@ -148,6 +150,9 @@ class MutKtExtensionTest {
     fun `afterAll with active registry disables and resets`() {
         MutationRegistry.enable()
         val ctx = makeContext(SampleAnnotated::class.java)
+        // Simulate that this extension instance already enabled the registry
+        // (i.e., beforeAll was previously called) by enabling via beforeAll:
+        extension.beforeAll(ctx)
         extension.afterAll(ctx)
         assertFalse(MutationRegistry.isActive())
     }
@@ -182,6 +187,96 @@ class MutKtExtensionTest {
         assertEquals("test failure", ex?.message)
     }
 
+    @Test
+    fun `interceptTestFactoryMethod with inactive registry proceeds`() {
+        MutationRegistry.disable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = FactoryInvocation()
+        extension.interceptTestFactoryMethod(inv, makeInvocationContext(), ctx)
+        assertTrue(inv.proceeded, "proceed() should be called when registry inactive")
+    }
+
+    @Test
+    fun `interceptTestFactoryMethod with active registry proceeds`() {
+        MutationRegistry.enable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = FactoryInvocation()
+        extension.interceptTestFactoryMethod(inv, makeInvocationContext(), ctx)
+        assertTrue(inv.proceeded, "proceed() should be called even when registry active")
+    }
+
+    @Test
+    fun `interceptTestFactoryMethod rethrows exception`() {
+        MutationRegistry.enable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = ThrowingFactoryInvocation(RuntimeException("factory failure"))
+        val ex =
+            kotlin.runCatching {
+                extension.interceptTestFactoryMethod(inv, makeInvocationContext(), ctx)
+            }.exceptionOrNull()
+        assertEquals("factory failure", ex?.message)
+    }
+
+    @Test
+    fun `interceptTestTemplateMethod with inactive registry proceeds`() {
+        MutationRegistry.disable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = makeInvocation()
+        extension.interceptTestTemplateMethod(inv, makeInvocationContext(), ctx)
+        assertTrue(inv.proceeded, "proceed() should be called when registry inactive")
+    }
+
+    @Test
+    fun `interceptTestTemplateMethod with active registry proceeds`() {
+        MutationRegistry.enable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = makeInvocation()
+        extension.interceptTestTemplateMethod(inv, makeInvocationContext(), ctx)
+        assertTrue(inv.proceeded, "proceed() should be called even when registry active")
+    }
+
+    @Test
+    fun `interceptTestTemplateMethod rethrows exception`() {
+        MutationRegistry.enable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = ThrowingInvocation(RuntimeException("template failure"))
+        val ex =
+            kotlin.runCatching {
+                extension.interceptTestTemplateMethod(inv, makeInvocationContext(), ctx)
+            }.exceptionOrNull()
+        assertEquals("template failure", ex?.message)
+    }
+
+    @Test
+    fun `interceptDynamicTest with inactive registry proceeds`() {
+        MutationRegistry.disable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = makeInvocation()
+        extension.interceptDynamicTest(inv, ctx)
+        assertTrue(inv.proceeded, "proceed() should be called when registry inactive")
+    }
+
+    @Test
+    fun `interceptDynamicTest with active registry proceeds`() {
+        MutationRegistry.enable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = makeInvocation()
+        extension.interceptDynamicTest(inv, ctx)
+        assertTrue(inv.proceeded, "proceed() should be called even when registry active")
+    }
+
+    @Test
+    fun `interceptDynamicTest rethrows exception`() {
+        MutationRegistry.enable()
+        val ctx = makeContext(PlainTest::class.java)
+        val inv = ThrowingInvocation(RuntimeException("dynamic failure"))
+        val ex =
+            kotlin.runCatching {
+                extension.interceptDynamicTest(inv, ctx)
+            }.exceptionOrNull()
+        assertEquals("dynamic failure", ex?.message)
+    }
+
     // Test helpers using reflection to access private methods
     private fun extensionTestAnnotation(context: ExtensionContext): MutKtTest? {
         val method = MutKtExtension::class.java.getDeclaredMethod("getAnnotation", ExtensionContext::class.java)
@@ -213,6 +308,26 @@ class MutKtExtensionTest {
 
     private class ThrowingInvocation(private val ex: Throwable) : InvocationInterceptor.Invocation<Void> {
         override fun proceed(): Void? {
+            throw ex
+        }
+    }
+
+    // Factory method invocations must return T : Any (not Void?), so use
+    // a dedicated class with a concrete Any return type.
+    private class FactoryInvocation : InvocationInterceptor.Invocation<String> {
+        var proceeded = false
+
+        override fun proceed(): String? {
+            proceeded = true
+            // Return a non-null Any to satisfy the T : Any bound in
+            // interceptTestFactoryMethod's signature. The empty string is
+            // fine — the test only checks the `proceeded` side effect.
+            return ""
+        }
+    }
+
+    private class ThrowingFactoryInvocation(private val ex: Throwable) : InvocationInterceptor.Invocation<String> {
+        override fun proceed(): String? {
             throw ex
         }
     }

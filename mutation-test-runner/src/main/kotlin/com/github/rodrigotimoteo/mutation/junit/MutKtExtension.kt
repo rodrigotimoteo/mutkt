@@ -27,6 +27,25 @@ import java.util.concurrent.atomic.AtomicInteger
  * - Test class and method boundaries
  * - Timeout conditions
  *
+ * **Known limitation — lifecycle / constructor attribution:** this
+ * extension overrides the JUnit 5 `InvocationInterceptor` hooks for
+ * `@Test` and `@TestFactory` test methods (plus template and dynamic
+ * test variants) and wraps them with `interceptWithTracking` for
+ * per-method kill attribution. It does NOT override the lifecycle
+ * hooks `interceptBeforeAllMethod`, `interceptBeforeEachMethod`,
+ * `interceptAfterEachMethod`, `interceptAfterAllMethod`, or
+ * `interceptTestClassConstructor`. Mutations triggered from
+ * `@BeforeAll` / `@BeforeEach` / `@AfterEach` / `@AfterAll` / test
+ * class constructors are still COUNTED (they run inside an active
+ * mutation session and `MutationRegistry` records the trigger), but
+ * they are not PER-METHOD ATTRIBUTED — the class-level report
+ * aggregates them without naming the lifecycle method that triggered
+ * them. Per-method logs in `interceptWithTracking` cover the test
+ * method that contained the lifecycle call only when the lifecycle
+ * is invoked from a wrapped test method (e.g. a `@BeforeEach` whose
+ * mutation fires from a `@Test` execution); a top-level
+ * `@BeforeAll` triggered before any test method is un-attributed.
+ *
  * Usage:
  * ```kotlin
  * @ExtendWith(MutKtExtension::class)
@@ -48,9 +67,33 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
     private val logger = LoggerFactory.getLogger(MutKtExtension::class.java)
 
     companion object {
-        /** Reference count for enable/disable — prevents parallel classes from killing each other. */
+        /**
+         * Global reference count for enable/disable — shared across all
+         * extension instances so that parallel test classes share a single
+         * mutation registry lifecycle.
+         */
         private val enableCount = AtomicInteger(0)
+
+        /**
+         * Test-only: reset the static reference count to zero. Production
+         * code must not call this; the count is self-balancing across the
+         * `beforeAll` / `afterAll` pair in normal use.
+         */
+        @JvmStatic
+        fun resetForTests() {
+            enableCount.set(0)
+        }
     }
+
+    /**
+     * Per-instance flag: `true` when this extension's [beforeAll] actually
+     * incremented [enableCount] (and is therefore responsible for the
+     * symmetric decrement in [afterAll]). Guards against a class that
+     * early-returned from [beforeAll] (DISABLED / IDE-skipped) still
+     * calling [MutationRegistry.disable] in [afterAll] and breaking the
+     * global reference count for sibling classes.
+     */
+    private var enabledByThisClass = false
 
     override fun beforeAll(context: ExtensionContext) {
         val annotation = getAnnotation(context)
@@ -66,11 +109,25 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
             return
         }
 
-        // Reference-counted enable: only enables if not already active
+        val className = context.testClass.orElse(null)?.name
+
+        // Reference-counted enable: only enables if not already active.
+        // The flag is set inside the same branch as the actual enable so
+        // only classes that crossed the increment boundary become
+        // responsible for the symmetric decrement in afterAll.
         if (enableCount.incrementAndGet() == 1) {
             MutationRegistry.enable()
+            enabledByThisClass = true
         }
         MutationRegistry.setTimeoutMs(config.timeoutMs)
+        // Register this class with the registry so the per-class
+        // aggregate in afterAll can collect mutations from every
+        // thread that ran tests for the class (JUnit parallel
+        // execution may dispatch methods to threads other than the
+        // beforeAll caller).
+        if (className != null) {
+            MutationRegistry.beginClass(className)
+        }
     }
 
     override fun afterAll(context: ExtensionContext) {
@@ -80,11 +137,16 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
 
         val annotation = getAnnotation(context)
         val config = buildConfig(annotation)
+        val className = context.testClass.orElse(null)?.name
 
         try {
             // Class-level aggregate: in STRICT mode, the contract is
             // "if ANY test method triggers an uncaught mutation, the
-            // class fails". `triggeredMutations` is the per-method
+            // class fails". We aggregate across every thread registered
+            // for this class (not just the current thread) so that
+            // JUnit parallel execution — where test methods may run on
+            // threads other than the beforeAll/afterAll caller — does
+            // not hide mutations. `triggeredMutations` is the per-method
             // snapshot already drained by `interceptWithTracking`'s
             // finally block, so the count printed here is the
             // aggregate of every test method in the class. Per-method
@@ -92,7 +154,12 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
             // (see its kdoc) so kill attribution is not lost —
             // developers can correlate the per-method log lines with
             // the class-level report below.
-            val triggered = MutationRegistry.current().triggeredMutations
+            val triggered =
+                if (className != null) {
+                    MutationRegistry.classTriggeredMutations(className)
+                } else {
+                    MutationRegistry.current().triggeredMutations
+                }
             val sb = StringBuilder("\n")
             sb.appendLine("=".repeat(REPORT_WIDTH))
             sb.appendLine("  MutKt Mutation Testing Report")
@@ -106,14 +173,18 @@ class MutKtExtension : BeforeAllCallback, AfterAllCallback, InvocationIntercepto
             }
         } finally {
             // Clean up this class's thread state
-            val className = context.testClass.orElse(null)?.name
             if (className != null) {
                 MutationRegistry.resetClass(className)
             }
-            // Reference-counted disable: only disables when last class finishes
-            if (enableCount.decrementAndGet() <= 0) {
-                enableCount.set(0)
-                MutationRegistry.disable()
+            // Reference-counted disable: only the class that crossed
+            // the increment boundary in beforeAll owns the decrement.
+            // Classes that early-returned (DISABLED / IDE-skipped) must
+            // not touch the global count.
+            if (enabledByThisClass) {
+                if (enableCount.decrementAndGet() <= 0) {
+                    enableCount.set(0)
+                    MutationRegistry.disable()
+                }
             }
         }
     }

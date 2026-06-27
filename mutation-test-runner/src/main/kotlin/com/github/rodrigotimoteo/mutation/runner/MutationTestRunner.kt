@@ -18,13 +18,31 @@ class MutationTestRunner(
     private val logger = LoggerFactory.getLogger(MutationTestRunner::class.java)
 
     /**
+     * Default test-class name patterns. Matches the common JUnit 5/4
+     * conventions plus JUnit Platform suite containers, which would
+     * otherwise be invisible to the engine — a `*Suite` class is the
+     * typical JUnit 5 entry point for grouped test execution and
+     * contains no `@Test` methods of its own, so missing them from
+     * discovery also means missing the tests they include.
+     */
+    private val defaultTestClassNamePatterns: Set<String> =
+        setOf("*Test", "*Tests", "Test*", "*Spec", "*Suite")
+
+    /**
      * Runs mutation testing on a project.
+     *
+     * @param testClassNamePatterns Glob patterns matched against the
+     *   simple class name of each candidate `.class` file. Default
+     *   covers JUnit 5/4 conventions plus `*Suite` containers. Override
+     *   to support a non-default naming scheme (e.g. a project that
+     *   uses `*IT` for integration tests).
      */
     fun run(
         classesDir: File,
         testClassesDir: File,
         classpath: List<File>,
         coverageExecFile: File? = null,
+        testClassNamePatterns: Set<String> = defaultTestClassNamePatterns,
     ): MutationReport {
         logger.info("Loading classes from: $classesDir")
         logger.info("Loading test classes from: $testClassesDir")
@@ -38,7 +56,7 @@ class MutationTestRunner(
         logger.info("Loaded ${testClassBytes.size} test class files")
 
         // Find test classes
-        val testClassNames = findTestClasses(testClassesDir)
+        val testClassNames = findTestClasses(testClassesDir, testClassNamePatterns)
         logger.info("Found ${testClassNames.size} test classes: $testClassNames")
 
         // Create classloader from classpath so engine can resolve all dependencies.
@@ -95,7 +113,11 @@ class MutationTestRunner(
         return result
     }
 
-    private fun findTestClasses(dir: File): List<String> {
+    @JvmOverloads
+    private fun findTestClasses(
+        dir: File,
+        testClassNamePatterns: Set<String> = defaultTestClassNamePatterns,
+    ): List<String> {
         val result = mutableListOf<String>()
         if (!dir.exists() || !dir.isDirectory) return result
 
@@ -117,17 +139,37 @@ class MutationTestRunner(
                         val innerSegment = className.substringAfterLast('$')
                         if (innerSegment.toIntOrNull() != null) return@forEach
                     }
-                    // Match classes named *Test, *Tests, Test*, or *Spec
-                    if (simpleName.endsWith("Test") ||
-                        simpleName.endsWith("Tests") ||
-                        simpleName.startsWith("Test") ||
-                        simpleName.endsWith("Spec")
-                    ) {
+                    if (matchesTestPattern(simpleName, testClassNamePatterns)) {
                         result.add(className)
                     }
                 }
         }
         return result
+    }
+
+    /**
+     * Match a simple class name against a set of glob-style patterns.
+     * Supported wildcards: `*` matches zero-or-more characters anywhere
+     * in the pattern. A pattern with no `*` requires an exact match.
+     * Patterns are anchored to the full simple name (no implicit
+     * suffix/prefix), so `Test*` and `*Test` are distinct.
+     */
+    private fun matchesTestPattern(
+        simpleName: String,
+        patterns: Set<String>,
+    ): Boolean {
+        if (patterns.isEmpty()) return false
+        for (pattern in patterns) {
+            if (pattern == "*") return true
+            val regex =
+                pattern
+                    .split("*")
+                    .joinToString(separator = ".*") { java.util.regex.Pattern.quote(it) }
+                    .let { "^$it$" }
+                    .toRegex()
+            if (regex.matches(simpleName)) return true
+        }
+        return false
     }
 }
 
@@ -154,6 +196,12 @@ object MutationTestRunnerFactory {
         excludeTestPatterns: List<String> = emptyList(),
         includeTags: Set<String> = emptySet(),
         excludeTags: Set<String> = emptySet(),
+        engineIds: List<String> =
+            listOf(
+                "junit-jupiter",
+                "junit-vintage",
+                "junit-platform-suite-engine",
+            ),
     ): MutationTestRunner {
         val engine =
             MutationEngine(
@@ -175,6 +223,7 @@ object MutationTestRunnerFactory {
                 excludeTestPatterns = excludeTestPatterns,
                 includeTags = includeTags,
                 excludeTags = excludeTags,
+                engineIds = engineIds,
             )
         return MutationTestRunner(engine)
     }

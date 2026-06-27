@@ -115,8 +115,8 @@ internal class MutationApplierMethodVisitor(
     // are matched positionally rather than all hitting the first occurrence.
     private val occurrenceCounters = mutableMapOf<Triple<String, Int, String>, Int>()
 
-    // Mirrors the scanner's instanceofCount so SEALED_WHEN via instanceof only
-    // matches 2nd+ INSTANCEOF on a line (the 1st is intentionally skipped).
+    // Mirrors the scanner's instanceofCount so SEALED_WHEN via instanceof matches
+    // every INSTANCEOF on a line (each instanceof is a candidate branch test).
     private var instanceofCount = 0
 
     /**

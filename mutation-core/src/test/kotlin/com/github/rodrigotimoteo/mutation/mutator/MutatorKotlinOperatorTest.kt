@@ -133,12 +133,11 @@ class MutatorKotlinOperatorTest {
     }
 
     /**
-     * Build class WITH @kotlin.Metadata whose d1 protobuf flags bit 4 is set,
-     * marking it as a data class. Use this for DATA_CLASS_COPY tests.
-     *
-     * Protobuf structure: outer field 1 (Class, LEN) -> 0x0A, then length, then
-     * inner field 1 (flags, VARINT) -> 0x08, then flag value.
-     * For isData: flag = 0x10.
+     * Build class WITH @kotlin.Metadata AND a `component1` method,
+     * marking it as a data class. The data-class signal in the scanner
+     * is the presence of `component$N` methods (because ASM exposes
+     * @kotlin.Metadata.d1 as String[] and the raw protobuf path is
+     * unreliable), so the helper emits `component1` after `<init>`.
      */
     private fun buildKotlinDataClass(
         className: String = "com/example/DataClass",
@@ -152,8 +151,6 @@ class MutatorKotlinOperatorTest {
         val meta = cw.visitAnnotation("Lkotlin/Metadata;", true)
         meta.visit("mv", intArrayOf(1, 9, 0))
         meta.visit("k", 1)
-        // d1 = [0x0A, length=1, 0x08, flag=0x10] -> KotlinClassMetadata.Class with isData flag
-        meta.visit("d1", byteArrayOf(0x0A.toByte(), 0x01, 0x08, 0x10))
         meta.visitEnd()
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor.visitCode()
@@ -162,6 +159,13 @@ class MutatorKotlinOperatorTest {
         ctor.visitInsn(Opcodes.RETURN)
         ctor.visitMaxs(1, 1)
         ctor.visitEnd()
+        // component1 — marks the class as a data class for the scanner
+        val comp = cw.visitMethod(Opcodes.ACC_PUBLIC, "component1", "()I", null, null)
+        comp.visitCode()
+        comp.visitInsn(Opcodes.ICONST_0)
+        comp.visitInsn(Opcodes.IRETURN)
+        comp.visitMaxs(1, 1)
+        comp.visitEnd()
         val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, methodName, descriptor, null, null)
         mv.visitCode()
         mv.visitLineNumber(lineNumber, Label())
@@ -408,7 +412,9 @@ class MutatorKotlinOperatorTest {
 
     @Test
     fun `DATA_CLASS_COPY ignores copy on non-data Kotlin class`() {
-        // Kotlin class (has @Metadata) but d1 does not set the isData flag.
+        // Kotlin class (has @Metadata) but no `component1` method —
+        // the scanner's data-class signal is the presence of `component$N`
+        // methods, so this is treated as a plain Kotlin class.
         val bytes =
             buildKotlinClass { mv ->
                 mv.visitVarInsn(Opcodes.ALOAD, 0)

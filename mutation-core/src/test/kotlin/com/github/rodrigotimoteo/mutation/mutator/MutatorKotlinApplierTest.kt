@@ -38,11 +38,12 @@ class MutatorKotlinApplierTest {
     private fun buildClassWithCopyMethod(): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/DataClass", null, "java/lang/Object", null)
-        // @kotlin.Metadata with d1 protobuf flags = 0x10 (isData)
+        // @kotlin.Metadata marks the class as Kotlin. The data-class signal
+        // is the component1 method (ASM exposes @kotlin.Metadata.d1 as
+        // String[] and the raw protobuf path is unreliable).
         val meta = cw.visitAnnotation("Lkotlin/Metadata;", true)
         meta.visit("mv", intArrayOf(1, 9, 0))
         meta.visit("k", 1)
-        meta.visit("d1", byteArrayOf(0x0A.toByte(), 0x01, 0x08, 0x10))
         meta.visitEnd()
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor.visitCode()
@@ -51,6 +52,13 @@ class MutatorKotlinApplierTest {
         ctor.visitInsn(Opcodes.RETURN)
         ctor.visitMaxs(1, 1)
         ctor.visitEnd()
+        // component1 — marks the class as a data class for the scanner
+        val comp = cw.visitMethod(Opcodes.ACC_PUBLIC, "component1", "()I", null, null)
+        comp.visitCode()
+        comp.visitInsn(Opcodes.ICONST_0)
+        comp.visitInsn(Opcodes.IRETURN)
+        comp.visitMaxs(1, 1)
+        comp.visitEnd()
         // copy() method definition
         val copy = cw.visitMethod(Opcodes.ACC_PUBLIC, "copy", "()Lcom/example/DataClass;", null, null)
         copy.visitCode()

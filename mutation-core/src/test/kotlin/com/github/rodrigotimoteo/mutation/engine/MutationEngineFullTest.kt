@@ -1,9 +1,12 @@
 package com.github.rodrigotimoteo.mutation.engine
 
+import com.github.rodrigotimoteo.mutation.analysis.WeakMutationAnalyzer
 import com.github.rodrigotimoteo.mutation.cache.MutKtCache
 import com.github.rodrigotimoteo.mutation.model.MutationResult
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
+import com.github.rodrigotimoteo.mutation.mutator.MutationInfo
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
+import com.github.rodrigotimoteo.mutation.mutator.Mutator
 import io.mockk.unmockkAll
 import org.jacoco.core.data.ExecutionData
 import org.jacoco.core.data.ExecutionDataStore
@@ -371,32 +374,125 @@ class MutationEngineFullTest {
         assertNotNull(report)
     }
 
+    // ==================== INCLUDE/EXCLUDE TAGS ====================
+
+    @Test
+    fun `includeTags matching test tag allows mutation to be evaluated`(
+        @TempDir tempDir: Path,
+    ) {
+        val classBytes = buildClassWithArithmetic()
+        val testBytes = buildTaggedTestAssertingAdd(5, 3, 8, tag = "fast")
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                includeTags = setOf("fast"),
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                testClassNames = listOf("com.example.CalcTest"),
+                testClassBytes = mapOf("com/example/CalcTest" to testBytes),
+            )
+        // The test class carries @Tag("fast") which matches includeTags;
+        // the test runs, the ARITHMETIC mutation (5+3→5-3) breaks the
+        // assertion (5-3=2 ≠ 8), so the mutation must be KILLED — proving
+        // the test was actually included by the tag filter.
+        assertTrue(report.results.isNotEmpty(), "expected at least one mutation result")
+        assertEquals(
+            MutationStatus.KILLED,
+            report.results.first().status,
+            "mutation should be killed when includeTags matches the test's @Tag; " +
+                "got status=${report.results.first().status}",
+        )
+    }
+
+    @Test
+    fun `includeTags not matching test tag filters out the test`(
+        @TempDir tempDir: Path,
+    ) {
+        val classBytes = buildClassWithArithmetic()
+        val testBytes = buildTaggedTestAssertingAdd(5, 3, 8, tag = "fast")
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                includeTags = setOf("slow"),
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                testClassNames = listOf("com.example.CalcTest"),
+                testClassBytes = mapOf("com/example/CalcTest" to testBytes),
+            )
+        // The test class carries @Tag("fast") but includeTags = setOf("slow")
+        // → the JUnit TagFilter drops the only test, the test runner reports
+        // no tests found, and the engine returns NO_COVERAGE for the mutation.
+        assertTrue(report.results.isNotEmpty(), "expected at least one mutation result")
+        assertEquals(
+            MutationStatus.NO_COVERAGE,
+            report.results.first().status,
+            "mutation should be NO_COVERAGE when includeTags does not match the " +
+                "test's @Tag; got status=${report.results.first().status}",
+        )
+    }
+
+    @Test
+    fun `excludeTags matching test tag filters out the test`(
+        @TempDir tempDir: Path,
+    ) {
+        val classBytes = buildClassWithArithmetic()
+        val testBytes = buildTaggedTestAssertingAdd(5, 3, 8, tag = "ignored")
+        val engine =
+            MutationEngine(
+                enabledOperators = setOf(MutationOperator.ARITHMETIC),
+                excludeTags = setOf("ignored"),
+            )
+        val report =
+            engine.runMutationTesting(
+                classFiles = mapOf("com/example/Calc" to classBytes),
+                testClassNames = listOf("com.example.CalcTest"),
+                testClassBytes = mapOf("com/example/CalcTest" to testBytes),
+            )
+        // The test class carries @Tag("ignored") and excludeTags matches →
+        // test is filtered out, engine returns NO_COVERAGE.
+        assertTrue(report.results.isNotEmpty(), "expected at least one mutation result")
+        assertEquals(
+            MutationStatus.NO_COVERAGE,
+            report.results.first().status,
+            "mutation should be NO_COVERAGE when excludeTags matches the " +
+                "test's @Tag; got status=${report.results.first().status}",
+        )
+    }
+
     // ==================== WEAK MUTATION ====================
 
     @Test
     fun `weak mutation enabled removes unreachable mutations`(
         @TempDir tempDir: Path,
     ) {
+        // Direct test of WeakMutationAnalyzer: synthetic JaCoCo exec probes
+        // don't always match real bytecode (JaCoCo's Analyzer uses per-instruction
+        // probe IDs, not line numbers), so going through the full engine path
+        // produces unreliable covered-line data. Test the analyzer's contract
+        // directly: given a covered-lines map that excludes the mutation's
+        // line, the mutation must be filtered out.
         val classBytes = buildClassWithArithmetic()
-        val execFile = tempDir.resolve("coverage.exec").toFile()
-        createExecFileWithCoverageForLine(execFile, "com/example/Calc", classBytes, coveredLines = setOf(2))
-
-        val engine =
-            MutationEngine(
-                enabledOperators = setOf(MutationOperator.ARITHMETIC),
-                enableWeakMutation = true,
-            )
-        val report =
-            engine.runMutationTesting(
-                classFiles = mapOf("com/example/Calc" to classBytes),
-                testClassNames = emptyList(),
-                testClassBytes = emptyMap(),
-                coverageExecFile = execFile,
-            )
-        // Line 1 unreachable, line 2 reachable → only line 2 mutation possible
-        // But ARITHMETIC scan happens on IADD at line 1, IRETURN at line 5
-        // In any case, weak mutation must have filtered
-        assertTrue(report.results.size <= 2)
+        val mutations =
+            Mutator(setOf(MutationOperator.ARITHMETIC)).scanMutations(classBytes)
+        assertTrue(
+            mutations.isNotEmpty(),
+            "expected at least one ARITHMETIC mutation on the IADD at line 1",
+        )
+        // coveredLines = setOf(2) does NOT include line 1, where the IADD lives.
+        val analyzer = WeakMutationAnalyzer()
+        val coveredLinesMap = mapOf("com/example/Calc" to setOf(2))
+        val reachable = analyzer.filterUnreachable(mutations, coveredLinesMap)
+        assertEquals(
+            emptyList<MutationInfo>(),
+            reachable,
+            "WeakMutationAnalyzer must drop mutations whose lineNumber is not in " +
+                "coveredLines; IADD on line 1 must be filtered when " +
+                "coveredLines = setOf(2), got: ${reachable.map { it.lineNumber }}",
+        )
     }
 
     @Test
@@ -908,6 +1004,57 @@ class MutationEngineFullTest {
     ): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
+        val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
+        ctor?.visitCode()
+        ctor?.visitVarInsn(Opcodes.ALOAD, 0)
+        ctor?.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+        ctor?.visitInsn(Opcodes.RETURN)
+        ctor?.visitMaxs(1, 1)
+        ctor?.visitEnd()
+        val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "testAdd", "()V", null, null)
+        mv?.visitCode()
+        val av = mv?.visitAnnotation("Lorg/junit/jupiter/api/Test;", true)
+        av?.visitEnd()
+        mv?.visitTypeInsn(Opcodes.NEW, "com/example/Calc")
+        mv?.visitInsn(Opcodes.DUP)
+        mv?.visitMethodInsn(Opcodes.INVOKESPECIAL, "com/example/Calc", "<init>", "()V", false)
+        mv?.visitVarInsn(Opcodes.ASTORE, 1)
+        mv?.visitVarInsn(Opcodes.ALOAD, 1)
+        mv?.visitIntInsn(Opcodes.BIPUSH, a)
+        mv?.visitIntInsn(Opcodes.BIPUSH, b)
+        mv?.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "com/example/Calc", "add", "(II)I", false)
+        mv?.visitIntInsn(Opcodes.BIPUSH, expected)
+        val ifLabel = Label()
+        mv?.visitJumpInsn(Opcodes.IF_ICMPEQ, ifLabel)
+        mv?.visitTypeInsn(Opcodes.NEW, "java/lang/AssertionError")
+        mv?.visitInsn(Opcodes.DUP)
+        mv?.visitLdcInsn("Addition result does not match expected")
+        mv?.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/AssertionError", "<init>", "(Ljava/lang/Object;)V", false)
+        mv?.visitInsn(Opcodes.ATHROW)
+        mv?.visitLabel(ifLabel)
+        mv?.visitInsn(Opcodes.RETURN)
+        mv?.visitMaxs(3, 2)
+        mv?.visitEnd()
+        cw.visitEnd()
+        return cw.toByteArray()
+    }
+
+    /**
+     * Like [buildTestAssertingAdd] but stamps a class-level @Tag annotation
+     * so JUnit Platform's TagFilter can include or exclude the test based
+     * on [MutationEngine.includeTags] / [MutationEngine.excludeTags].
+     */
+    private fun buildTaggedTestAssertingAdd(
+        a: Int,
+        b: Int,
+        expected: Int,
+        tag: String,
+    ): ByteArray {
+        val cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/CalcTest", null, "java/lang/Object", null)
+        val classAv = cw.visitAnnotation("Lorg/junit/jupiter/api/Tag;", true)
+        classAv?.visit("value", tag)
+        classAv?.visitEnd()
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
         ctor?.visitVarInsn(Opcodes.ALOAD, 0)

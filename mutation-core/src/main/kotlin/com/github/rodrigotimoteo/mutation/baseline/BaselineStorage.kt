@@ -39,14 +39,21 @@ class BaselineStorage(private val projectDir: File) {
     /**
      * Save mutation report as baseline.
      *
-     * @param results Map of className to (operator, lineNumber, status)
+     * The per-mutation tuple is a [BaselineEntry] (operator, lineNumber,
+     * occurrenceIndex, status). The occurrence index disambiguates
+     * multiple mutations that fall on the same source line with the
+     * same operator — without it the baseline key collapses to
+     * `(operator, line)` and the second mutation silently overwrites
+     * the first.
+     *
+     * @param results Map of className to baseline entries
      */
-    fun save(results: Map<String, List<Triple<String, Int, MutationStatus>>>) {
+    fun save(results: Map<String, List<BaselineEntry>>) {
         withFileLock(baselineFile) {
             val lines = mutableListOf<String>()
             for ((className, mutations) in results) {
-                for ((operator, line, status) in mutations) {
-                    lines.add("$className|$operator|$line|$status")
+                for (entry in mutations) {
+                    lines.add("$className|${entry.operator}|${entry.lineNumber}|${entry.occurrenceIndex}|${entry.status}")
                 }
             }
             baselineFile.writeText(lines.joinToString("\n"))
@@ -59,7 +66,7 @@ class BaselineStorage(private val projectDir: File) {
      *
      * @param results New results to merge into baseline
      */
-    fun saveMerged(results: Map<String, List<Triple<String, Int, MutationStatus>>>) {
+    fun saveMerged(results: Map<String, List<BaselineEntry>>) {
         val existing = load().toMutableMap()
         for ((className, mutations) in results) {
             existing[className] = mutations
@@ -70,23 +77,42 @@ class BaselineStorage(private val projectDir: File) {
     /**
      * Load previous baseline.
      *
-     * @return Map of className to (operator, lineNumber, status) or empty map
+     * Two on-disk formats are accepted for backward compatibility:
+     * - 5-part: `className|operator|line|occurrence|status` (current)
+     * - 4-part: `className|operator|line|status` (legacy, treated as
+     *   `occurrenceIndex = 0`)
+     *
+     * @return Map of className to baseline entries or empty map
      */
-    fun load(): Map<String, List<Triple<String, Int, MutationStatus>>> {
+    fun load(): Map<String, List<BaselineEntry>> {
         if (!baselineFile.exists()) return emptyMap()
 
         return withFileLock(baselineFile) {
-            val results = mutableMapOf<String, MutableList<Triple<String, Int, MutationStatus>>>()
+            val results = mutableMapOf<String, MutableList<BaselineEntry>>()
 
             for (line in baselineFile.readLines()) {
                 if (line.isBlank()) continue
                 val parts = line.split("|")
-                if (parts.size == 4) {
-                    val className = parts[0]
-                    val operator = parts[1]
-                    val lineNumber = parts[2].toIntOrNull() ?: continue
-                    val status = runCatching { MutationStatus.valueOf(parts[3]) }.getOrNull() ?: continue
-                    results.getOrPut(className) { mutableListOf() }.add(Triple(operator, lineNumber, status))
+                when (parts.size) {
+                    5 -> {
+                        val className = parts[0]
+                        val operator = parts[1]
+                        val lineNumber = parts[2].toIntOrNull() ?: continue
+                        val occurrenceIndex = parts[3].toIntOrNull() ?: continue
+                        val status = runCatching { MutationStatus.valueOf(parts[4]) }.getOrNull() ?: continue
+                        results.getOrPut(className) { mutableListOf() }
+                            .add(BaselineEntry(operator, lineNumber, occurrenceIndex, status))
+                    }
+                    4 -> {
+                        // Legacy format without occurrenceIndex — treat
+                        // as the first occurrence on that line.
+                        val className = parts[0]
+                        val operator = parts[1]
+                        val lineNumber = parts[2].toIntOrNull() ?: continue
+                        val status = runCatching { MutationStatus.valueOf(parts[3]) }.getOrNull() ?: continue
+                        results.getOrPut(className) { mutableListOf() }
+                            .add(BaselineEntry(operator, lineNumber, 0, status))
+                    }
                 }
             }
 
@@ -113,28 +139,33 @@ class BaselineStorage(private val projectDir: File) {
     /**
      * Compare current results with baseline.
      *
-     * @param currentResults Map of className to (operator, lineNumber, status)
+     * @param currentResults Map of className to baseline entries
      * @return DiffResult with new/changed/removed mutations
      */
-    fun compareWithBaseline(currentResults: Map<String, List<Triple<String, Int, MutationStatus>>>): DiffResult {
+    fun compareWithBaseline(currentResults: Map<String, List<BaselineEntry>>): DiffResult {
         val baseline = load()
 
         val newMutations = mutableListOf<String>()
         val changedStatus = mutableListOf<Triple<String, String, MutationStatus>>()
         val removedMutations = mutableListOf<String>()
 
+        // Key includes the occurrence index so two mutations on the
+        // same line with the same operator are tracked independently
+        // — the previous `(operator, line)` key collapsed them.
+        fun keyOf(entry: BaselineEntry) = "${entry.operator}:${entry.lineNumber}:${entry.occurrenceIndex}"
+
         // Find new and changed mutations
         for ((className, mutations) in currentResults) {
             val baselineMutations = baseline[className] ?: emptyList()
-            val baselineMap = baselineMutations.associateBy { "${it.first}:${it.second}" }
+            val baselineMap = baselineMutations.associateBy { keyOf(it) }
 
-            for ((operator, line, status) in mutations) {
-                val key = "$operator:$line"
+            for (entry in mutations) {
+                val key = keyOf(entry)
                 val baselineStatus = baselineMap[key]
                 if (baselineStatus == null) {
                     newMutations.add("$className:$key")
-                } else if (baselineStatus.third != status) {
-                    changedStatus.add(Triple(className, key, status))
+                } else if (baselineStatus.status != entry.status) {
+                    changedStatus.add(Triple(className, key, entry.status))
                 }
             }
         }
@@ -142,10 +173,10 @@ class BaselineStorage(private val projectDir: File) {
         // Find removed mutations
         for ((className, mutations) in baseline) {
             val currentMutations = currentResults[className] ?: emptyList()
-            val currentMap = currentMutations.associateBy { "${it.first}:${it.second}" }
+            val currentMap = currentMutations.associateBy { keyOf(it) }
 
-            for ((operator, line, _) in mutations) {
-                val key = "$operator:$line"
+            for (entry in mutations) {
+                val key = keyOf(entry)
                 if (!currentMap.containsKey(key)) {
                     removedMutations.add("$className:$key")
                 }
@@ -198,7 +229,8 @@ class BaselineStorage(private val projectDir: File) {
 /**
  * Result of comparing current mutations with baseline.
  *
- * @property newMutations Mutations not in baseline (className:operator:line)
+ * @property newMutations Mutations not in baseline
+ *   (className:operator:line:occurrenceIndex)
  * @property changedStatus Mutations with different status than baseline
  * @property removedMutations Mutations in baseline but not in current run
  */
@@ -216,3 +248,24 @@ data class DiffResult(
                 append("New: ${newMutations.size}, Changed: ${changedStatus.size}, Removed: ${removedMutations.size}")
             }
 }
+
+/**
+ * Single mutation entry in the baseline file.
+ *
+ * Carries enough identity to disambiguate multiple mutations on the
+ * same source line: the [occurrenceIndex] is the 0-based ordinal of the
+ * mutation within the line (set by [com.github.rodrigotimoteo.mutation.mutator.MutationScanner]).
+ * The previous `Triple<String, Int, MutationStatus>` key collapsed any
+ * pair of same-line same-operator mutations into one row.
+ *
+ * @property operator Mutation operator name (e.g. `ARITHMETIC`)
+ * @property lineNumber Source line number
+ * @property occurrenceIndex 0-based index of the mutation on that line
+ * @property status Last observed mutation status
+ */
+data class BaselineEntry(
+    val operator: String,
+    val lineNumber: Int,
+    val occurrenceIndex: Int,
+    val status: MutationStatus,
+)

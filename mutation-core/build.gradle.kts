@@ -13,19 +13,19 @@ dependencies {
     // JaCoCo for coverage-guided mutation testing
     implementation(libs.jacoco.core)
 
-    // JUnit for test execution via reflection
-    implementation(libs.junit.jupiter)
-    implementation(libs.junit4)
-    implementation(libs.junit.jupiter.params)
-
-    // JUnit Platform Launcher for native JUnit 5 support
-    implementation(libs.junit.platform.launcher)
-    // JUnit Vintage Engine so the launcher can run JUnit 4 tests as well
-    implementation(libs.junit.vintage.engine)
+    // JUnit Platform Launcher API referenced from ReflectionTestRunner (compileOnly — required for compilation)
+    compileOnly(libs.junit.platform.launcher)
+    // JUnit Jupiter API (compileOnly — type references in code, e.g. annotations)
+    compileOnly(libs.junit.jupiter)
+    // JUnit 4 API (compileOnly — vintage engine references this at runtime)
+    compileOnly(libs.junit4)
+    // JUnit Vintage Engine — runs JUnit 4 tests via the JUnit Platform (runtimeOnly)
+    runtimeOnly(libs.junit.vintage.engine)
 
     // Testing
     testImplementation(libs.kotlin.test)
     testImplementation(libs.junit.jupiter)
+    testImplementation(libs.junit4)
     testImplementation(libs.assertj.core)
     testImplementation(libs.mockk)
     testRuntimeOnly(libs.junit.platform.launcher)

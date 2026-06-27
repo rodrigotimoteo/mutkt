@@ -67,31 +67,50 @@ class BaseProjectClassLoader(
 }
 
 /**
- * Per-mutation classloader. Loads the mutated target class and test classes.
- * Delegates non-target project classes to [BaseProjectClassLoader].
+ * Per-mutation classloader. Loads ONLY the mutated target class (and its
+ * inner classes). Test classes are loaded by the parent [TestClassLoader]
+ * (defined once per group, shared across all mutants of the same target).
+ * Non-target project classes are loaded by the grandparent
+ * [BaseProjectClassLoader].
  *
- * Test classes are loaded here (not by the base) so that when they reference
- * the target class, JVM resolves it through this classloader — seeing the
- * mutated version.
+ * 3-tier hierarchy (H-R3-perf-1): previously this loader also re-defineClass'd
+ * the same test classes for every mutant of a target, paying a class-verification
+ * cost O(M × T) where M = mutations and T = test classes. With the middle tier,
+ * test classes are defined once per group (O(T) per target).
+ *
+ * The parent classloader chain resolves test classes back through this loader
+ * when they reference the target — JVM class resolution follows the loader of
+ * the referencing class, so test classes (loaded by [TestClassLoader]) that
+ * reference the target (e.g. `FooTarget` field type) trigger loading through
+ * [TestClassLoader] → [MutationClassLoader], which returns the mutated version.
  */
 class MutationClassLoader(
-    private val baseLoader: BaseProjectClassLoader,
+    private val testLoader: TestClassLoader,
     private val targetClassName: String,
     private val targetBytes: ByteArray,
-    private val testClassBytes: Map<String, ByteArray>,
     private val allClassBytes: Map<String, ByteArray>,
     val failedClassCache: MutableSet<String>,
-) : ClassLoader(baseLoader) {
-    // Top-level test class names (e.g. "com/example/FooTest"). Inner/nested
-    // classes are detected by splitting on '$' and checking the prefix
-    // against this set — constant-time membership per loadClass call.
-    //
-    // The previous implementation used a set of `"name$"` prefixes and
-    // matched via `startsWith`, which was both O(n) per lookup AND
-    // misclassified unrelated classes (e.g. `com/example/foo/BarHelper`
-    // matched prefix `com/example/foo/Bar`). This version is O(1) and
-    // only matches true test classes and their inner classes.
-    private val testClassNames: Set<String> = testClassBytes.keys
+) : ClassLoader(testLoader) {
+    /**
+     * Convenience constructor for tests and legacy callers that pass a flat
+     * [BaseProjectClassLoader] + testClassBytes map. Builds a transient
+     * [TestClassLoader] internally so the 3-tier hierarchy is preserved
+     * without forcing every call site to wire up the middle tier.
+     */
+    constructor(
+        baseLoader: BaseProjectClassLoader,
+        targetClassName: String,
+        targetBytes: ByteArray,
+        testClassBytes: Map<String, ByteArray>,
+        allClassBytes: Map<String, ByteArray>,
+        failedClassCache: MutableSet<String>,
+    ) : this(
+        TestClassLoader(baseLoader, testClassBytes, allClassBytes, failedClassCache),
+        targetClassName,
+        targetBytes,
+        allClassBytes,
+        failedClassCache,
+    )
 
     override fun loadClass(
         name: String,
@@ -137,6 +156,62 @@ class MutationClassLoader(
                 }
             }
 
+            // Everything else → TestClassLoader (test classes) → BaseProjectClassLoader
+            // (non-target project classes + JDK). The parent chain handles both.
+            return super.loadClass(binaryName, resolve)
+        }
+    }
+}
+
+/**
+ * Middle tier of the 3-tier hierarchy. Defines test classes ONCE per group,
+ * shared across all mutants of the same target class. Sits between
+ * [BaseProjectClassLoader] (grandparent, non-target project classes) and
+ * [MutationClassLoader] (per-mutant child, target class).
+ *
+ * Test classes are loaded here rather than per-mutant so that:
+ *   1. `defineClass` runs once per test class per run (not once per mutant),
+ *      cutting classloader cost from O(M × T) to O(T) per target.
+ *   2. The same `Class<?>` identity is returned for a test class across
+ *      mutants, which JVM caching requires for class-init idempotency.
+ *
+ * The chain [MutationClassLoader] → [TestClassLoader] → [BaseProjectClassLoader]
+ * means test classes that reference the target class are resolved through
+ * the [MutationClassLoader] child — which returns the mutated version.
+ */
+class TestClassLoader(
+    baseLoader: BaseProjectClassLoader,
+    private val testClassBytes: Map<String, ByteArray>,
+    private val allClassBytes: Map<String, ByteArray>,
+    val failedClassCache: MutableSet<String>,
+) : ClassLoader(baseLoader) {
+    // Top-level test class names (e.g. "com/example/FooTest"). Inner/nested
+    // classes are detected by splitting on '$' and checking the prefix
+    // against this set — constant-time membership per loadClass call.
+    //
+    // The previous implementation used a set of `"name$"` prefixes and
+    // matched via `startsWith`, which was both O(n) per lookup AND
+    // misclassified unrelated classes (e.g. `com/example/foo/BarHelper`
+    // matched prefix `com/example/foo/Bar`). This version is O(1) and
+    // only matches true test classes and their inner classes.
+    private val testClassNames: Set<String> = testClassBytes.keys
+
+    override fun loadClass(
+        name: String,
+        resolve: Boolean,
+    ): Class<*> {
+        val binaryName = name.replace('/', '.')
+        val slashedName = name.replace('.', '/')
+
+        val loaded = findLoadedClass(binaryName)
+        if (loaded != null) return loaded
+
+        // Serialize concurrent defineClass attempts for the same class name to avoid
+        // duplicate class definition LinkageError under concurrent loadClass calls.
+        synchronized(getClassLoadingLock(binaryName)) {
+            // Re-check after acquiring lock — another thread may have defined it.
+            findLoadedClass(binaryName)?.let { return it }
+
             // Test class (or inner class of test class) → intercept to keep in same classloader.
             // O(1) membership: exact-name hit OR prefix-before-'$' hit. The '$' split prevents
             // false positives like `com/example/foo/BarHelper` matching `com/example/foo/Bar`.
@@ -172,11 +247,26 @@ class MutationClassLoader(
                 }
             }
 
-            // Everything else → BaseProjectClassLoader (non-target project classes + JDK).
+            // Non-test, non-target → BaseProjectClassLoader (non-target project classes + JDK).
             return super.loadClass(binaryName, resolve)
         }
     }
 }
+
+/**
+ * Container for a 3-tier classloader group (H-R3-perf-1).
+ *
+ * - [base]: defines non-target project classes once per group.
+ * - [test]: defines test classes once per group (was previously re-defined
+ *   per mutant — see [TestClassLoader] docs for the O(M × T) → O(T) win).
+ * - For each mutation, call [MutantClassLoaderFactory.createMutationLoader]
+ *   with this group to get a per-mutant loader that defines the mutated
+ *   target only.
+ */
+class MutantClassLoaderGroup(
+    val base: BaseProjectClassLoader,
+    val test: TestClassLoader,
+)
 
 /**
  * Factory for creating classloader hierarchies per target class.
@@ -190,17 +280,22 @@ class MutationClassLoader(
  * ```kotlin
  * val group = MutantClassLoaderFactory.createGroup(parent, classFiles, testClassBytes, target)
  * // For each mutation targeting className:
- * val loader = MutantClassLoaderFactory.createMutationLoader(group, target, mutatedBytes, ...)
+ * val loader = MutantClassLoaderFactory.createMutationLoader(group, target, mutatedBytes, classFiles)
  * // ... run tests ...
  * ```
  */
 object MutantClassLoaderFactory {
     /**
-     * Creates a [BaseProjectClassLoader] for a target class, excluding it
-     * (and test classes) from the base so child loaders can intercept them.
+     * Creates the 3-tier classloader group for a target class:
+     * [BaseProjectClassLoader] (non-target project) → [TestClassLoader]
+     * (test classes, defined once) → per-mutant [MutationClassLoader]
+     * (created by [createMutationLoader]).
+     *
+     * Test classes and the target (plus target inner classes) are excluded
+     * from the base so middle/child tiers can intercept them.
      *
      * Each call creates a fresh, isolated failed-class cache. The cache is
-     * shared with the [MutationClassLoader]s produced by [createMutationLoader]
+     * shared with the [MutationClassLoader]s and [TestClassLoader] produced
      * for the same group, but never with other groups.
      */
     fun createGroup(
@@ -208,38 +303,38 @@ object MutantClassLoaderFactory {
         classFiles: Map<String, ByteArray>,
         testClassBytes: Map<String, ByteArray>,
         targetClassName: String,
-    ): BaseProjectClassLoader {
+    ): MutantClassLoaderGroup {
         val excludedClasses = mutableSetOf(targetClassName)
         // Exclude target inner classes (companion, nested) so child MutationClassLoader
         // can define them alongside the mutated target.
         val targetInnerPrefix = "$targetClassName\$"
         excludedClasses.addAll(classFiles.keys.filter { it.startsWith(targetInnerPrefix) })
-        // Also exclude test classes so they're loaded by MutationClassLoader.
+        // Also exclude test classes so they're loaded by TestClassLoader.
         excludedClasses.addAll(testClassBytes.keys)
         val failedCache: MutableSet<String> = ConcurrentHashMap.newKeySet()
-        return BaseProjectClassLoader(parent, classFiles, excludedClasses, failedCache)
+        val base = BaseProjectClassLoader(parent, classFiles, excludedClasses, failedCache)
+        val test = TestClassLoader(base, testClassBytes, classFiles, failedCache)
+        return MutantClassLoaderGroup(base, test)
     }
 
     /**
-     * Creates a [MutationClassLoader] that loads the mutated target + test classes,
-     * delegating everything else to [baseLoader]. The failed-class cache is
-     * inherited from [baseLoader] so both loaders in the same group see the
-     * same LinkageError cache.
+     * Creates a per-mutant [MutationClassLoader] that defines the mutated
+     * target only. Test classes and project classes are resolved through
+     * the parent [TestClassLoader] / [BaseProjectClassLoader] in the group.
+     * The failed-class cache is shared with the group.
      */
     fun createMutationLoader(
-        baseLoader: BaseProjectClassLoader,
+        group: MutantClassLoaderGroup,
         targetClassName: String,
         targetBytes: ByteArray,
-        testClassBytes: Map<String, ByteArray>,
         allClassBytes: Map<String, ByteArray>,
     ): MutationClassLoader {
         return MutationClassLoader(
-            baseLoader,
+            group.test,
             targetClassName,
             targetBytes,
-            testClassBytes,
             allClassBytes,
-            baseLoader.failedClassCache,
+            group.base.failedClassCache,
         )
     }
 

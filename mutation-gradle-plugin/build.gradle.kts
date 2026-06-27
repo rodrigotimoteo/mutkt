@@ -15,7 +15,7 @@ gradlePlugin {
     plugins {
         create("mutation-kotlin") {
             id = "io.github.rodrigotimoteo.mutation-kotlin"
-            implementationClass = "io.github.rodrigotimoteo.mutation.gradle.MutationPlugin"
+            implementationClass = "com.github.rodrigotimoteo.mutation.gradle.MutationPlugin"
             displayName = "MutKt - Kotlin Mutation Testing"
             description = "PITest-style mutation testing for Kotlin/JVM. Run existing tests against mutated bytecode."
             tags.set(listOf("mutation-testing", "kotlin", "testing", "code-quality"))

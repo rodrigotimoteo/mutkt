@@ -10,7 +10,7 @@ dependencies {
     implementation(project(":mutation-core"))
     implementation(project(":mutation-test-runner"))
     testImplementation(libs.junit.jupiter)
-    testImplementation(kotlin("test"))
+    testImplementation(libs.kotlin.test)
     testImplementation(libs.asm.core)
 }
 

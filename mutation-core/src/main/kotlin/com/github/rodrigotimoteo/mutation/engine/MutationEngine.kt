@@ -22,10 +22,26 @@ import com.github.rodrigotimoteo.mutation.runner.ReflectionTestRunner
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.util.concurrent.Callable
+import java.util.concurrent.CancellationException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.regex.PatternSyntaxException
+
+/**
+ * Maximum number of seconds to wait for in-flight mutants to finish during
+ * the orderly executor shutdown before escalating to `shutdownNow()`. The
+ * previous literal `10` was duplicated below for the `shutdownNow` path.
+ */
+private const val EXECUTOR_SHUTDOWN_TIMEOUT_SEC = 10L
+
+/**
+ * Maximum number of seconds to wait for in-flight mutants to finish after
+ * `shutdownNow()` has been called. The previous literal `5` was duplicated
+ * inline in `runMutants`.
+ */
+private const val EXECUTOR_SHUTDOWN_NOW_TIMEOUT_SEC = 5L
 
 /**
  * Minimum number of results required before post-hoc subsumption analysis
@@ -80,6 +96,7 @@ private const val MIN_SUBSUMPTION_MUTATIONS = 10
  * @property enableSubsumption Skip redundant mutations
  * @property enableWeakMutation Skip unreachable mutations
  * @property projectDir Project root directory for caching/baseline
+ * @property engineIds JUnit Platform engine IDs to include when discovering tests
  * @see MutationReport for result details
  */
 class MutationEngine(
@@ -101,6 +118,12 @@ class MutationEngine(
     private val excludeTestPatterns: List<String> = emptyList(),
     private val includeTags: Set<String> = emptySet(),
     private val excludeTags: Set<String> = emptySet(),
+    private val engineIds: List<String> =
+        listOf(
+            "junit-jupiter",
+            "junit-vintage",
+            "junit-platform-suite-engine",
+        ),
 ) {
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators, excludedMethods)
@@ -121,6 +144,14 @@ class MutationEngine(
     // mutation filtering.
     private val compiledIncludePatterns = compilePatterns(includePatterns, "includePatterns")
     private val compiledExcludePatterns = compilePatterns(excludePatterns, "excludePatterns")
+
+    // Compiled regex patterns for test class filtering. Same fail-fast
+    // rationale as the include/exclude patterns above: a bad regex here
+    // would otherwise only surface deep inside `filterTestClassNames` at
+    // execution time, where the user has no way to identify which
+    // pattern string was at fault.
+    private val compiledTargetTestPatterns = compilePatterns(targetTestPatterns, "targetTestPatterns")
+    private val compiledExcludeTestPatterns = compilePatterns(excludeTestPatterns, "excludeTestPatterns")
 
     // Per-run scratch state. These two maps are mutable `var` fields set
     // by `runMutationTesting` and read by helpers like `getOriginalClassBytes`
@@ -152,7 +183,7 @@ class MutationEngine(
      * concurrent runs shared a single engine instance they would
      * collide on those launchers — keep it scoped to one run.
      */
-    private val sharedTestRunner = ReflectionTestRunner()
+    private val sharedTestRunner = ReflectionTestRunner(engineIds = engineIds)
 
     /**
      * Runs mutation testing on the given classpath.
@@ -172,6 +203,12 @@ class MutationEngine(
         // making every test `ClassNotFoundException` and collapsing all
         // mutations to NO_COVERAGE).
         allTestClassBytes = testClassBytes
+
+        // A reused engine can outlive the source files its previous run
+        // looked at; `findSourceCode` would otherwise hand back stale
+        // snippets for paths that no longer exist on disk. Clear before
+        // each run so the first mutation in a class forces a fresh stat.
+        sourceFileCache.clear()
 
         val startTime = System.currentTimeMillis()
         val allClassFiles = classFiles + testClassBytes
@@ -417,6 +454,12 @@ class MutationEngine(
      * (class, method) is marked [MutationStatus.SUBSUMED] rather than
      * killed or survived — it adds no information beyond its
      * subsuming sibling.
+     *
+     * Subsumption only considers actually-killed mutations: ERROR
+     * mutants can carry non-empty `failedTests` (load failures still
+     * surface as failed test classes) but those are infrastructure
+     * errors, not real kills. Mixing them in would let a broken
+     * mutant be reported as SUBSUMED, hiding the underlying problem.
      */
     private fun applySubsumption(
         allResults: List<MutationResult>,
@@ -425,8 +468,22 @@ class MutationEngine(
         if (!enableSubsumption || allResults.size <= MIN_SUBSUMPTION_MUTATIONS) {
             return allResults
         }
-        val mutations = allResults.map { it.mutation }
-        val (_, subsumed) = subsumptionAnalyzer.analyze(mutations, killSets)
+        val killedResults =
+            allResults.filter {
+                it.status == MutationStatus.KILLED || it.status == MutationStatus.WEAK_KILLED
+            }
+        if (killedResults.size < 2) return allResults
+
+        val killedIds = killedResults.map { it.mutation.id }.toSet()
+        val killedKillSets = killSets.filterKeys { it in killedIds }
+        val killedMutations = killedResults.map { it.mutation }
+
+        val (_, rawSubsumed) = subsumptionAnalyzer.analyze(killedMutations, killedKillSets)
+        // The analyzer may return IDs that no longer pass the killed
+        // filter (defensive — analyzer should already honor it, but we
+        // re-intersect here so a future analyzer change cannot smuggle
+        // a SUBSUMED status onto a non-killed result).
+        val subsumed = rawSubsumed.intersect(killedIds)
         if (subsumed.isEmpty()) return allResults
         logger.info("Subsumption: ${subsumed.size} redundant mutations identified")
         return allResults.map { result ->
@@ -450,12 +507,15 @@ class MutationEngine(
     }
 
     private fun generateAllMutations(classFiles: Map<String, ByteArray>): List<Pair<MutationInfo, ByteArray>> {
-        val allMutations = mutableListOf<Pair<MutationInfo, ByteArray>>()
-        for ((className, classBytes) in classFiles) {
-            val mutations = mutator.generateMutants(classBytes)
-            allMutations.addAll(mutations)
-        }
-        return allMutations
+        // H-R3-perf-2: scan + mutate in parallel. Each class is independent
+        // (its own ASM parse, its own mutated bytes), so a parallel stream
+        // is safe. The stream uses ForkJoinPool.commonPool(), whose
+        // parallelism defaults to available processors — usually a good
+        // match for the engine's `parallelism` setting.
+        return classFiles.entries
+            .parallelStream()
+            .flatMap { (_, classBytes) -> mutator.generateMutants(classBytes).stream() }
+            .toList()
     }
 
     /**
@@ -582,6 +642,13 @@ class MutationEngine(
 
     /**
      * Save baseline for future comparison.
+     *
+     * The baseline key includes [com.github.rodrigotimoteo.mutation.mutator.MutationInfo]'s
+     * `occurrenceIndex` so multiple mutations on the same line with the
+     * same operator are tracked as separate rows. The previous
+     * `(operator, lineNumber, status)` triple collapsed them, so a
+     * class with two same-line same-operator mutations would persist
+     * the survivor status and silently lose the other.
      */
     private fun saveBaseline(
         results: List<MutationResult>,
@@ -593,10 +660,11 @@ class MutationEngine(
             results.groupBy { it.mutation.className }
                 .mapValues { (_, classResults) ->
                     classResults.map { result ->
-                        Triple(
-                            result.mutation.operator.operatorName,
-                            result.mutation.lineNumber,
-                            result.status,
+                        com.github.rodrigotimoteo.mutation.baseline.BaselineEntry(
+                            operator = result.mutation.operator.operatorName,
+                            lineNumber = result.mutation.lineNumber,
+                            occurrenceIndex = result.mutation.getOccurrenceIndex(),
+                            status = result.status,
                         )
                     }
                 }
@@ -621,9 +689,17 @@ class MutationEngine(
         classFiles: Map<String, ByteArray>,
         coverageData: CoverageAnalyzer.CoverageData.Valid,
     ): List<Pair<MutationInfo, ByteArray>> {
+        // Per-class covered-lines cache. JaCoCo's analyzer parses the
+        // .exec file plus walks the class structure per call, so we MUST
+        // call `getCoveredLinesForClass` once per unique class — calling
+        // it per mutation was the O(N²) hot spot in C-R3-4a (a class with
+        // 200 mutations triggered 200 JaCoCo analyses of the same bytes).
+        val coveredLinesByClass = mutableMapOf<String, Set<Int>>()
+
         val filtered = mutableListOf<Pair<MutationInfo, ByteArray>>()
         for ((mutation, mutatedBytes) in allMutations) {
-            val classBytes = classFiles[mutation.className.replace('.', '/')]
+            val classKey = mutation.className.replace('.', '/')
+            val classBytes = classFiles[classKey]
             if (classBytes == null) {
                 // Class bytes missing from the classpath map. We can't
                 // run the JaCoCo analyzer for this class, so we err on
@@ -633,14 +709,15 @@ class MutationEngine(
                 filtered.add(mutation to mutatedBytes)
                 continue
             }
-            val coverage =
-                coverageAnalyzer.analyzeCoverage(
-                    classBytes,
-                    mutation.className,
-                    coverageData,
-                    listOf(mutation),
-                )
-            if (coverage.firstOrNull()?.coveringTests?.isNotEmpty() == true) {
+            val coveredLines =
+                coveredLinesByClass.getOrPut(mutation.className) {
+                    coverageAnalyzer.getCoveredLinesForClass(
+                        coverageData,
+                        classKey,
+                        classBytes,
+                    )
+                }
+            if (mutation.lineNumber in coveredLines) {
                 filtered.add(mutation to mutatedBytes)
             }
         }
@@ -673,8 +750,11 @@ class MutationEngine(
         val mutationsByClass = mutations.groupBy { it.first.className }
         logger.info("${mutations.size} mutations across ${mutationsByClass.size} classes")
 
-        // Pre-create BaseProjectClassLoader per target class (shared across mutations).
-        val baseLoaders = mutableMapOf<String, com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader>()
+        // Pre-create 3-tier classloader group per target class (shared across mutations).
+        // H-R3-perf-1: the middle TestClassLoader defines test classes once per group,
+        // avoiding O(M × T) re-defineClass cost when mutations per target class is large.
+        val baseLoaders =
+            mutableMapOf<String, com.github.rodrigotimoteo.mutation.classloader.MutantClassLoaderGroup>()
         for ((className, _) in mutationsByClass) {
             val targetKey = className.replace('.', '/')
             baseLoaders[className] =
@@ -703,7 +783,7 @@ class MutationEngine(
                     index to
                         executor.submit(
                             Callable {
-                                runSingleMutantBatched(mutation, mutatedBytes, classFiles, baseLoader, testClassNames, testClassByteMap)
+                                runSingleMutantBatched(mutation, mutatedBytes, classFiles, baseLoader, testClassNames)
                             },
                         )
                 }
@@ -712,7 +792,16 @@ class MutationEngine(
                 try {
                     val (result, failedTests) = future.get(timeoutMs, TimeUnit.MILLISECONDS)
                     results.add(result)
-                    if (failedTests.isNotEmpty()) {
+                    // Only credit kill sets for mutations that were
+                    // actually killed. ERROR mutants (load failures)
+                    // and NO_COVERAGE mutants can still report non-empty
+                    // `failedTests`, but those are infrastructure noise
+                    // and would poison test-strength history and
+                    // subsumption analysis if stored as if they were
+                    // real kills.
+                    if (failedTests.isNotEmpty() &&
+                        (result.status == MutationStatus.KILLED || result.status == MutationStatus.WEAK_KILLED)
+                    ) {
                         killSets[result.mutation.id] = failedTests
                     }
                     // Print progress. Guard `rate` against a zero
@@ -739,6 +828,16 @@ class MutationEngine(
                             errorMessage = "Timeout after ${timeoutMs}ms",
                         ),
                     )
+                } catch (e: CancellationException) {
+                    // The future was cancelled (typically by the
+                    // InterruptedException branch below or by a
+                    // previous TimeoutException on the same future).
+                    // Without this branch, `CancellationException`
+                    // would fall into the catch-all `Exception` and be
+                    // reported as a mutant ERROR, polluting the report
+                    // with phantom failures for cancellations the user
+                    // explicitly requested. Skip and move on.
+                    continue
                 } catch (e: java.util.concurrent.ExecutionException) {
                     logger.error("Mutation execution failed: ${mutations[index].first}", e.cause)
                     results.add(
@@ -757,6 +856,15 @@ class MutationEngine(
                     // is left in a clean state before the exception
                     // propagates out of `runMutants`.
                     logger.warn("Mutation testing interrupted at mutant index $index")
+                    // Cancel any in-flight mutations so they do not keep
+                    // running on worker threads after the caller has
+                    // bailed out. Previously only the current future
+                    // was implicitly abandoned; sibling futures kept
+                    // running for the full `timeoutMs` each, leaking
+                    // CPU and (worse) potentially mutating shared
+                    // classloader state after `runMutants` returned.
+                    futures.forEach { it.second.cancel(true) }
+                    executor.shutdownNow()
                     Thread.currentThread().interrupt()
                     break
                 } catch (e: Exception) {
@@ -776,9 +884,9 @@ class MutationEngine(
             }
         } finally {
             executor.shutdown()
-            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TIMEOUT_SEC, TimeUnit.SECONDS)) {
                 executor.shutdownNow()
-                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_NOW_TIMEOUT_SEC, TimeUnit.SECONDS)) {
                     logger.warn("Executor did not terminate after shutdownNow — threads may leak")
                 }
             }
@@ -789,9 +897,9 @@ class MutationEngine(
             // MutationClassLoader instances are closed in runSingleMutantBatched.
             // Each close is wrapped so a failing close does not prevent the
             // remaining loaders from being released.
-            for ((targetClass, baseLoader) in baseLoaders) {
+            for ((targetClass, group) in baseLoaders) {
                 try {
-                    invokeClose(baseLoader)
+                    invokeClose(group.base)
                 } catch (e: Exception) {
                     logger.debug("Error closing BaseProjectClassLoader for $targetClass: ${e.message}")
                 }
@@ -803,16 +911,15 @@ class MutationEngine(
     }
 
     /**
-     * Batched mutation testing: uses shared BaseProjectClassLoader per target class.
+     * Batched mutation testing: uses shared 3-tier classloader group per target class.
      * Uses pre-computed mutated bytes from generateAllMutations (no re-application).
      */
     private fun runSingleMutantBatched(
         mutation: MutationInfo,
         mutatedBytes: ByteArray,
         classFiles: Map<String, ByteArray>,
-        baseLoader: com.github.rodrigotimoteo.mutation.classloader.BaseProjectClassLoader,
+        baseLoader: com.github.rodrigotimoteo.mutation.classloader.MutantClassLoaderGroup,
         testClassNames: List<String>,
-        testClassByteMap: Map<String, ByteArray>,
     ): Pair<MutationResult, Set<String>> {
         val startTime = System.currentTimeMillis()
 
@@ -823,7 +930,6 @@ class MutationEngine(
                 baseLoader,
                 targetClassKey,
                 mutatedBytes,
-                testClassByteMap,
                 classFiles,
             )
 
@@ -907,14 +1013,34 @@ class MutationEngine(
      * class can produce dozens of mutations; previously `findSourceCode`
      * re-read the same `.kt`/`.java` from disk for every mutation in
      * the class. Caching the read eliminates N×file I/O per class.
+     *
+     * [ConcurrentHashMap] is required because the worker threads spawned
+     * by `runMutants` call `findSourceCode` (and therefore touch this
+     * cache) in parallel with the main thread. A plain [mutableMapOf]
+     * is not safe for concurrent reads/writes and would risk losing
+     * cached entries or, under the JDK, throwing on structural
+     * modifications during iteration.
+     *
+     * An [emptyList] entry acts as the "path does not exist" sentinel:
+     * [ConcurrentHashMap] rejects null values from `put` / `putIfAbsent`,
+     * so the previous nullable-map design had to be adapted. The lookup
+     * path treats an empty list the same as a missing file (skip) and
+     * an empty list from a real but empty source file is functionally
+     * identical for our purposes — there is no line snippet to return.
      */
-    private val sourceFileCache = mutableMapOf<String, List<String>?>()
+    private val sourceFileCache: ConcurrentHashMap<String, List<String>> = ConcurrentHashMap()
 
     private fun findSourceCode(
         className: String,
         lineNumber: Int,
     ): Pair<String?, String?> {
         if (lineNumber <= 0) return null to null
+        // `File(File?, String)` NPEs at the JVM level when the parent is
+        // null. Bail out before any I/O so the report simply shows no
+        // source snippet instead of crashing the engine when no
+        // projectDir was wired in (e.g. consumer-side usage that does
+        // not need source-level reporting).
+        if (projectDir == null) return null to null
         val relativePath = className.replace('.', '/') + ".kt"
         val javaPath = className.replace('.', '/') + ".java"
         // Covers pure-JVM (main/test) plus all common KMP source set
@@ -961,16 +1087,16 @@ class MutationEngine(
                 val sourceFile = File(projectDir, "$srcDir/$path")
                 val cacheKey = sourceFile.path
                 if (sourceFile.exists()) {
-                    // `null` cache value means "file exists but lines not
-                    // yet loaded" — read once and store. A class can
-                    // produce dozens of mutations; the previous code
-                    // re-read the same .kt/.java from disk for every
-                    // one, wasting N×file I/O.
+                    // `emptyList()` cache value means "file path
+                    // resolves to nothing readable" — read once and
+                    // store. A class can produce dozens of mutations;
+                    // the previous code re-read the same .kt/.java
+                    // from disk for every one, wasting N×file I/O.
                     val lines =
                         sourceFileCache.getOrPut(cacheKey) {
-                            if (sourceFile.exists()) sourceFile.readLines() else null
+                            if (sourceFile.exists()) sourceFile.readLines() else emptyList()
                         }
-                    if (lines == null) continue
+                    if (lines.isEmpty()) continue
                     if (lineNumber <= lines.size) {
                         val snippet =
                             lines.subList(
@@ -983,7 +1109,9 @@ class MutationEngine(
                 }
                 // Negative cache for non-existent paths so we don't stat
                 // the same missing file on every mutation in the class.
-                sourceFileCache.putIfAbsent(cacheKey, null)
+                // [ConcurrentHashMap] rejects null values, so use
+                // [emptyList] as the "not found" sentinel.
+                sourceFileCache.putIfAbsent(cacheKey, emptyList())
             }
         }
         return null to null
@@ -1050,18 +1178,24 @@ class MutationEngine(
 
     /**
      * Filter test class names by targetTestPatterns and excludeTestPatterns.
+     *
+     * Patterns are pre-compiled in the constructor (see
+     * [compiledTargetTestPatterns] / [compiledExcludeTestPatterns]) so
+     * invalid regex fails fast at engine construction. This method only
+     * applies the already-compiled patterns to the incoming test class
+     * names, avoiding the per-run `Regex(...)` allocation that would
+     * otherwise be paid for every call.
      */
     private fun filterTestClassNames(testClassNames: List<String>): List<String> {
-        if (targetTestPatterns.isEmpty() && excludeTestPatterns.isEmpty()) {
+        if (compiledTargetTestPatterns.isEmpty() && compiledExcludeTestPatterns.isEmpty()) {
             return testClassNames
         }
 
-        val compiledInclude = targetTestPatterns.map { Regex(it) }
-        val compiledExclude = excludeTestPatterns.map { Regex(it) }
-
         return testClassNames.filter { name ->
-            val matchesInclude = compiledInclude.isEmpty() || compiledInclude.any { it.containsMatchIn(name) }
-            val matchesExclude = compiledExclude.any { it.containsMatchIn(name) }
+            val matchesInclude =
+                compiledTargetTestPatterns.isEmpty() ||
+                    compiledTargetTestPatterns.any { it.containsMatchIn(name) }
+            val matchesExclude = compiledExcludeTestPatterns.any { it.containsMatchIn(name) }
             matchesInclude && !matchesExclude
         }
     }

@@ -5,13 +5,23 @@ package com.github.rodrigotimoteo.mutation.mutator
  *
  * The annotation's `d1` byte array contains a serialized protobuf of
  * `kotlinx.metadata.jvm.KotlinClassMetadata.Class`. The first field of
- * that message is `flags` (varint), where bit 4 (0x10) indicates a data class.
+ * that message is `flags` (varint), where bit 10 (0x400) indicates a data class
+ * in Kotlin 2.1+ metadata (real data class flags = 0x406).
+ *
+ * Note: ASM's AnnotationVisitor exposes `d1` as `String[]` (modified-UTF-8),
+ * not as `ByteArray`, so the visitor-side check in MutationScanner uses a
+ * different detection strategy (presence of `component$N` methods). This
+ * utility is kept for the correct bit constant and as a reference parser.
  *
  * We only need the `flags` field — full protobuf parsing is unnecessary.
  */
 internal object KotlinMetadataUtils {
-    // Bit 4 of the Class.flags field — set when the class is a `data class`.
-    private const val IS_DATA_FLAG: Int = 0x10
+    // Bit 10 of the Class.flags field — set when the class is a `data class`
+    // in Kotlin 2.1 metadata (KotlinClassMetadata.ProtoBuf.Class flags layout:
+    // bit 0=hasAnnotations, bit 1=isInternal, bit 2=isModule, bit 3=isMultiFile,
+    // bit 4=isExpect, bit 5=isExternal, bit 6=isConst? (reserved), bit 7=hasConstant?,
+    // bit 8=isSealed, bit 9=isInterface? (used elsewhere), bit 10=isData).
+    private const val IS_DATA_FLAG: Int = 0x400
 
     /**
      * Returns true if the @kotlin.Metadata d1 blob indicates a data class.

@@ -305,7 +305,10 @@ class MutantClassLoaderFullTest {
 
         assertNotNull(clazz)
         assertEquals("com.example.MutTest1", clazz.name)
-        assertSame(mutationLoader, clazz.classLoader)
+        // H-R3-perf-1: test classes are defined in the middle TestClassLoader
+        // (parent of MutationClassLoader), not in MutationClassLoader itself.
+        // Resolution still flows through MutationClassLoader for target refs.
+        assertSame(mutationLoader.parent, clazz.classLoader)
     }
 
     @Test
@@ -366,7 +369,8 @@ class MutantClassLoaderFullTest {
 
         assertNotNull(clazz)
         assertEquals("com.example.MutTestInner\$Inner", clazz.name)
-        assertSame(mutationLoader, clazz.classLoader, "Inner must be defined in mutation loader")
+        // H-R3-perf-1: inner-of-test is defined in the parent TestClassLoader.
+        assertSame(mutationLoader.parent, clazz.classLoader, "Inner must be defined in test loader")
     }
 
     @Test
@@ -654,8 +658,8 @@ class MutantClassLoaderFullTest {
                 targetClassName = targetName,
             )
         // Trigger a LinkageError in group A to populate its cache.
-        assertFailsWith<LinkageError> { groupA.loadClass("com.example.FactoryReset") }
-        assertTrue(badName in groupA.failedClassCache, "Group A must cache the failure")
+        assertFailsWith<LinkageError> { groupA.base.loadClass("com.example.FactoryReset") }
+        assertTrue(badName in groupA.base.failedClassCache, "Group A must cache the failure")
 
         // Group B starts with a fresh cache and is unaware of group A's failure.
         val groupB =
@@ -666,16 +670,16 @@ class MutantClassLoaderFullTest {
                 targetClassName = targetName,
             )
         assertTrue(
-            groupB.failedClassCache.isEmpty(),
+            groupB.base.failedClassCache.isEmpty(),
             "Group B must start with an empty failed-class cache",
         )
     }
 
     @Test
-    fun `MutantClassLoaderFactory createGroup returns BaseProjectClassLoader`() {
+    fun `MutantClassLoaderFactory createGroup returns MutantClassLoaderGroup`() {
         val name = "com/example/FactoryGrp"
         val bytes = buildClassWithMethod(name)
-        val base =
+        val group =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 mapOf(name to bytes),
@@ -683,8 +687,10 @@ class MutantClassLoaderFullTest {
                 name,
             )
 
-        assertNotNull(base)
-        assertTrue(base is BaseProjectClassLoader)
+        assertNotNull(group)
+        assertTrue(group is MutantClassLoaderGroup)
+        assertTrue(group.base is BaseProjectClassLoader)
+        assertTrue(group.test is TestClassLoader)
     }
 
     @Test
@@ -693,7 +699,7 @@ class MutantClassLoaderFullTest {
         val testName = "com/example/FactoryExclTest"
         val targetBytes = buildClassWithMethod(targetName)
         val testBytes = buildClassWithMethod(testName)
-        val base =
+        val group =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 mapOf(targetName to targetBytes),
@@ -702,14 +708,14 @@ class MutantClassLoaderFullTest {
             )
 
         // Both target and test → not defined by base (delegated to parent → ClassNotFound).
-        assertFailsWith<ClassNotFoundException> { base.loadClass("com.example.FactoryExclT") }
-        assertFailsWith<ClassNotFoundException> { base.loadClass("com.example.FactoryExclTest") }
+        assertFailsWith<ClassNotFoundException> { group.base.loadClass("com.example.FactoryExclT") }
+        assertFailsWith<ClassNotFoundException> { group.base.loadClass("com.example.FactoryExclTest") }
     }
 
     @Test
     fun `MutantClassLoaderFactory createMutationLoader returns MutationClassLoader`() {
         val targetName = "com/example/FactoryMut"
-        val base =
+        val group =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 emptyMap(),
@@ -718,10 +724,9 @@ class MutantClassLoaderFullTest {
             )
         val mutationLoader =
             MutantClassLoaderFactory.createMutationLoader(
-                base,
+                group,
                 targetName,
                 buildClassWithMethod(targetName),
-                testClassBytes = emptyMap(),
                 allClassBytes = emptyMap(),
             )
 
@@ -734,7 +739,7 @@ class MutantClassLoaderFullTest {
         val targetName = "com/example/FactoryMutDel"
         val otherName = "com/example/FactoryMutOther"
         val otherBytes = buildClassWithMethod(otherName)
-        val base =
+        val group =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 mapOf(otherName to otherBytes),
@@ -743,10 +748,9 @@ class MutantClassLoaderFullTest {
             )
         val mutationLoader =
             MutantClassLoaderFactory.createMutationLoader(
-                base,
+                group,
                 targetName,
                 buildClassWithMethod(targetName),
-                testClassBytes = emptyMap(),
                 allClassBytes = emptyMap(),
             )
 
@@ -755,7 +759,7 @@ class MutantClassLoaderFullTest {
         assertNotNull(clazz)
         assertEquals("com.example.FactoryMutOther", clazz.name)
         // Non-target → handled by base → loaded by base, not mutation loader.
-        assertSame(base, clazz.classLoader)
+        assertSame(group.base, clazz.classLoader)
     }
 
     // ---------- Cache isolation (per-group failed-class cache) ----------
@@ -769,14 +773,14 @@ class MutantClassLoaderFullTest {
         val badBytesA = buildClassWithInvalidSuperclass(badA)
         val badBytesB = buildClassWithInvalidSuperclass(badB)
 
-        val baseA =
+        val groupA =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 classFiles = mapOf(badA to badBytesA, badB to badBytesB),
                 testClassBytes = emptyMap(),
                 targetClassName = targetA,
             )
-        val baseB =
+        val groupB =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 classFiles = mapOf(badA to badBytesA, badB to badBytesB),
@@ -784,17 +788,17 @@ class MutantClassLoaderFullTest {
                 targetClassName = targetB,
             )
 
-        // Populate baseA's cache with both bad names.
-        assertFailsWith<LinkageError> { baseA.loadClass("com.example.IsoBadA") }
-        assertFailsWith<LinkageError> { baseA.loadClass("com.example.IsoBadB") }
-        assertTrue(badA in baseA.failedClassCache)
-        assertTrue(badB in baseA.failedClassCache)
+        // Populate groupA's base cache with both bad names.
+        assertFailsWith<LinkageError> { groupA.base.loadClass("com.example.IsoBadA") }
+        assertFailsWith<LinkageError> { groupA.base.loadClass("com.example.IsoBadB") }
+        assertTrue(badA in groupA.base.failedClassCache)
+        assertTrue(badB in groupA.base.failedClassCache)
 
-        // baseB's cache must be untouched — both names should still attempt defineClass.
-        assertNotSame(baseA.failedClassCache, baseB.failedClassCache)
-        assertTrue(baseB.failedClassCache.isEmpty(), "baseB's cache must start empty")
-        assertFailsWith<LinkageError> { baseB.loadClass("com.example.IsoBadA") }
-        assertFailsWith<LinkageError> { baseB.loadClass("com.example.IsoBadB") }
+        // groupB's base cache must be untouched — both names should still attempt defineClass.
+        assertNotSame(groupA.base.failedClassCache, groupB.base.failedClassCache)
+        assertTrue(groupB.base.failedClassCache.isEmpty(), "groupB's base cache must start empty")
+        assertFailsWith<LinkageError> { groupB.base.loadClass("com.example.IsoBadA") }
+        assertFailsWith<LinkageError> { groupB.base.loadClass("com.example.IsoBadB") }
     }
 
     @Test
@@ -804,7 +808,7 @@ class MutantClassLoaderFullTest {
         val badBytes = buildClassWithInvalidSuperclass(badName)
         val targetBytes = buildClassWithMethod(target)
 
-        val base =
+        val group =
             MutantClassLoaderFactory.createGroup(
                 parentClassLoader,
                 classFiles = mapOf(target to targetBytes, badName to badBytes),
@@ -813,19 +817,18 @@ class MutantClassLoaderFullTest {
             )
         val mutationLoader =
             MutantClassLoaderFactory.createMutationLoader(
-                base,
+                group,
                 target,
                 targetBytes,
-                testClassBytes = emptyMap(),
                 allClassBytes = mapOf(badName to badBytes),
             )
 
         // Populate the cache via the base loader.
-        assertFailsWith<LinkageError> { base.loadClass("com.example.ShareBad") }
-        assertTrue(badName in base.failedClassCache)
+        assertFailsWith<LinkageError> { group.base.loadClass("com.example.ShareBad") }
+        assertTrue(badName in group.base.failedClassCache)
 
         // The mutation loader must observe the same cache instance.
-        assertSame(base.failedClassCache, mutationLoader.failedClassCache)
+        assertSame(group.base.failedClassCache, mutationLoader.failedClassCache)
         // First call after population: cache short-circuit kicks in, parent delegation
         // returns ClassNotFoundException (the bad name is not on the parent classpath).
         assertFailsWith<ClassNotFoundException> {
@@ -840,7 +843,7 @@ class MutantClassLoaderFullTest {
         val bad = "com/example/ConcBad"
         val badBytes = buildClassWithInvalidSuperclass(bad)
 
-        val baseLoaders =
+        val groups =
             (0 until threadCount).map { _ ->
                 MutantClassLoaderFactory.createGroup(
                     parentClassLoader,
@@ -853,7 +856,7 @@ class MutantClassLoaderFullTest {
         // Every base must hold a distinct cache instance. Identity check — empty
         // Sets compare equal regardless of backing map, so content equality would
         // collapse 16 distinct instances into 1.
-        val caches = baseLoaders.map { it.failedClassCache }
+        val caches = groups.map { it.base.failedClassCache }
         val uniqueByIdentity = java.util.IdentityHashMap<MutableSet<String>, Unit>()
         caches.forEach { uniqueByIdentity[it] = Unit }
         assertEquals(
@@ -863,11 +866,11 @@ class MutantClassLoaderFullTest {
         )
 
         // Triggering a failure in one group must not mark the name in any other group.
-        assertFailsWith<LinkageError> { baseLoaders[0].loadClass("com.example.ConcBad") }
-        assertTrue(bad in baseLoaders[0].failedClassCache)
+        assertFailsWith<LinkageError> { groups[0].base.loadClass("com.example.ConcBad") }
+        assertTrue(bad in groups[0].base.failedClassCache)
         for (i in 1 until threadCount) {
             assertTrue(
-                baseLoaders[i].failedClassCache.isEmpty(),
+                groups[i].base.failedClassCache.isEmpty(),
                 "Group $i cache must remain untouched by group 0's failure",
             )
         }

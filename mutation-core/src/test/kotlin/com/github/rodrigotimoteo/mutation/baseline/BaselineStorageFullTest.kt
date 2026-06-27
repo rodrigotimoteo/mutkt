@@ -42,10 +42,10 @@ class BaselineStorageFullTest {
     fun `load skips lines with wrong field count`() {
         File(tempDir, ".mutkt/baseline").writeText(
             """
-            com.example.Foo|ARITHMETIC|42|KILLED
+            com.example.Foo|ARITHMETIC|42|0|KILLED
             com.example.Bar|RETURN_VALS|10
-            com.example.Baz|RETURN_VALS|10|SURVIVED|extra
-            com.example.Qux|VOID|5|SURVIVED
+            com.example.Baz|RETURN_VALS|10|SURVIVED|extra|extra2
+            com.example.Qux|VOID|5|0|SURVIVED
             """.trimIndent(),
         )
 
@@ -92,13 +92,13 @@ class BaselineStorageFullTest {
     fun `saveMerged merges new classes without deleting existing baseline classes`() {
         baseline.save(
             mapOf(
-                "com.example.Old" to listOf(Triple("ARITHMETIC", 1, MutationStatus.KILLED)),
+                "com.example.Old" to listOf(BaselineEntry("ARITHMETIC", 1, 0, MutationStatus.KILLED)),
             ),
         )
 
         baseline.saveMerged(
             mapOf(
-                "com.example.New" to listOf(Triple("RETURN_VALS", 5, MutationStatus.SURVIVED)),
+                "com.example.New" to listOf(BaselineEntry("RETURN_VALS", 5, 0, MutationStatus.SURVIVED)),
             ),
         )
 
@@ -162,7 +162,7 @@ class BaselineStorageFullTest {
     fun `compareWithBaseline reports entirely new class as new mutations`() {
         baseline.save(
             mapOf(
-                "com.example.Old" to listOf(Triple("ARITHMETIC", 1, MutationStatus.KILLED)),
+                "com.example.Old" to listOf(BaselineEntry("ARITHMETIC", 1, 0, MutationStatus.KILLED)),
             ),
         )
 
@@ -170,8 +170,8 @@ class BaselineStorageFullTest {
             mapOf(
                 "com.example.New" to
                     listOf(
-                        Triple("ARITHMETIC", 10, MutationStatus.SURVIVED),
-                        Triple("RETURN_VALS", 20, MutationStatus.SURVIVED),
+                        BaselineEntry("ARITHMETIC", 10, 0, MutationStatus.SURVIVED),
+                        BaselineEntry("RETURN_VALS", 20, 0, MutationStatus.SURVIVED),
                     ),
             )
 
@@ -188,15 +188,15 @@ class BaselineStorageFullTest {
             mapOf(
                 "com.example.Removed" to
                     listOf(
-                        Triple("ARITHMETIC", 1, MutationStatus.KILLED),
-                        Triple("RETURN_VALS", 2, MutationStatus.SURVIVED),
+                        BaselineEntry("ARITHMETIC", 1, 0, MutationStatus.KILLED),
+                        BaselineEntry("RETURN_VALS", 2, 0, MutationStatus.SURVIVED),
                     ),
             ),
         )
 
         val currentResults =
             mapOf(
-                "com.example.Other" to listOf(Triple("ARITHMETIC", 1, MutationStatus.KILLED)),
+                "com.example.Other" to listOf(BaselineEntry("ARITHMETIC", 1, 0, MutationStatus.KILLED)),
             )
 
         val diff = baseline.compareWithBaseline(currentResults)

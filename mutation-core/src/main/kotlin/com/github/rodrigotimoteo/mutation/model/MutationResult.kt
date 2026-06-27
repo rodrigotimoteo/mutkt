@@ -18,10 +18,19 @@ data class MutationResult(
     val executionTimeMs: Long = 0,
     val errorMessage: String? = null,
 ) {
+    /**
+     * True when the mutation was actually killed by a test, or killed
+     * by a test side-effect (weak kill). Subsumed mutations are NOT
+     * counted as killed: a SUBSUMED status means "redundant with
+     * another mutation" — including it in the killed bucket would
+     * inflate the kill rate and desync per-class scores from the
+     * global `MutationReport.killedPercentage` (which only counts
+     * KILLED). Use [MutationStatus.SUBSUMED] directly when you need
+     * the full picture.
+     */
     val isKilled: Boolean get() =
         status == MutationStatus.KILLED ||
-            status == MutationStatus.WEAK_KILLED ||
-            status == MutationStatus.SUBSUMED
+            status == MutationStatus.WEAK_KILLED
     val isSurvived: Boolean get() = status == MutationStatus.SURVIVED
 }
 

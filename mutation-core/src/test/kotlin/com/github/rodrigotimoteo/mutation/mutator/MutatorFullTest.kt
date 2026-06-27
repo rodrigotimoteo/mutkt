@@ -256,23 +256,19 @@ class MutatorFullTest {
     @Test
     fun `class SuppressMutations with unknown array name delegates to super`() {
         // The annotation visitor's visitArray returns super when name != "operators".
-        // When this happens, the operators array is not parsed, so no operators
-        // are added to suppressedOperators. We test this behaviorally: a class
-        // with @SuppressMutations(operators=["X"]) plus a non-"operators" array
-        // should still allow mutations because "operators" array is the only
-        // one that suppresses.
+        // The annotation has BOTH a non-"operators" array AND a real "operators"
+        // array. The unknown array's visitArray must delegate to super without
+        // breaking parsing of the real "operators" array — so ARITHMETIC must be
+        // suppressed by the "operators" array.
         val bytes = buildClassWithUnknownArrayInSuppress()
         val mutator = Mutator(MutationOperator.MVP_OPERATORS)
         val mutations = mutator.scanMutations(bytes)
-        // ARITHMETIC (IADD) should still be found because the real "operators"
-        // array had a value but the annotation's visitArray with non-"operators"
-        // name delegates to super — which is what we want to test.
-        // The key check: when only unknown array is present (no "operators"),
-        // the annotation is treated as suppress-all.
+        // The "operators" array has ["ARITHMETIC"] → ARITHMETIC must be suppressed
+        // even though the annotation also has an unknown array attribute.
         assertTrue(
-            mutations.none { it.operator == MutationOperator.ARITHMETIC } ||
-                mutations.any { it.operator == MutationOperator.ARITHMETIC },
-            "Behavior should be deterministic regardless of unknown arrays",
+            mutations.none { it.operator == MutationOperator.ARITHMETIC },
+            "ARITHMETIC should be suppressed by the operators array even when an " +
+                "unknown array attribute is also present, got: ${mutations.map { it.operator }}",
         )
     }
 
@@ -1507,11 +1503,12 @@ class MutatorFullTest {
     private fun buildClassWithCopyCall(opcode: Int): ByteArray {
         val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
         cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, "com/example/Foo", null, "java/lang/Object", null)
-        // @kotlin.Metadata with d1 protobuf flags = 0x10 (isData) — required for DATA_CLASS_COPY
+        // @kotlin.Metadata marks the class as Kotlin. The data-class signal
+        // is the component1 method (ASM exposes @kotlin.Metadata.d1 as
+        // String[] and the raw protobuf path is unreliable).
         val meta = cw.visitAnnotation("Lkotlin/Metadata;", true)
         meta.visit("mv", intArrayOf(1, 9, 0))
         meta.visit("k", 1)
-        meta.visit("d1", byteArrayOf(0x0A.toByte(), 0x01, 0x08, 0x10))
         meta.visitEnd()
         val ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null)
         ctor?.visitCode()
@@ -1520,6 +1517,13 @@ class MutatorFullTest {
         ctor?.visitInsn(Opcodes.RETURN)
         ctor?.visitMaxs(1, 1)
         ctor?.visitEnd()
+        // component1 — marks the class as a data class for the scanner
+        val comp = cw.visitMethod(Opcodes.ACC_PUBLIC, "component1", "()I", null, null)
+        comp?.visitCode()
+        comp?.visitInsn(Opcodes.ICONST_0)
+        comp?.visitInsn(Opcodes.IRETURN)
+        comp?.visitMaxs(1, 1)
+        comp?.visitEnd()
         val mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "test", "()Lcom/example/Foo;", null, null)
         mv?.visitCode()
         mv?.visitLineNumber(1, Label())

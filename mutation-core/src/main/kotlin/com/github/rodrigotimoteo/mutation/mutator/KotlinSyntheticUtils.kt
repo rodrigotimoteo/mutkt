@@ -32,3 +32,30 @@ internal fun isKotlinSyntheticMethod(name: String): Boolean {
         name == "hashCode\$default" ||
         name == "equals\$default"
 }
+
+/**
+ * True for a Kotlin data class component accessor — a generated method named
+ * `component<N>` where `<N>` is a positive integer (e.g. `component1`,
+ * `component2`, ...). Used as a low-cost data-class marker because
+ * `@kotlin.Metadata.d1` is exposed by ASM as `String[]` and the visitor
+ * cannot byte-parse the protobuf flags. Real data classes auto-generate
+ * one `componentN` per primary-constructor property; non-data classes
+ * never emit these names.
+ *
+ * `component$N$default` synthetic bridges are NOT matched here — they're
+ * already handled by [isKotlinSyntheticMethod].
+ */
+internal fun isKotlinComponentNMethod(name: String): Boolean {
+    if (!name.startsWith("component")) return false
+    val rest = name.removePrefix("component")
+    if (rest.isEmpty()) return false
+    var i = 0
+    // Reject leading zeros (e.g. `component01`) — generated accessors never
+    // have them. Also reject non-digit chars via the allDigit scan.
+    if (rest[0] == '0') return false
+    while (i < rest.length) {
+        if (rest[i] !in '0'..'9') return false
+        i++
+    }
+    return true
+}

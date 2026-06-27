@@ -16,7 +16,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "kotlin-mutation"
+rootProject.name = "mutkt"
 
 include("mutation-core")
 include("mutation-report")

@@ -59,6 +59,17 @@ class Mutator(
     /**
      * Generates all possible mutants for a class.
      * Returns list of (mutation, mutatedBytecode) pairs.
+     *
+     * TODO(C-R3-4b): currently re-parses `classBytes` once per mutation
+     * via [applyMutation] → [ClassReader]. For a class with N mutations
+     * this is N+1 ASM parses (1 for scan, N for apply). The intended fix
+     * is to parse once into a [org.objectweb.asm.tree.ClassNode], then
+     * run the applier on a clone (or on the same node with state reset)
+     * for each mutation. Skipped for now: [CommonSuperClassClassWriter]
+     * and [LoadClassResolver] are constructed per-call inside
+     * [applyMutation] and depend on the original bytes, so the refactor
+     * needs a parallel `applyMutationToNode` overload. The current
+     * implementation is correct; only throughput is affected.
      */
     fun generateMutants(classBytes: ByteArray): List<Pair<MutationInfo, ByteArray>> {
         val mutations = scanMutations(classBytes)

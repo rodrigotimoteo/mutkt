@@ -1,22 +1,13 @@
-buildscript {
-    repositories {
-        mavenLocal()
-        google()
-        gradlePluginPortal()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.android.tools.build:gradle:8.7.3")
-    }
-}
-
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kover)
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.dokka)
     alias(libs.plugins.owasp.dependencycheck)
+    alias(libs.plugins.nexus.publish)
 }
 
 allprojects {
@@ -55,8 +46,10 @@ subprojects {
     }
 
     extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
-        excludeSourceSets {
-            names("generated")
+        currentProject {
+            sources {
+                excludedSourceSets.addAll("generated")
+            }
         }
     }
 
@@ -87,6 +80,24 @@ subprojects {
                     name.set(project.name)
                     description.set("Kotlin Mutation Testing - PITest-style for Kotlin/JVM")
                     url.set("https://github.com/rodrigotimoteo/mutkt")
+                    licenses {
+                        license {
+                            name.set("MIT License")
+                            url.set("https://opensource.org/licenses/MIT")
+                        }
+                    }
+                    developers {
+                        developer {
+                            id.set("rodrigotimoteo")
+                            name.set("Rodrigo Timoteo")
+                            email.set("rodrigotimoteo@example.com")
+                        }
+                    }
+                    scm {
+                        connection.set("scm:git:git://github.com/rodrigotimoteo/mutkt.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/rodrigotimoteo/mutkt.git")
+                        url.set("https://github.com/rodrigotimoteo/mutkt")
+                    }
                 }
             }
         }
@@ -104,14 +115,6 @@ subprojects {
                             ?: ""
                 }
             }
-            maven {
-                name = "MavenCentral"
-                url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
-                credentials {
-                    username = System.getenv("SONATYPE_USERNAME") ?: project.findProperty("ossrh.username") as String? ?: ""
-                    password = System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("ossrh.password") as String? ?: ""
-                }
-            }
         }
     }
 
@@ -122,10 +125,6 @@ subprojects {
             useInMemoryPgpKeys(signingKey, signingPassword)
             val publishing = extensions.getByType<PublishingExtension>()
             sign(publishing.publications)
-            tasks.withType<AbstractPublishToMaven>().configureEach {
-                val signingTasks = tasks.withType<Sign>()
-                mustRunAfter(signingTasks)
-            }
         } else {
             isRequired = false
         }
@@ -149,7 +148,18 @@ extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckE
     nvd {
         apiKey = System.getenv("NVD_API_KEY") ?: (project.findProperty("nvd.api.key") as String? ?: "")
         validForHours.set(24)
-        datafeedUrl.set("https://nvd.nist.gov/static/feeds/json/cve/1.1/nvdcve-1.1-{year}.json.gz")
         datafeedStartYear.set(2002)
+    }
+}
+
+nexusPublishing {
+    packageGroup.set("io.github.rodrigotimoteo")
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
+            username.set(System.getenv("SONATYPE_USERNAME") ?: project.findProperty("sonatype.username") as String?)
+            password.set(System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("sonatype.password") as String?)
+        }
     }
 }

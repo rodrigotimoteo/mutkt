@@ -74,6 +74,25 @@ object MutationRegistry {
     }
 
     /**
+     * Aggregate triggered mutations across every thread registered for
+     * [className]. Returns the union of [ThreadState.triggeredMutations]
+     * for all threads in the class's thread set, so the per-class
+     * report in [MutKtExtension.afterAll] sees mutations triggered on
+     * any thread — not only the thread that called [beginClass].
+     *
+     * Returns an empty set when the class has no registered threads.
+     */
+    fun classTriggeredMutations(className: String): Set<String> {
+        val threadIds = classThreads[className] ?: return emptySet()
+        val aggregated = ConcurrentHashMap.newKeySet<String>()
+        for (threadId in threadIds) {
+            val state = threads[threadId] ?: continue
+            aggregated.addAll(state.triggeredMutations)
+        }
+        return aggregated
+    }
+
+    /**
      * Enable mutation testing globally.
      */
     fun enable() {

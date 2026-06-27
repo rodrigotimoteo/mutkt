@@ -6,6 +6,8 @@ import com.github.rodrigotimoteo.mutation.model.MutationResult
 import com.github.rodrigotimoteo.mutation.model.MutationStatus
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import org.gradle.api.Project
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
 import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -202,6 +204,96 @@ class MutationTaskTest {
         assertNotNull(method, "expected runMutationTests method on MutationTask")
         val annotation = method!!.getAnnotation(org.gradle.api.tasks.TaskAction::class.java)
         assertNotNull(annotation, "expected @TaskAction annotation on runMutationTests")
+    }
+
+    @Test
+    fun `task androidRuntimeClasspath is annotated with @InputFiles`() {
+        // androidRuntimeClasspath must be marked @InputFiles so the
+        // build cache invalidates when any entry in the Android variant's
+        // runtime classpath changes. Without this, mutations would re-run
+        // against stale classpath jars.
+        val field = findFieldByName("androidRuntimeClasspath")
+        assertNotNull(field, "expected androidRuntimeClasspath field on MutationTask")
+        assertNotNull(
+            field!!.getAnnotation(InputFiles::class.java),
+            "androidRuntimeClasspath must be annotated with @InputFiles for build cache " +
+                "invalidation; got annotations: ${field.annotations.map { it.annotationClass.qualifiedName }}",
+        )
+    }
+
+    @Test
+    fun `task androidJar is annotated with @InputFile`() {
+        // androidJar must be marked @InputFile so the build cache
+        // invalidates when the android.jar version changes (e.g. user
+        // upgrades compileSdk). A stale android.jar means mutant
+        // classloaders would link against the wrong android API surface.
+        val field = findFieldByName("androidJar")
+        assertNotNull(field, "expected androidJar field on MutationTask")
+        assertNotNull(
+            field!!.getAnnotation(InputFile::class.java),
+            "androidJar must be annotated with @InputFile for build cache invalidation; " +
+                "got annotations: ${field.annotations.map { it.annotationClass.qualifiedName }}",
+        )
+    }
+
+    @Test
+    fun `task androidTargetClasses is annotated with @InputFiles`() {
+        // androidTargetClasses must be marked @InputFiles so the build
+        // cache invalidates when the AGP compile task outputs change.
+        val field = findFieldByName("androidTargetClasses")
+        assertNotNull(field, "expected androidTargetClasses field on MutationTask")
+        assertNotNull(
+            field!!.getAnnotation(InputFiles::class.java),
+            "androidTargetClasses must be annotated with @InputFiles for build cache " +
+                "invalidation; got annotations: ${field.annotations.map { it.annotationClass.qualifiedName }}",
+        )
+    }
+
+    @Test
+    fun `task androidTestClasses is annotated with @InputFiles`() {
+        // androidTestClasses must be marked @InputFiles for the same
+        // reason as androidTargetClasses — invalidated when AGP test
+        // compile outputs change.
+        val field = findFieldByName("androidTestClasses")
+        assertNotNull(field, "expected androidTestClasses field on MutationTask")
+        assertNotNull(
+            field!!.getAnnotation(InputFiles::class.java),
+            "androidTestClasses must be annotated with @InputFiles for build cache " +
+                "invalidation; got annotations: ${field.annotations.map { it.annotationClass.qualifiedName }}",
+        )
+    }
+
+    @Test
+    fun `task androidContext is annotated with @Internal`() {
+        // androidContext is a holder for the variant metadata and is
+        // duplicated by the per-property @InputFiles / @InputFile
+        // fields above. The original holder itself must NOT be a Gradle
+        // input — its members (runtimeClasspath, classesDirs, etc.) are
+        // exposed separately so Gradle can track them. If androidContext
+        // were @Input, its serialized form would change every build and
+        // thrash the build cache.
+        val field = findFieldByName("androidContext")
+        assertNotNull(field, "expected androidContext field on MutationTask")
+        assertNotNull(
+            field!!.getAnnotation(org.gradle.api.tasks.Internal::class.java),
+            "androidContext must be annotated with @Internal (its members are exposed as " +
+                "separate @InputFiles / @InputFile fields); got annotations: " +
+                "${field.annotations.map { it.annotationClass.qualifiedName }}",
+        )
+    }
+
+    private fun findFieldByName(name: String): java.lang.reflect.Field? {
+        // Walk the class hierarchy because some properties are declared on
+        // the outer MutationTask class while others are inherited from a
+        // base task type. Kotlin properties on a class appear as fields
+        // with the same simple name.
+        var klass: Class<*>? = MutationTask::class.java
+        while (klass != null) {
+            val field = klass.declaredFields.firstOrNull { it.name == name }
+            if (field != null) return field
+            klass = klass.superclass
+        }
+        return null
     }
 
     @Test
