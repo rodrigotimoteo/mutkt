@@ -47,7 +47,7 @@ dependencies {
 mutationTest {
     // Option 1: regex class patterns (recommended for Kotlin/Java packages)
     targetClassPatterns.set(setOf("com\\.example\\.app\\..*"))
-    targetTestClassPatterns.set(setOf("com\\.example\\.app\\..*Test"))
+    targetTestPatterns.set(setOf("com\\.example\\.app\\..*Test"))
 
     // Option 2: simple package matching (shorthand for `.*` regex)
     targetPackages.set(setOf("com.example.app"))

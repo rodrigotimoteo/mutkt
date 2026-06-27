@@ -24,6 +24,10 @@ import java.io.File
  * ```
  */
 class HtmlReportGenerator {
+    private companion object {
+        const val MAX_SNIPPET_LINES = 12
+    }
+
     /**
      * Generate HTML mutation report.
      *
@@ -176,7 +180,7 @@ class HtmlReportGenerator {
                         }
                     val sourceCell =
                         if (result.mutation.sourceCode != null) {
-                            "<pre class=\"source-snippet\">${escapeHtml(result.mutation.sourceCode!!)}</pre>"
+                            "<pre class=\"source-snippet\">${escapeHtml(truncateSnippet(result.mutation.sourceCode!!))}</pre>"
                         } else {
                             "<span class=\"no-source\">—</span>"
                         }
@@ -204,6 +208,20 @@ class HtmlReportGenerator {
 
         outputFile.writeText(html)
         return outputFile
+    }
+
+    /**
+     * Cap the source snippet length in the detailed-results table.
+     * Multi-line snippets for big methods would otherwise bloat the
+     * HTML report by megabytes for a 1000-mutation run. The full
+     * snippet is preserved in [Mutation.sourceCode] for tooling that
+     * wants it; the report just truncates to a reasonable window.
+     */
+    private fun truncateSnippet(snippet: String): String {
+        val lines = snippet.lines()
+        if (lines.size <= MAX_SNIPPET_LINES) return snippet
+        val kept = lines.take(MAX_SNIPPET_LINES)
+        return (kept + "… (+${lines.size - MAX_SNIPPET_LINES} more lines)").joinToString("\n")
     }
 
     private fun getCss(): String {

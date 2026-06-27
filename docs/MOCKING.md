@@ -8,7 +8,7 @@ Quick reference for MockK and Mockito usage with MutKt's mutation test runner.
 - ✅ Regular mocks work (interfaces, open classes, subclass mock maker)
 - ✅ Inline mocks work (`mockkStatic`, `mockkConstructor`, Mockito 5+ inline) — JUnit Platform Launcher has first-class classloader + agent integration
 - ✅ Robolectric + inline mocks work
-- ℹ️ Inline-mocking Java agents may conflict with the test runner; JUnit Jupiter extensions themselves are executed by the launcher
+- ℹ️ Inline-mocking Java agents require the test runtime classpath to include the agent jars plus a matching `-javaagent` JVM argument; the Gradle plugin inherits both from the regular `test` task, so copy them through if you override `classpath` or `jvmArgs` on `mutationTest`.
 
 ## Compatibility matrix
 

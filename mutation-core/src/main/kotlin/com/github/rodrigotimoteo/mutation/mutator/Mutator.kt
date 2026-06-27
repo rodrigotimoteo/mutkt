@@ -23,7 +23,7 @@ import org.objectweb.asm.Opcodes
  * @see MutationOperator for available operators
  * @see MutationInfo for mutation point details
  */
-class Mutator(
+class Mutator @JvmOverloads constructor(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     private val excludedMethods: Set<String> = emptySet(),
 ) {

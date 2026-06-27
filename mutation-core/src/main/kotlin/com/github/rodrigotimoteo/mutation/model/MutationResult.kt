@@ -12,7 +12,7 @@ package com.github.rodrigotimoteo.mutation.model
  * @property errorMessage Error message if status is ERROR
  * @see MutationStatus for status details
  */
-data class MutationResult(
+data class MutationResult @JvmOverloads constructor(
     val mutation: Mutation,
     val status: MutationStatus,
     val executionTimeMs: Long = 0,
@@ -37,7 +37,7 @@ data class MutationResult(
 /**
  * Mutation score for a specific class.
  */
-data class ClassMutationScore(
+data class ClassMutationScore @JvmOverloads constructor(
     val className: String,
     val totalMutations: Int,
     val killedMutations: Int,
@@ -57,7 +57,7 @@ data class ClassMutationScore(
  * folded into `total` but lived in no bucket, so the displayed
  * percentages understated the survivor rate.
  */
-data class MutationReport(
+data class MutationReport @JvmOverloads constructor(
     val results: List<MutationResult>,
     val totalMutations: Int,
     val killedMutations: Int,
@@ -94,6 +94,17 @@ data class MutationReport(
      * `hashCode` / `toString` automatically, and the default
      * `LazyThreadSafetyMode.SYNCHRONIZED` makes the first call
      * race-safe without needing a `@Volatile` field.
+     *
+     * Scoring rule (matches the global report exactly): the denominator
+     * is the class's total mutation count, INCLUDING subsumed and
+     * weak-killed mutations. The numerator (`killedMutations`) is
+     * status `KILLED` only — `WEAK_KILLED` is reported separately in
+     * [ClassMutationScore.weakMutations] so the per-class row adds up
+     * to the global report and the per-class kill rate stays
+     * comparable to [killedPercentage]. The previous code used
+     * [MutationResult.isKilled] (KILLED + WEAK_KILLED) for the
+     * numerator, which made per-class scores higher than the global
+     * score on the same data.
      */
     private val classScoresCache: List<ClassMutationScore> by lazy {
         results
@@ -101,11 +112,13 @@ data class MutationReport(
             .map { (className, classResults) ->
                 val total = classResults.size
                 val subsumed = classResults.count { it.status == MutationStatus.SUBSUMED }
+                val weakKilled = classResults.count { it.status == MutationStatus.WEAK_KILLED }
                 ClassMutationScore(
                     className = className,
                     totalMutations = total,
-                    killedMutations = classResults.count { it.isKilled },
+                    killedMutations = classResults.count { it.status == MutationStatus.KILLED },
                     survivedMutations = classResults.count { it.isSurvived },
+                    weakMutations = weakKilled,
                     subsumedMutations = subsumed,
                 )
             }.sortedByDescending { it.score }

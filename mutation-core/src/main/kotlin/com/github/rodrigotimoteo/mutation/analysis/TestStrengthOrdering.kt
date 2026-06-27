@@ -2,6 +2,8 @@ package com.github.rodrigotimoteo.mutation.analysis
 
 import com.github.rodrigotimoteo.mutation.MUTKT_DIR
 import java.io.File
+import java.io.RandomAccessFile
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Test strength ordering based on historical kill data.
@@ -10,6 +12,12 @@ import java.io.File
  * This enables faster kill detection by exercising strongest tests early.
  *
  * History stored in `.mutkt/test-strength.json`
+ *
+ * Thread safety: [inMemoryCache] is a [ConcurrentHashMap] so concurrent
+ * Gradle workers can call [recordResults] without corrupting the cache.
+ * [flushHistory] is wrapped in [withFileLock] (OS file lock on the
+ * `test-strength.json.lock` sidecar) so concurrent workers cannot
+ * write a torn JSON file.
  *
  * Usage:
  * ```kotlin
@@ -20,7 +28,7 @@ import java.io.File
  */
 class TestStrengthOrdering(private val projectDir: File) {
     private val historyFile = File(projectDir, "$MUTKT_DIR/test-strength.json")
-    private val inMemoryCache = mutableMapOf<String, TestStrengthEntry>()
+    private val inMemoryCache: ConcurrentHashMap<String, TestStrengthEntry> = ConcurrentHashMap()
     private var cacheLoaded = false
 
     /**
@@ -48,23 +56,33 @@ class TestStrengthOrdering(private val projectDir: File) {
         totalMutations: Int,
     ) {
         ensureCacheLoaded()
-        val existing = inMemoryCache[testClassName] ?: TestStrengthEntry()
-
-        inMemoryCache[testClassName] =
-            existing.copy(
-                totalKills = existing.totalKills + killedMutations,
-                totalRuns = existing.totalRuns + 1,
-                totalMutations = existing.totalMutations + totalMutations,
+        // Atomic merge: read existing entry, apply delta, and write back via
+        // ConcurrentHashMap.compute so concurrent Gradle workers cannot lose
+        // increments. Without compute, two parallel recordResults calls for
+        // the same test class would each read the old entry, then both
+        // overwrite it with their copy — losing the first call's increment.
+        inMemoryCache.compute(testClassName) { _, existing ->
+            val current = existing ?: TestStrengthEntry()
+            current.copy(
+                totalKills = current.totalKills + killedMutations,
+                totalRuns = current.totalRuns + 1,
+                totalMutations = current.totalMutations + totalMutations,
                 lastRun = System.currentTimeMillis(),
             )
+        }
     }
 
     /**
      * Flush in-memory cache to disk. Call once after all recordResults calls.
+     *
+     * Wrapped in [withFileLock] so concurrent Gradle workers cannot
+     * interleave their `writeText` calls and produce a torn JSON file.
      */
     fun flushHistory() {
         ensureCacheLoaded()
-        saveHistory(inMemoryCache)
+        withFileLock {
+            saveHistory(inMemoryCache)
+        }
     }
 
     /**
@@ -186,6 +204,29 @@ class TestStrengthOrdering(private val projectDir: File) {
             }
         historyFile.parentFile.mkdirs()
         historyFile.writeText(json)
+    }
+
+    /**
+     * Run [block] while holding an exclusive OS file lock on the test
+     * strength history file. Prevents concurrent Gradle workers from
+     * interleaving their `writeText` calls and corrupting the JSON.
+     *
+     * The `.lock` sidecar is removed in `finally` so it does not
+     * accumulate in `.mutkt/`.
+     */
+    private inline fun <T> withFileLock(block: () -> T): T {
+        val parent = historyFile.parentFile
+        if (parent != null) parent.mkdirs()
+        val lockFile = File(parent, "${historyFile.name}.lock")
+        try {
+            RandomAccessFile(lockFile, "rw").channel.use { channel ->
+                channel.lock().use {
+                    return block()
+                }
+            }
+        } finally {
+            lockFile.delete()
+        }
     }
 }
 

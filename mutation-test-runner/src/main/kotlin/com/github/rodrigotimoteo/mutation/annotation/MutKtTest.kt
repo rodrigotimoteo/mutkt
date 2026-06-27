@@ -24,7 +24,9 @@ import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
 @Retention(AnnotationRetention.RUNTIME)
 annotation class MutKtTest(
     /**
-     * Verification mode for mutation testing.
+     * Verification mode for mutation testing. Default matches
+     * [MutKtConfiguration.mode] (LENIENT) so the two configuration
+     * surfaces stay consistent.
      */
     val mode: VerificationMode = VerificationMode.LENIENT,
     /**

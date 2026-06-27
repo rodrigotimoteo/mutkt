@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.3.1] - 2026-06-27
+
+### JUnit Platform Enhancements
+- **engineIds parameter** — `MutationEngine` + `ReflectionTestRunner` accept a custom JUnit Platform engine ID list (default: `junit-jupiter` + `junit-vintage` + `junit-platform-suite-engine`). Restrict discovery to a specific engine to skip Vintage on a pure-Jupiter project.
+- **junit-platform-suite-engine default** — `@Suite` classes now discovered by default; no plugin config required.
+- **TagFilter support** — `includeTags` / `excludeTags` constructor params on `MutationEngine` and `runTests()` on `ReflectionTestRunner`. JUnit 5 `@Tag` / `@Tags` / `@EnabledIf` / `@EnabledOnOs` filters are honored when set.
+- **MutKtExtension interceptors** — `interceptTestFactoryMethod` + `interceptDynamicTestMethod` + `interceptTestTemplateMethod` added so `@TestFactory` and `@ParameterizedTest` work with MutKt's per-method tracking. `interceptWithTracking` logs per-method trigger count and clears `triggeredMutations` between methods.
+
+### Performance & Correctness
+- **Concurrent source file cache** — `ConcurrentHashMap<String, String>` replaces the previous per-class map; `findSourceCode` no longer races between worker threads.
+- **3-tier classloader hierarchy** — `TestClassLoader` (parent: `URLClassLoader`, child: `MutantClassLoader`, inner: `BaseProjectClassLoader`) for JUnit 5 + inline-mock classpath isolation.
+- **Parallel class scanning** — `generateAllMutations` now runs across a `ForkJoinPool` (was sequential per-class scan).
+- **Coverage O(N²) → O(N)** — JaCoCo `.exec` parsed once and reused for both filter and weak-mutation analysis (was re-parsed per mutation).
+
+### Publishing & Build
+- **Maven Central via gradle-nexus-publish-plugin** — replaces the `oss.sonatype.org` manual upload. POM includes `licenses`, `developers`, `scm`, `name`, `description`, `url`. Publishing gated on `SONATYPE_USERNAME` / `SONATYPE_PASSWORD` env vars + GPG key.
+- **KMP source set support** — `GitChangeDetector.DEFAULT_SOURCE_DIRS` covers all common KMP roots (jvmMain, androidMain, iosMain + iosArm64/iosX64/iosSimulatorArm64 variants, linuxMain, macosMain, mingwX64Main, mingwX86Main, jsMain, wasmJsMain, wasmWasiMain, commonMain).
+- **Kover 0.9.0** — upgraded; verify rule enforces 85% line coverage per module (mutation-core / mutation-gradle-plugin / mutation-report / mutation-test-runner).
+- **AAR `libs/*.jar` extraction** — `AarExtractor.extractAll` now extracts every bundled jar under `libs/` in addition to `classes.jar`. SHA-256 stable-dir scheme prevents stale extraction accumulation.
+
+### Bug Fixes
+- **Scoring** — `NO_COVERAGE` no longer counts against the mutation score; only `KILLED` / `WEAK_KILLED` / `SUBSUMED` increase the score denominator.
+- **killSets** — `KillSetStorage.saveMerged` overwrites the merged result, not the in-memory new run; cross-run kill sets are persisted correctly.
+- **InterruptedException** — `MutationEngine.runMutants` propagates `InterruptedException` instead of swallowing it, so the engine responds to cancellation.
+- **@SuppressMutations** — presence with no operators now suppresses all (documented behavior); `operators = [...]` suppresses only those.
+- **ConcurrentHashMap in TestStrengthOrdering** — `inMemoryCache` switched to `ConcurrentHashMap`; `flushHistory` wrapped in `withFileLock` to prevent concurrent Gradle workers from corrupting `test-strength.json`.
+- **ClassFilter @Deprecated** — marked `@Deprecated` with `ReplaceWith` pointing to `MutationEngine.includePatterns` / `excludePatterns`. Production wiring lives in the Gradle plugin + engine.
+
+### KDoc & Documentation
+- **MutationOperator.fromName** — added KDoc explaining the lookup + null-on-miss contract.
+- **Mutator.excludedMethods** — added `@property` KDoc.
+- **MutationEngine** — added `@property` for `engineIds`, `includeTags`, `excludeTags`, `excludedMethods`, `maxMutationsPerClass`, `targetTestPatterns`, `excludeTestPatterns`.
+- **SubsumptionAnalyzer** — KDoc notes the O(m²) comparison cost and recommends pre-grouping mutations by `(class, method)` for large methods.
+- **AarExtractor** — class-level KDoc explains SHA-256 stable-dir scheme + `clearAars` trade-off (in-run cleanup, complements Gradle `clean`).
+- **README** — version bumped to 0.3.1; new "What's New in 0.3.1" section.
+- **MIGRATION.md** — added 0.3.0 → 0.3.1 section (no breaking changes, enhancements only).
+- **AGENTS.md** — verified operator count (6 MVP + 4 Kotlin + 6 Quick Win = 16) and gotchas.
+
 ## [0.3.0] - 2026-06-15
 
 ### Android Support (6 phases, 33 new tests)

@@ -25,7 +25,7 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
  *           only — not consulted by equals/hashCode/copy.
  * @property description Human-readable description of the mutation
  */
-data class Mutation(
+data class Mutation @JvmOverloads constructor(
     val id: String,
     val className: String,
     val methodName: String,

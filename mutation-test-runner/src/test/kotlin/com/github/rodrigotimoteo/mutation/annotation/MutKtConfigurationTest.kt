@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 
 class MutKtConfigurationTest {
     @Test
-    fun `default mode is STRICT`() {
+    fun `default mode is LENIENT`() {
         val config = MutKtConfiguration()
-        assertEquals(VerificationMode.STRICT, config.mode)
+        assertEquals(VerificationMode.LENIENT, config.mode)
     }
 
     @Test
@@ -43,8 +43,8 @@ class MutKtConfigurationTest {
     @Test
     fun `copy with different mode`() {
         val config = MutKtConfiguration()
-        val modified = config.copy(mode = VerificationMode.LENIENT)
-        assertEquals(VerificationMode.LENIENT, modified.mode)
+        val modified = config.copy(mode = VerificationMode.STRICT)
+        assertEquals(VerificationMode.STRICT, modified.mode)
         assertEquals(config.timeoutMs, modified.timeoutMs)
     }
 
@@ -67,7 +67,7 @@ class MutKtConfigurationTest {
     fun `toString includes all fields`() {
         val config = MutKtConfiguration()
         val str = config.toString()
-        assertTrue(str.contains("STRICT"))
+        assertTrue(str.contains("LENIENT"))
         assertTrue(str.contains("30000"))
         assertTrue(str.contains("skipInIDE"))
     }

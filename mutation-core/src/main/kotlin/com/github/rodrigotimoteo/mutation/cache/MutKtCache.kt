@@ -91,18 +91,28 @@ class MutKtCache(private val projectDir: File) {
         status: MutationStatus,
     ) {
         val cacheFile = getCacheFile(classHash)
+        val key = "$operator:$methodName:$lineNumber:$occurrenceIndex"
+        val entry = "$key=$status"
         withFileLock(cacheFile) {
-            val key = "$operator:$methodName:$lineNumber:$occurrenceIndex"
-            val entry = "$key=$status"
-
-            val lines =
-                if (cacheFile.exists()) {
-                    cacheFile.readLines().filter { !it.startsWith("$key=") }
+            // Update in place: search for an existing entry with the
+            // same key, replace its line if found, else append. Avoids
+            // the read-whole-file / write-whole-file round trip per
+            // store call (O(N²) bytes for N mutations in the same
+            // class). Lock is held throughout so concurrent workers
+            // cannot race.
+            if (!cacheFile.exists()) {
+                cacheFile.writeText(entry)
+                return@withFileLock
+            }
+            val existingLines = cacheFile.readLines()
+            val matchIndex = existingLines.indexOfFirst { it.startsWith("$key=") }
+            val newLines =
+                if (matchIndex >= 0) {
+                    existingLines.toMutableList().also { it[matchIndex] = entry }
                 } else {
-                    emptyList()
+                    existingLines + entry
                 }
-
-            cacheFile.writeText((lines + entry).joinToString("\n"))
+            cacheFile.writeText(newLines.joinToString("\n"))
         }
     }
 

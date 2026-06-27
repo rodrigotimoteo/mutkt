@@ -84,9 +84,17 @@ private const val MIN_SUBSUMPTION_MUTATIONS = 10
  * println("Score: ${report.killedPercentage}%")
  * ```
  *
+ * Concurrency: the engine is **single-shot, single-thread**. Create one
+ * engine per run; do not invoke [runMutationTesting] concurrently from
+ * multiple threads on the same instance — the per-run scratch state
+ * (`classFilesMap`, `allTestClassBytes`, `sourceFileCache`) would race
+ * and the second caller would observe the first caller's bytes. The
+ * shared [ReflectionTestRunner] has the same constraint.
+ *
  * @property enabledOperators Mutation operators to apply
  * @property timeoutMs Timeout per mutant in milliseconds
- * @property maxParallelMutants Number of parallel mutant executions
+ * @property maxParallelMutants Number of parallel mutant executions.
+ *           `0` falls back to `Runtime.getRuntime().availableProcessors()`.
  * @property enableInlinedFinally Filter mutations in inlined finally blocks
  * @property enableTestOrdering Order tests by historical strength
  * @property changedClasses Only test these classes (incremental mode)
@@ -96,13 +104,22 @@ private const val MIN_SUBSUMPTION_MUTATIONS = 10
  * @property enableSubsumption Skip redundant mutations
  * @property enableWeakMutation Skip unreachable mutations
  * @property projectDir Project root directory for caching/baseline
- * @property engineIds JUnit Platform engine IDs to include when discovering tests
+ * @property excludedMethods Method names to skip during scanning (substring match)
+ * @property maxMutationsPerClass Cap on mutations per class (`0` = no cap)
+ * @property targetTestPatterns Regex patterns for test classes to include
+ * @property excludeTestPatterns Regex patterns for test classes to exclude
+ * @property includeTags JUnit @Tag names to include (also honored for @EnabledIf / @EnabledOnOs at execution time)
+ * @property excludeTags JUnit @Tag names to exclude
+ * @property engineIds JUnit Platform engine IDs to include when discovering tests.
+ *           Default `["junit-jupiter", "junit-vintage", "junit-platform-suite-engine"]`
+ *           — restrict to e.g. `["junit-jupiter"]` to skip Vintage on a pure-Jupiter project.
  * @see MutationReport for result details
  */
-class MutationEngine(
+@Suppress("LongParameterList", "TooManyFunctions")
+class MutationEngine @JvmOverloads constructor(
     private val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
-    maxParallelMutants: Int = 0,
+    maxParallelMutants: Int = 4,
     private val enableInlinedFinally: Boolean = true,
     private val enableTestOrdering: Boolean = true,
     private val changedClasses: Set<String> = emptySet(),
@@ -125,6 +142,35 @@ class MutationEngine(
             "junit-platform-suite-engine",
         ),
 ) {
+    /**
+     * Config-based constructor. Preferred for new code: groups the 19
+     * engine parameters into a single [MutationEngineConfig] so call
+     * sites read as named groups (Filter, Scan, Execution, ...) rather
+     * than a long parameter list.
+     *
+     * @sample samples.engine.runWithConfig
+     */
+    constructor(config: MutationEngineConfig) : this(
+        enabledOperators = config.enabledOperators,
+        timeoutMs = config.timeoutMs,
+        maxParallelMutants = config.maxParallelMutants,
+        enableInlinedFinally = config.enableInlinedFinally,
+        enableTestOrdering = config.enableTestOrdering,
+        changedClasses = config.changedClasses,
+        includePatterns = config.includePatterns,
+        excludePatterns = config.excludePatterns,
+        enableCache = config.enableCache,
+        enableSubsumption = config.enableSubsumption,
+        enableWeakMutation = config.enableWeakMutation,
+        projectDir = config.projectDir,
+        excludedMethods = config.excludedMethods,
+        maxMutationsPerClass = config.maxMutationsPerClass,
+        targetTestPatterns = config.targetTestPatterns,
+        excludeTestPatterns = config.excludeTestPatterns,
+        includeTags = config.includeTags,
+        excludeTags = config.excludeTags,
+        engineIds = config.engineIds,
+    )
     private val logger = LoggerFactory.getLogger(MutationEngine::class.java)
     private val mutator = Mutator(enabledOperators, excludedMethods)
     private val coverageAnalyzer = CoverageAnalyzer()
@@ -187,7 +233,36 @@ class MutationEngine(
 
     /**
      * Runs mutation testing on the given classpath.
+     *
+     * @param classFiles Map of slashed class name to compiled bytecode
+     *        (e.g. `"com/example/Foo"` → bytes). Must not be empty.
+     * @param testClassNames Fully qualified test class names to run
+     *        against each mutant. May be empty (all mutations will
+     *        report `NO_COVERAGE`).
+     * @param testClassBytes Bytecode for the test classes — required
+     *        when the test classes are not on the classpath provided
+     *        by [testClassLoader].
+     * @param coverageExecFile Optional JaCoCo `.exec` file. When present
+     *        and valid, drives coverage-guided filtering of mutations
+     *        (drops mutations in uncovered lines) and weak-mutation
+     *        analysis (drops mutations in unrun classes).
+     * @param testClassLoader Optional parent classloader for the
+     *        mutation test classloader. Defaults to the engine's own
+     *        classloader when null.
+     * @return A [MutationReport] containing per-mutation results and
+     *         aggregate statistics.
+     * @throws IllegalArgumentException if any of [MutationEngineConfig.includePatterns],
+     *         [MutationEngineConfig.excludePatterns],
+     *         [MutationEngineConfig.targetTestPatterns], or
+     *         [MutationEngineConfig.excludeTestPatterns] is not a valid
+     *         regex (raised at engine construction, not here).
+     * @throws java.util.concurrent.TimeoutException never — the
+     *         per-mutant timeout is enforced internally and reported
+     *         as [com.github.rodrigotimoteo.mutation.model.MutationStatus.TIMEOUT].
+     * @sample samples.engine.minimalRun
+     * @see MutationEngineConfig for grouped configuration
      */
+    @JvmOverloads
     fun runMutationTesting(
         classFiles: Map<String, ByteArray>,
         testClassNames: List<String>,
@@ -623,6 +698,11 @@ class MutationEngine(
      * Update test strength ordering with results.
      * Records per-mutant outcome: only test classes that actually killed
      * the mutation get credit, not all test classes.
+     *
+     * Old loop called `recordResults` once per (mutation, test) pair,
+     * hitting a file lock + JSON write per call. Now we accumulate
+     * per-test (kills, runs) deltas in a Map and call `recordResults`
+     * once per test class.
      */
     private fun updateTestStrength(
         results: List<MutationResult>,
@@ -631,12 +711,20 @@ class MutationEngine(
     ) {
         if (testStrengthOrdering == null) return
 
+        val totals = HashMap<String, IntArray>(testClassNames.size * 2)
+        for (testClass in testClassNames) {
+            totals[testClass] = intArrayOf(0, 0)
+        }
         for (result in results) {
             val killingTests = killSets[result.mutation.id] ?: emptySet()
             for (testClass in testClassNames) {
-                val score = if (testClass in killingTests) 1 else 0
-                testStrengthOrdering.recordResults(testClass, score, 1)
+                val entry = totals.getValue(testClass)
+                if (testClass in killingTests) entry[0] = entry[0] + 1
+                entry[1] = entry[1] + 1
             }
+        }
+        for ((testClass, entry) in totals) {
+            testStrengthOrdering.recordResults(testClass, entry[0], entry[1])
         }
     }
 
@@ -1030,6 +1118,37 @@ class MutationEngine(
      */
     private val sourceFileCache: ConcurrentHashMap<String, List<String>> = ConcurrentHashMap()
 
+    /**
+     * Pre-computed source roots for [findSourceCode]. Building the list
+     * inside the per-mutation call path was cheap per call but repeated
+     * thousands of times per run; the list itself never changes between
+     * mutations, so it is built once at construction and reused. The
+     * `kotlin`/`java` suffix variants are collapsed by the `suffixes`
+     * join below.
+     */
+    private val sourceRoots: List<String> by lazy {
+        val bases =
+            listOf(
+                "src/main",
+                "src/commonMain",
+                "src/jvmMain",
+                "src/androidMain",
+                "src/iosMain",
+                "src/iosArm64Main",
+                "src/iosX64Main",
+                "src/iosSimulatorArm64Main",
+                "src/linuxMain",
+                "src/macosMain",
+                "src/mingwX64Main",
+                "src/mingwX86Main",
+                "src/jsMain",
+                "src/wasmJsMain",
+                "src/wasmWasiMain",
+            )
+        val suffixes = listOf("kotlin", "java")
+        bases.flatMap { base -> suffixes.map { "$base/$it" } }
+    }
+
     private fun findSourceCode(
         className: String,
         lineNumber: Int,
@@ -1044,45 +1163,9 @@ class MutationEngine(
         val relativePath = className.replace('.', '/') + ".kt"
         val javaPath = className.replace('.', '/') + ".java"
         // Covers pure-JVM (main/test) plus all common KMP source set
-        // directories (commonMain, jvmMain, androidMain, iosMain,
-        // linuxMain, macosMain, mingwX*, jsMain, wasm*Main). Each
-        // platform is checked with both `kotlin` and `java` source
-        // roots; the list is short enough that the extra stat() per
-        // mutation is negligible compared to the regex and ASM work.
-        val srcDirs =
-            listOf(
-                "src/main/kotlin",
-                "src/main/java",
-                "src/commonMain/kotlin",
-                "src/commonMain/java",
-                "src/jvmMain/kotlin",
-                "src/jvmMain/java",
-                "src/androidMain/kotlin",
-                "src/androidMain/java",
-                "src/iosMain/kotlin",
-                "src/iosMain/java",
-                "src/iosArm64Main/kotlin",
-                "src/iosArm64Main/java",
-                "src/iosX64Main/kotlin",
-                "src/iosX64Main/java",
-                "src/iosSimulatorArm64Main/kotlin",
-                "src/iosSimulatorArm64Main/java",
-                "src/linuxMain/kotlin",
-                "src/linuxMain/java",
-                "src/macosMain/kotlin",
-                "src/macosMain/java",
-                "src/mingwX64Main/kotlin",
-                "src/mingwX64Main/java",
-                "src/mingwX86Main/kotlin",
-                "src/mingwX86Main/java",
-                "src/jsMain/kotlin",
-                "src/jsMain/java",
-                "src/wasmJsMain/kotlin",
-                "src/wasmJsMain/java",
-                "src/wasmWasiMain/kotlin",
-                "src/wasmWasiMain/java",
-            )
-        for (srcDir in srcDirs) {
+        // directories. The list is pre-computed once in [sourceRoots];
+        // previously it was rebuilt for every mutation in the class.
+        for (srcDir in sourceRoots) {
             for (path in listOf(relativePath, javaPath)) {
                 val sourceFile = File(projectDir, "$srcDir/$path")
                 val cacheKey = sourceFile.path

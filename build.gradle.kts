@@ -19,7 +19,7 @@ allprojects {
     }
 
     group = "io.github.rodrigotimoteo"
-    version = "0.3.0"
+    version = "0.3.1"
 }
 
 dependencies {
@@ -49,6 +49,29 @@ subprojects {
         currentProject {
             sources {
                 excludedSourceSets.addAll("generated")
+            }
+        }
+    }
+
+    // Enforce 85% line coverage per published module. mutation-core /
+    // mutation-gradle-plugin / mutation-report / mutation-test-runner are
+    // published; the *sample* / *self-test* modules are excluded above.
+    //
+    // Kover 0.9.0 DSL: the `verify { rule { minBound { ... } } }` block
+    // expresses the minimum allowed coverage. The bound is evaluated
+    // per-project (currentProject scope) so the rule applies to each
+    // subproject, not the aggregated build.
+    extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
+        currentProject {
+            reports {
+                verify {
+                    rule {
+                        minBound {
+                            coverageUnits.set(kotlinx.kover.gradle.plugin.dsl.CoverageUnit.LINE)
+                            minValue.set(85)
+                        }
+                    }
+                }
             }
         }
     }

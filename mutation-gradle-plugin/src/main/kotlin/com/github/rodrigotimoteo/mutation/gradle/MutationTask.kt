@@ -371,12 +371,12 @@ abstract class MutationTask
             // AARs present → returns the same list). Runs even when the
             // Android resolver failed so users with manually-wired
             // debugUnitTestRuntimeClasspath still get working classpath.
-            // The AAR temp dir is wiped at the start of every run so stale
-            // extractions from AARs no longer on the classpath do not
-            // accumulate in `build/mutkt-aars/` across runs.
+            // Stale extractions from AARs no longer on the classpath are
+            // pruned; unchanged AARs are reused without re-extraction.
             val aarTempDir =
                 aarExtractDir.asFile.get().apply { mkdirs() }
-            AarExtractor(aarTempDir).clearAars()
+            val aarFiles = rawClasspathFiles.filter { it.extension.lowercase() == "aar" }
+            AarExtractor(aarTempDir).clearStaleAars(aarFiles)
             val classpathFiles = expandAars(rawClasspathFiles, aarTempDir)
 
             // Find coverage file

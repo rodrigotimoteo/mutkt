@@ -22,7 +22,7 @@ MutKt fully supports Android unit tests via Robolectric. See [docs/ANDROID.md](d
 // build.gradle.kts
 plugins {
     kotlin("jvm") version "2.1.10"
-    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.3.0"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.3.1"
 }
 ```
 
@@ -42,7 +42,7 @@ For explicit control over which code blocks are mutated:
 
 ```kotlin
 dependencies {
-    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.3.0")
+    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.3.1")
 }
 
 @ExtendWith(MutKtExtension::class)
@@ -55,6 +55,19 @@ class CalculatorTest {
     }
 }
 ```
+
+## What's New in 0.3.1
+
+- **Custom JUnit engines** — `engineIds` parameter on `MutationEngine` / `ReflectionTestRunner` to restrict discovery (default includes `junit-jupiter`, `junit-vintage`, `junit-platform-suite-engine`).
+- **Tag filtering** — `includeTags` / `excludeTags` honor `@Tag` / `@Tags` / `@EnabledIf` / `@EnabledOnOs` style filters.
+- **MutKtExtension interceptors** — `@TestFactory` (dynamic tests) and `@ParameterizedTest` (test templates) now route through `interceptWithTracking` for per-method mutation attribution.
+- **3-tier classloader hierarchy** — `TestClassLoader` isolates inline-mock agents (MockK / Mockito) from project classpath.
+- **Parallel class scanning** — `generateAllMutations` runs across `ForkJoinPool` (was sequential per-class scan).
+- **Coverage O(N²) → O(N)** — JaCoCo `.exec` parsed once and reused.
+- **Kover 0.9.0** — verify rule enforces 85% line coverage per module.
+- **AAR `libs/*.jar` extraction** — every bundled jar in an AAR is now visible to the URL classloader.
+- **KMP source set support** — all common KMP source roots (ios, linux, macos, mingw, js, wasm*, common) are recognized for incremental analysis.
+- **Maven Central via `gradle-nexus-publish-plugin`** — POM metadata (licenses, developers, scm) included.
 
 ## How It Works
 
@@ -240,7 +253,7 @@ class Service {
 buildscript {
     repositories { mavenCentral() }
     dependencies {
-        classpath("io.github.rodrigotimoteo:mutation-gradle-plugin:0.3.0")
+        classpath("io.github.rodrigotimoteo:mutation-gradle-plugin:0.3.1")
     }
 }
 apply(plugin = "io.github.rodrigotimoteo.mutation-kotlin")

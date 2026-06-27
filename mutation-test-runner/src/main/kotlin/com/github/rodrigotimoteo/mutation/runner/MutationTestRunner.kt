@@ -37,6 +37,7 @@ class MutationTestRunner(
      *   to support a non-default naming scheme (e.g. a project that
      *   uses `*IT` for integration tests).
      */
+    @JvmOverloads
     fun run(
         classesDir: File,
         testClassesDir: File,
@@ -177,6 +178,9 @@ class MutationTestRunner(
  * Factory for creating MutationTestRunner with default configuration.
  */
 object MutationTestRunnerFactory {
+    @JvmStatic
+    @JvmOverloads
+    @Suppress("LongParameterList")
     fun create(
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
         maxParallelMutants: Int = 4,
@@ -187,8 +191,8 @@ object MutationTestRunnerFactory {
         includePatterns: List<String> = emptyList(),
         excludePatterns: List<String> = emptyList(),
         enableCache: Boolean = false,
-        enableSubsumption: Boolean = false,
-        enableWeakMutation: Boolean = false,
+        enableSubsumption: Boolean = true,
+        enableWeakMutation: Boolean = true,
         projectDir: java.io.File? = null,
         excludedMethods: Set<String> = emptySet(),
         maxMutationsPerClass: Int = 0,

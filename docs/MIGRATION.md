@@ -2,6 +2,53 @@
 
 This guide helps you migrate between versions of the Kotlin Mutation Testing library.
 
+## From 0.3.0 to 0.3.1
+
+### Breaking Changes
+
+None. 0.3.1 is a pure enhancement release — every 0.3.0 configuration continues to work without changes.
+
+### New Configuration Options
+
+```kotlin
+mutationTest {
+    // New (0.3.1): restrict JUnit Platform engine discovery.
+    // Default: ["junit-jupiter", "junit-vintage", "junit-platform-suite-engine"]
+    // Add an `engineIds` SetProperty<String> to the Gradle DSL via custom
+    // configuration or pass it directly to MutationEngine at construction.
+    val engineIds = listOf("junit-jupiter")  // skip Vintage on a pure-Jupiter project
+
+    // New (0.3.1): filter by JUnit @Tag (also honors @EnabledIf / @EnabledOnOs).
+    // Available on MutationEngine / ReflectionTestRunner.
+    val includeTags = setOf("fast", "smoke")
+    val excludeTags = setOf("slow", "integration")
+}
+```
+
+### New Behavior
+
+- **Test factory + parameterized tests** — `@TestFactory` (dynamic tests) and `@ParameterizedTest` (test templates) now run through `MutKtExtension.interceptWithTracking` and are subject to per-method mutation attribution. Projects that did not previously discover these tests as killed/survived will start seeing them in reports.
+- **junit-platform-suite-engine discovery** — `@Suite` classes are now picked up by default. If you want to skip them, restrict `engineIds`.
+- **KMP source set support** — incremental analysis (`git diff`) now recognizes all KMP source roots (`commonMain`, `jvmMain`, `androidMain`, `iosMain` + arch variants, `linuxMain`, `macosMain`, `mingwX64Main` / `mingwX86Main`, `jsMain`, `wasmJsMain` / `wasmWasiMain`). No config change required; the diff now finds changes in KMP projects.
+- **AAR `libs/*.jar`** — Android AAR dependencies now expose every jar entry under `libs/`, not just `classes.jar`. Projects depending on AARs with bundled jars will see more code on the test classpath.
+
+### New APIs (programmatic)
+
+```kotlin
+// New constructor parameters on MutationEngine / ReflectionTestRunner
+MutationEngine(
+    enabledOperators = ...,
+    engineIds = listOf("junit-jupiter"),       // NEW
+    includeTags = setOf("fast"),                // NEW
+    excludeTags = setOf("slow"),                // NEW
+    // ... existing params unchanged
+)
+```
+
+### Deprecations
+
+- **`ClassFilter`** (mutation-core) — marked `@Deprecated`; replaced by `MutationEngine.includePatterns` / `excludePatterns`. Direct use of `ClassFilter` is no longer wired in production paths but the class is retained for `ClassFilterTest` compatibility.
+
 ## From 0.2.0 to 0.3.0
 
 ### Breaking Changes

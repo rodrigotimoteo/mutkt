@@ -41,6 +41,7 @@ object MutKt {
      * When mutation testing is enabled, this tracks which mutations
      * are triggered during execution. When disabled, it's a no-op.
      */
+    @JvmStatic
     fun <T> underTest(
         mutationId: String = "",
         block: () -> T,
@@ -67,6 +68,7 @@ object MutKt {
     /**
      * Register a block without tracking a specific mutation.
      */
+    @JvmStatic
     fun <T> underTest(block: () -> T): T {
         return underTest("", block)
     }
@@ -74,12 +76,14 @@ object MutKt {
     /**
      * Check if mutation testing is currently active.
      */
+    @JvmStatic
     fun isActive(): Boolean = MutationRegistry.isActive()
 
     /**
      * Enable mutation testing programmatically.
      * Usually done automatically by MutKtExtension.
      */
+    @JvmStatic
     fun enable() {
         MutationRegistry.enable()
     }
@@ -88,6 +92,7 @@ object MutKt {
      * Disable mutation testing programmatically.
      * Usually done automatically by MutKtExtension.
      */
+    @JvmStatic
     fun disable() {
         MutationRegistry.disable()
     }
@@ -95,6 +100,7 @@ object MutKt {
     /**
      * Set the timeout for mutation execution.
      */
+    @JvmStatic
     fun setTimeoutMs(ms: Long) {
         MutationRegistry.setTimeoutMs(ms)
     }

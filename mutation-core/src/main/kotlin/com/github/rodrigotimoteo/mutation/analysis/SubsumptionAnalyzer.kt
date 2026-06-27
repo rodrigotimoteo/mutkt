@@ -15,6 +15,15 @@ import com.github.rodrigotimoteo.mutation.model.Mutation
  * Subsumption only applies to mutations within the same class and method.
  * Cross-class and cross-method subsumption is not considered.
  *
+ * **Complexity**: the inner pair comparison is **O(m²)** where `m` is the
+ * number of mutations within a (class, method) group. For projects with
+ * very large methods (hundreds of mutations per method) this can dominate
+ * analysis time. Mutations are pre-grouped by `className::methodName` so
+ * the cost is bounded per-method, not global. If you routinely see large
+ * `m` values, consider increasing the in-method mutation filter (operator
+ * restrict, dead-code elimination) or pre-sorting mutations by line to
+ * exit early on non-overlapping regions.
+ *
  * @see <a href="https://pitest.org/quickstart/configuring/subsumption/">PITest subsumption</a>
  */
 class SubsumptionAnalyzer {
@@ -80,24 +89,42 @@ class SubsumptionAnalyzer {
         for ((_, methodMutations) in grouped) {
             if (methodMutations.size < 2) continue
 
-            // Only consider mutations with kill data available; the provider
-            // returns null for "no kill data" so the loop skips them.
-            val withKillData = methodMutations.filter { killSetProvider(it.id) != null }
+            // Pre-compute kill sets once per mutation in the group; the
+            // pair loop would otherwise call the provider twice per pair
+            // (O(n²) provider calls). Sort by ascending kill-set size so
+            // the larger set is `i` (the candidate subsumer) and the
+            // smaller set is `j` (the candidate subsumed). Bail the pair
+            // as soon as |J| >= |I| — a superset can never be subsumed
+            // by a subset-or-equal set.
+            data class Entry(
+                val id: String,
+                val killSet: Set<String>,
+            )
+            val entries =
+                methodMutations
+                    .mapNotNull { m ->
+                        val ks = killSetProvider(m.id) ?: return@mapNotNull null
+                        Entry(m.id, ks)
+                    }.sortedBy { it.killSet.size }
 
-            for (i in withKillData.indices) {
-                if (withKillData[i].id in subsumed) continue
+            for (i in entries.indices) {
+                val entryI = entries[i]
+                if (entryI.id in subsumed) continue
 
-                val killSetI = killSetProvider(withKillData[i].id) ?: continue
-
-                for (j in withKillData.indices) {
+                for (j in entries.indices) {
                     if (i == j) continue
-                    if (withKillData[j].id in subsumed) continue
-
-                    val killSetJ = killSetProvider(withKillData[j].id) ?: continue
-
-                    // If killSetJ ⊆ killSetI and killSetJ is a strict subset, then i subsumes j
-                    if (killSetJ.isNotEmpty() && killSetI != killSetJ && killSetI.containsAll(killSetJ)) {
-                        subsumed.add(withKillData[j].id)
+                    val entryJ = entries[j]
+                    if (entryJ.id in subsumed) continue
+                    // |J| <= |I| by sort; if equal the strict-subset
+                    // check below excludes them anyway. Bail when J
+                    // catches up — every remaining j has |J| >= |I|,
+                    // and a superset cannot be subsumed.
+                    if (entryJ.killSet.size >= entryI.killSet.size) break
+                    if (entryJ.killSet.isNotEmpty() &&
+                        entryI.killSet != entryJ.killSet &&
+                        entryI.killSet.containsAll(entryJ.killSet)
+                    ) {
+                        subsumed.add(entryJ.id)
                     }
                 }
             }

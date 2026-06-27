@@ -4,12 +4,19 @@ import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
 
 /**
  * Configuration for mutation test execution.
+ *
+ * Default mode is [VerificationMode.LENIENT] (not [VerificationMode.STRICT])
+ * to match the @MutKtTest annotation default. The historical
+ * `STRICT` default failed builds for any surviving mutation, which
+ * was the wrong starting point for a new project with no test
+ * coverage yet. Switch to `STRICT` once you have a known-good
+ * baseline and want survivors to fail the build.
  */
-data class MutKtConfiguration(
+data class MutKtConfiguration @JvmOverloads constructor(
     /**
      * Whether to require all mutations to be killed.
      */
-    val mode: VerificationMode = VerificationMode.STRICT,
+    val mode: VerificationMode = VerificationMode.LENIENT,
     /**
      * Timeout in milliseconds for each mutant execution.
      */

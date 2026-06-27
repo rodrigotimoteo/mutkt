@@ -42,6 +42,13 @@ class WeakMutationAnalyzer {
      * Filters out mutations that are not on covered lines.
      *
      * Production entry point invoked by [com.github.rodrigotimoteo.mutation.engine.MutationEngine].
+     *
+     * When the class is in the covered set but the line number is
+     * unknown (`<= 0`), the mutation is treated as reachable: we
+     * cannot prove it is unreachable, and conservatively keeping it
+     * matches PITest's behaviour for weakly-tracked mutations. Dropping
+     * unknown-line mutations from a known-covered class would silently
+     * shrink the test set for no accuracy gain.
      */
     fun filterUnreachable(
         mutations: List<MutationInfo>,
@@ -54,7 +61,7 @@ class WeakMutationAnalyzer {
             val classLines =
                 coveredLinesMap[mutation.className]
                     ?: coveredLinesMap[mutation.className.replace('.', '/')]
-            classLines != null && mutation.lineNumber in classLines
+            classLines != null && (mutation.lineNumber <= 0 || mutation.lineNumber in classLines)
         }
     }
 
