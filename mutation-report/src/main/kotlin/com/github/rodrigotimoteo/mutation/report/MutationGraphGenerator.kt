@@ -36,6 +36,9 @@ object MutationGraphGenerator {
                     .node.mutation.killed { fill: #f44336; }
                     .node.mutation.survived { fill: #FF9800; }
                     .node.mutation.weak { fill: #FFEB3B; }
+                    .node.mutation.subsumed { fill: #B0BEC5; }
+                    .node.mutation.timeout { fill: #FF5722; }
+                    .node.mutation.no_coverage { fill: #9E9E9E; }
                     .node.mutation.error { fill: #9E9E9E; }
                     .link { stroke: #999; stroke-opacity: 0.6; }
                     .link.killed { stroke: #f44336; stroke-width: 2px; }
@@ -165,10 +168,14 @@ object MutationGraphGenerator {
         // Add mutation nodes
         for (result in report.results) {
             val status =
-                when {
-                    result.isKilled -> "killed"
-                    result.isSurvived -> "survived"
-                    else -> "error"
+                when (result.status) {
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.KILLED -> "killed"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.WEAK_KILLED -> "weak"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.SUBSUMED -> "subsumed"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.SURVIVED -> "survived"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.NO_COVERAGE -> "no_coverage"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.TIMEOUT -> "timeout"
+                    com.github.rodrigotimoteo.mutation.model.MutationStatus.ERROR -> "error"
                 }
             nodes.add("""{"id": "${escapeJson(result.mutation.id)}", "type": "mutation", "status": "$status"}""")
         }

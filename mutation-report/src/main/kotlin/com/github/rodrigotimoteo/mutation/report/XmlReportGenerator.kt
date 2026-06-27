@@ -8,7 +8,11 @@ import java.io.File
  */
 object XmlReportGenerator {
     /**
-     * Generate XML report from mutation results.
+     * Generate XML mutation report.
+     *
+     * @param report The mutation report to serialize
+     * @param outputDir Destination directory for mutations.xml
+     * @return The written mutations.xml file
      */
     fun generate(
         report: MutationReport,

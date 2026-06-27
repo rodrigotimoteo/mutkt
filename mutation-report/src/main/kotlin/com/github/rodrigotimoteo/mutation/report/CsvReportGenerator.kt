@@ -97,6 +97,8 @@ object CsvReportGenerator {
     }
 
     private fun escapeCsv(text: String): String {
+        // Guard against CSV formula injection when opened in Excel/Sheets.
+        if (text.isNotEmpty() && text[0] in "=+-@\t\r") return "'" + text
         return if (
             text.contains(",") ||
             text.contains("\"") ||

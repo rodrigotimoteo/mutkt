@@ -37,7 +37,7 @@ class ConsoleReporter {
         mutationInfo: String,
     ): String {
         val percentage = current.toDouble() / total * 100
-        val barWidth = 30
+        val barWidth = PROGRESS_BAR_WIDTH
         val filled = (percentage / 100 * barWidth).toInt()
         val empty = barWidth - filled
         val bar = "█".repeat(filled) + "░".repeat(empty)
@@ -81,7 +81,7 @@ class ConsoleReporter {
 
         // Kill rate bar
         val killRate = report.killedPercentage
-        val barWidth = 40
+        val barWidth = KILL_RATE_BAR_WIDTH
         val filled = (killRate / 100.0 * barWidth).toInt()
         val empty = barWidth - filled
         val bar = "█".repeat(filled) + "░".repeat(empty)
@@ -159,6 +159,9 @@ class ConsoleReporter {
     fun clearLine(): String = if (isStdoutTty()) "\r\u001B[K" else "\r"
 
     companion object {
+        private const val PROGRESS_BAR_WIDTH = 30
+        private const val KILL_RATE_BAR_WIDTH = 40
+
         /**
          * Detects whether stdout is connected to a terminal.
          *

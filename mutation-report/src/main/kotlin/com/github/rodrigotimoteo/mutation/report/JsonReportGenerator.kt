@@ -60,11 +60,20 @@ object JsonReportGenerator {
     }
 
     private fun escapeJson(text: String): String {
-        return text
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t")
+        val sb = StringBuilder(text.length)
+        for (c in text) {
+            when (c) {
+                '\\' -> sb.append("\\\\")
+                '"' -> sb.append("\\\"")
+                '/' -> sb.append("\\/")
+                '\b' -> sb.append("\\b")
+                '\u000C' -> sb.append("\\f")
+                '\n' -> sb.append("\\n")
+                '\r' -> sb.append("\\r")
+                '\t' -> sb.append("\\t")
+                else -> if (c.code < 0x20) "\\u%04x".format(c.code) else sb.append(c)
+            }
+        }
+        return sb.toString()
     }
 }

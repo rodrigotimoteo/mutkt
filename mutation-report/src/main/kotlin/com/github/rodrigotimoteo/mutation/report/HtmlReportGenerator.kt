@@ -179,11 +179,9 @@ class HtmlReportGenerator {
                             MutationStatus.SUBSUMED -> "subsumed"
                         }
                     val sourceCell =
-                        if (result.mutation.sourceCode != null) {
-                            "<pre class=\"source-snippet\">${escapeHtml(truncateSnippet(result.mutation.sourceCode!!))}</pre>"
-                        } else {
-                            "<span class=\"no-source\">—</span>"
-                        }
+                        result.mutation.sourceCode?.let { code ->
+                            "<pre class=\"source-snippet\">${escapeHtml(truncateSnippet(code))}</pre>"
+                        } ?: "<span class=\"no-source\">—</span>"
                     appendLine("          <tr>")
                     appendLine("            <td class=\"class-name\">${escapeHtml(result.mutation.className)}</td>")
                     appendLine("            <td>${escapeHtml(result.mutation.methodName)}</td>")
