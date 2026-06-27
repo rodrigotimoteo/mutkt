@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutation.registry
 
 import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -56,6 +57,8 @@ import java.util.concurrent.atomic.AtomicLong
  * @see MutKt
  */
 object MutationRegistry {
+    private val logger = LoggerFactory.getLogger(MutationRegistry::class.java)
+
     private val active = AtomicBoolean(false)
     private val threads = ConcurrentHashMap<Long, ThreadState>()
     private val classThreads = ConcurrentHashMap<String, MutableSet<Long>>()
@@ -67,14 +70,6 @@ object MutationRegistry {
     private var clock: Clock = Clock.systemUTC()
 
     /**
-     * Per-thread registry state. `private` because the only public surface
-     * is the [current] / [markStartTime] / [markTriggered] / [isMutationTriggered]
-     * helpers on the registry itself — callers never construct or inspect a
-     * [ThreadState] directly. Hidden so future refactors can change its
-     * shape (e.g. coalesce fields, replace the `ConcurrentHashMap.newKeySet`
-     * with a typed holder) without breaking the public API.
-     */
-    private     /**
      * Per-thread mutation-tracking state. Exposed publicly so the
      * `@JvmStatic` [current] method on the `object` companion can
      * return it from Java callers. Mutable in place: callers may
@@ -342,15 +337,24 @@ object MutationRegistry {
     //     a single bad listener cannot poison the engine run loop) ---
 
     private fun notifyEnabled() = notify { it.onEnabled() }
+
     private fun notifyDisabled() = notify { it.onDisabled() }
+
     private fun notifyTimeout(threadId: Long) = notify { it.onTimeout(threadId) }
 
     private inline fun notify(block: (RegistryListener) -> Unit) {
         for (listener in listeners) {
             try {
                 block(listener)
-            } catch (_: Exception) {
-                // listener failure is non-fatal; do not propagate
+            } catch (e: Exception) {
+                // listener failure is non-fatal; do not propagate. Log
+                // at WARN with the listener class so a misbehaving
+                // callback is visible without poisoning the run loop.
+                logger.warn(
+                    "RegistryListener {} threw, swallowing: {}",
+                    listener::class.java.name,
+                    e.toString(),
+                )
             }
         }
     }

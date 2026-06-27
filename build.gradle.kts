@@ -57,20 +57,15 @@ subprojects {
     // mutation-gradle-plugin / mutation-report / mutation-test-runner are
     // published; the *sample* / *self-test* modules are excluded above.
     //
-    // Kover 0.9.0 DSL: the `verify { rule { minBound { ... } } }` block
-    // expresses the minimum allowed coverage. The bound is evaluated
-    // per-project (currentProject scope) so the rule applies to each
-    // subproject, not the aggregated build.
+    // Kover 0.9.0 DSL: `reports.verify.rule.minBound(85)` expresses the
+    // minimum allowed line coverage as a plain Int. The block runs
+    // inside `subprojects { ... }` so the rule applies per-subproject
+    // (not aggregated across the whole build).
     extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
-        currentProject {
-            reports {
-                verify {
-                    rule {
-                        minBound {
-                            coverageUnits.set(kotlinx.kover.gradle.plugin.dsl.CoverageUnit.LINE)
-                            minValue.set(85)
-                        }
-                    }
+        reports {
+            verify {
+                rule {
+                    minBound(85)
                 }
             }
         }
@@ -154,13 +149,16 @@ subprojects {
     }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = libs.versions.jvmTarget.get()
-            freeCompilerArgs +=
+        compilerOptions {
+            jvmTarget.set(
+                org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(libs.versions.jvmTarget.get()),
+            )
+            freeCompilerArgs.addAll(
                 listOf(
                     "-opt-in=kotlin.RequiresOptIn",
                     "-Xjsr305=strict",
-                )
+                ),
+            )
         }
     }
 }

@@ -25,36 +25,38 @@ import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
  *           only — not consulted by equals/hashCode/copy.
  * @property description Human-readable description of the mutation
  */
-data class Mutation @JvmOverloads constructor(
-    val id: String,
-    val className: String,
-    val methodName: String,
-    val methodDescriptor: String,
-    val operator: MutationOperator,
-    val lineNumber: Int,
-    val sourceFile: String? = null,
-    val sourceCode: String? = null,
-    val originalBytecode: ByteArray = ByteArray(0),
-    val mutatedBytecode: ByteArray = ByteArray(0),
-    val description: String,
-) {
-    /**
-     * Recover the zero-based occurrence index for this mutation within
-     * its (class, method, line) tuple. The [id] format encodes it as the
-     * last `::` segment so the value can be recovered without storing an
-     * extra constructor field (which would break data-class
-     * `equals`/`hashCode` for older callers using positional construction).
-     */
-    fun getOccurrenceIndex(): Int = id.substringAfterLast("::").toIntOrNull() ?: 0
+data class Mutation
+    @JvmOverloads
+    constructor(
+        val id: String,
+        val className: String,
+        val methodName: String,
+        val methodDescriptor: String,
+        val operator: MutationOperator,
+        val lineNumber: Int,
+        val sourceFile: String? = null,
+        val sourceCode: String? = null,
+        val originalBytecode: ByteArray = ByteArray(0),
+        val mutatedBytecode: ByteArray = ByteArray(0),
+        val description: String,
+    ) {
+        /**
+         * Recover the zero-based occurrence index for this mutation within
+         * its (class, method, line) tuple. The [id] format encodes it as the
+         * last `::` segment so the value can be recovered without storing an
+         * extra constructor field (which would break data-class
+         * `equals`/`hashCode` for older callers using positional construction).
+         */
+        fun getOccurrenceIndex(): Int = id.substringAfterLast("::").toIntOrNull() ?: 0
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is Mutation) return false
-        return id == other.id
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is Mutation) return false
+            return id == other.id
+        }
+
+        override fun hashCode(): Int = id.hashCode()
+
+        override fun toString(): String =
+            "Mutation(id='$id', className='$className', methodName='$methodName', operator=$operator, lineNumber=$lineNumber)"
     }
-
-    override fun hashCode(): Int = id.hashCode()
-
-    override fun toString(): String =
-        "Mutation(id='$id', className='$className', methodName='$methodName', operator=$operator, lineNumber=$lineNumber)"
-}

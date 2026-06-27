@@ -3,7 +3,6 @@ package com.github.rodrigotimoteo.mutation.engine
 import com.github.rodrigotimoteo.mutation.ClassName
 import com.github.rodrigotimoteo.mutation.ClassNamePattern
 import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
-import com.github.rodrigotimoteo.mutation.MutationId
 import com.github.rodrigotimoteo.mutation.mutator.MutationOperator
 import java.io.File
 
@@ -51,13 +50,11 @@ data class MutationEngineConfig(
     val enabledOperators: Set<MutationOperator> = MutationOperator.MVP_OPERATORS,
     val excludedMethods: Set<String> = emptySet(),
     val maxMutationsPerClass: Int = 0,
-
     // --- Scan group ---
     val includePatterns: List<ClassNamePattern> = emptyList(),
     val excludePatterns: List<ClassNamePattern> = emptyList(),
     val targetTestPatterns: List<ClassNamePattern> = emptyList(),
     val excludeTestPatterns: List<ClassNamePattern> = emptyList(),
-
     // --- Test group ---
     val engineIds: List<String> =
         listOf(
@@ -67,7 +64,6 @@ data class MutationEngineConfig(
         ),
     val includeTags: Set<String> = emptySet(),
     val excludeTags: Set<String> = emptySet(),
-
     // --- Execution group ---
     val maxParallelMutants: Int = 4,
     val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
@@ -75,14 +71,11 @@ data class MutationEngineConfig(
     val enableTestOrdering: Boolean = true,
     val enableCache: Boolean = false,
     val changedClasses: Set<ClassName> = emptySet(),
-
     // --- Analysis group ---
     val enableSubsumption: Boolean = true,
     val enableWeakMutation: Boolean = true,
-
     // --- Coverage ---
     val coverageExecFile: File? = null,
-
     // --- Filesystem ---
     val projectDir: File? = null,
 ) {

@@ -12,28 +12,30 @@ import com.github.rodrigotimoteo.mutation.DEFAULT_TIMEOUT_MS
  * coverage yet. Switch to `STRICT` once you have a known-good
  * baseline and want survivors to fail the build.
  */
-data class MutKtConfiguration @JvmOverloads constructor(
-    /**
-     * Whether to require all mutations to be killed.
-     */
-    val mode: VerificationMode = VerificationMode.LENIENT,
-    /**
-     * Timeout in milliseconds for each mutant execution.
-     */
-    val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
-    /**
-     * Whether to skip testing when running from IDE (single test).
-     */
-    val skipInIDE: Boolean = true,
-    /**
-     * Class name patterns to include for mutation.
-     */
-    val includePatterns: List<String> = emptyList(),
-    /**
-     * Class name patterns to exclude from mutation.
-     */
-    val excludePatterns: List<String> = listOf("**/*Test*", "**/*Generated*", "**/*Builder*"),
-)
+data class MutKtConfiguration
+    @JvmOverloads
+    constructor(
+        /**
+         * Whether to require all mutations to be killed.
+         */
+        val mode: VerificationMode = VerificationMode.LENIENT,
+        /**
+         * Timeout in milliseconds for each mutant execution.
+         */
+        val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+        /**
+         * Whether to skip testing when running from IDE (single test).
+         */
+        val skipInIDE: Boolean = true,
+        /**
+         * Class name patterns to include for mutation.
+         */
+        val includePatterns: List<String> = emptyList(),
+        /**
+         * Class name patterns to exclude from mutation.
+         */
+        val excludePatterns: List<String> = listOf("**/*Test*", "**/*Generated*", "**/*Builder*"),
+    )
 
 /**
  * Verification mode for mutation testing.
