@@ -62,26 +62,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify Sonatype credentials
+      - name: Verify Sonatype credentials (informational only)
+        # Central Portal's /service/local/staging/profiles endpoint
+        # returns 401 to basic auth (it expects the legacy OSSRH realm),
+        # but the gradle publish + manual upload endpoints below accept
+        # the same User Token credentials via Bearer. Treat this as a
+        # hint, not a gate. The real auth check is the gradle publish
+        # task that follows.
         run: |
-          echo "Testing Sonatype auth..."
+          echo "Testing Sonatype auth (informational; may 401 even when valid)..."
           RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
             -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
             "https://ossrh-staging-api.central.sonatype.com/service/local/staging/profiles" 2>&1)
           HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
           BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
-          echo "HTTP code: $HTTP_CODE"
-          if [ "$HTTP_CODE" = "401" ]; then
-            echo ""
-            echo "FAIL: 401 Unauthorized - credentials are OLD OSSRH tokens"
-            echo "   Need Central Portal User Tokens instead."
-            echo "   Generate at: https://central.sonatype.com/account"
-            echo "   Update GitHub secrets: SONATYPE_USERNAME, SONATYPE_PASSWORD"
-            exit 1
-          elif [ "$HTTP_CODE" = "200" ]; then
-            echo "OK: Auth works. Profiles found:"
+          echo "Auth check HTTP code: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "Auth probe ok. Profiles:"
             echo "$BODY" | jq '.data[].profileName' 2>/dev/null || echo "$BODY"
           else
+            echo "Auth probe returned $HTTP_CODE (continuing — real check is gradle publish below)"
             echo "Response: $BODY"
           fi
 
