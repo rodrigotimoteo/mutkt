@@ -56,6 +56,27 @@ subprojects {
         }
     }
 
+    // Make every Sonatype publish task explicitly depend on its
+    // matching sign task. Gradle 8.10 strict validation rejects the
+    // implicit dependency on `sign<MavenPublication>` outputs that
+    // gradle-nexus-publish-plugin's publish tasks create. Without
+    // this, subprojects that apply `java-gradle-plugin` (i.e.
+    // mutation-gradle-plugin, which has the auto-generated
+    // `pluginMaven` publication) fail configuration with
+    // "uses output of task ... without declaring an explicit or
+    // implicit dependency".
+    tasks.matching { it.name.startsWith("publish") && it.name.endsWith("PublicationToSonatypeRepository") }
+        .configureEach {
+            val publishTaskName = name
+            val signTaskName = publishTaskName
+                .removePrefix("publish")
+                .replace("PublicationToSonatypeRepository", "Publication")
+            val signTask = tasks.findByName("sign$signTaskName")
+            if (signTask != null) {
+                dependsOn(signTask)
+            }
+        }
+
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         testLogging {
