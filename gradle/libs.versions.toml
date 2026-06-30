@@ -21,7 +21,6 @@ mockitoKotlin = "5.4.0"
 androidxTestExtJunit = "1.2.1"
 androidxTestCore = "1.5.0"
 mutationPlugin = "0.3.0"
-nexusPublish = "2.0.0"
 
 [libraries]
 # Kotlin
@@ -80,4 +79,3 @@ detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 owasp-dependencycheck = { id = "org.owasp.dependencycheck", version.ref = "owasp" }
-nexus-publish = { id = "io.github.gradle-nexus.publish-plugin", version.ref = "nexusPublish" }

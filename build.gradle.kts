@@ -7,7 +7,6 @@ plugins {
     alias(libs.plugins.ktlint)
     alias(libs.plugins.dokka)
     alias(libs.plugins.owasp.dependencycheck)
-    alias(libs.plugins.nexus.publish)
 }
 
 allprojects {
@@ -47,37 +46,14 @@ subprojects {
         publications {
             withType<MavenPublication>().configureEach {
                 pom {
-                    // Licenses / developers / scm are configured in
-                    // `subprojects { PublishingExtension ... }` above so
-                    // every published module + plugin marker gets them.
-                    // (Configured in subprojects to avoid duplication.)
+                    // Licenses / developers / scm are added in the
+                    // subprojects PublishingExtension block above
+                    // (so all MavenPublication instances in subprojects
+                    // get them, including plugin markers).
                 }
             }
         }
     }
-
-    // Make every Sonatype publish task explicitly depend on its
-    // matching sign task. Gradle 8.10 strict validation rejects the
-    // implicit dependency on `sign<MavenPublication>` outputs that
-    // gradle-nexus-publish-plugin's publish tasks create. Without
-    // this, subprojects that apply `java-gradle-plugin` (i.e.
-    // mutation-gradle-plugin, which has the auto-generated
-    // `pluginMaven` publication) fail configuration with
-    // "uses output of task ... without declaring an explicit or
-    // implicit dependency".
-    tasks
-        .matching { it.name.startsWith("publish") && it.name.endsWith("PublicationToSonatypeRepository") }
-        .configureEach {
-            val publishTaskName = name
-            val signTaskName =
-                publishTaskName
-                    .removePrefix("publish")
-                    .replace("PublicationToSonatypeRepository", "Publication")
-            val signTask = tasks.findByName("sign$signTaskName")
-            if (signTask != null) {
-                dependsOn(signTask)
-            }
-        }
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
@@ -174,6 +150,21 @@ subprojects {
                             ?: ""
                 }
             }
+            // Sonatype Central Portal (post-OSSRH). v0.3.0 publish used
+            // the same staging URL via plain `maven-publish` rather than
+            // gradle-nexus-publish-plugin. We keep the same approach
+            // because the plugin's `publishMavenPublicationTo*` task
+            // triggers a Gradle 8.10 strict task-dependency validation
+            // error against the sign tasks of plugin-marker publications
+            // in subprojects that apply `java-gradle-plugin`.
+            maven {
+                name = "MavenCentral"
+                url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
+                credentials {
+                    username = System.getenv("SONATYPE_USERNAME") ?: project.findProperty("ossrh.username") as String? ?: ""
+                    password = System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("ossrh.password") as String? ?: ""
+                }
+            }
         }
     }
 
@@ -184,6 +175,17 @@ subprojects {
             useInMemoryPgpKeys(signingKey, signingPassword)
             val publishing = extensions.getByType<PublishingExtension>()
             sign(publishing.publications)
+
+            // Gradle 8.10 strict task-dependency validation rejects the
+            // implicit dependency that `AbstractPublishToMaven` has on
+            // its corresponding sign task's outputs. v0.3.0 used
+            // `mustRunAfter` to declare the ordering edge explicitly.
+            // This silences the validation error and ensures .asc files
+            // are written before the publish task reads them.
+            tasks.withType<org.gradle.api.publish.maven.tasks.AbstractPublishToMaven>().configureEach {
+                val signingTasks = tasks.withType<org.gradle.plugins.signing.Sign>()
+                mustRunAfter(signingTasks)
+            }
         } else {
             isRequired = false
         }
@@ -211,20 +213,5 @@ extensions.configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckE
         apiKey = System.getenv("NVD_API_KEY") ?: (project.findProperty("nvd.api.key") as String? ?: "")
         validForHours.set(24)
         datafeedStartYear.set(2002)
-    }
-}
-
-nexusPublishing {
-    packageGroup.set("io.github.rodrigotimoteo")
-    repositories {
-        sonatype {
-            // Sonatype Central Portal (replaces legacy s01.oss.sonatype.org,
-            // sunset 2025-06-30). gradle-nexus-publish-plugin 2.0.0+ uses
-            // these URLs to publish + close staging in one shot.
-            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
-            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
-            username.set(System.getenv("SONATYPE_USERNAME") ?: project.findProperty("sonatype.username") as String?)
-            password.set(System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("sonatype.password") as String?)
-        }
     }
 }

@@ -86,10 +86,19 @@ jobs:
           fi
 
       - name: Publish to Sonatype staging (Central Portal)
-        # gradle-nexus-publish-plugin 2.0.0 publishes via the new
-        # ossrh-staging-api.central.sonatype.com endpoint (not the
-        # sunset s01.oss.sonatype.org).
-        run: ./gradlew publishToSonatype --no-daemon
+        # Plain `maven-publish` (not gradle-nexus-publish-plugin) — v0.3.0
+        # used this approach and it dodges the Gradle 8.10 strict task
+        # dependency validation error on `signPluginMavenPublication`
+        # outputs that the plugin triggers.
+        # mutation-gradle-plugin publishes ALL publications (maven +
+        # pluginMaven + plugin marker). The others publish only the
+        # single `maven` publication.
+        run: |
+          set -e
+          ./gradlew :mutation-gradle-plugin:publishAllPublicationsToMavenCentralRepository --no-daemon
+          ./gradlew :mutation-core:publishMavenPublicationToMavenCentralRepository --no-daemon
+          ./gradlew :mutation-report:publishMavenPublicationToMavenCentralRepository --no-daemon
+          ./gradlew :mutation-test-runner:publishMavenPublicationToMavenCentralRepository --no-daemon
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
