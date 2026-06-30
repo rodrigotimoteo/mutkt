@@ -65,12 +65,14 @@ subprojects {
     // `pluginMaven` publication) fail configuration with
     // "uses output of task ... without declaring an explicit or
     // implicit dependency".
-    tasks.matching { it.name.startsWith("publish") && it.name.endsWith("PublicationToSonatypeRepository") }
+    tasks
+        .matching { it.name.startsWith("publish") && it.name.endsWith("PublicationToSonatypeRepository") }
         .configureEach {
             val publishTaskName = name
-            val signTaskName = publishTaskName
-                .removePrefix("publish")
-                .replace("PublicationToSonatypeRepository", "Publication")
+            val signTaskName =
+                publishTaskName
+                    .removePrefix("publish")
+                    .replace("PublicationToSonatypeRepository", "Publication")
             val signTask = tasks.findByName("sign$signTaskName")
             if (signTask != null) {
                 dependsOn(signTask)
