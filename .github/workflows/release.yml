@@ -62,14 +62,76 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to Maven Central via Central Portal
+      - name: Verify Sonatype credentials
         run: |
-          ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository --no-daemon
+          echo "Testing Sonatype auth..."
+          RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
+            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
+            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/profiles" 2>&1)
+          HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
+          BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
+          echo "HTTP code: $HTTP_CODE"
+          if [ "$HTTP_CODE" = "401" ]; then
+            echo ""
+            echo "FAIL: 401 Unauthorized - credentials are OLD OSSRH tokens"
+            echo "   Need Central Portal User Tokens instead."
+            echo "   Generate at: https://central.sonatype.com/account"
+            echo "   Update GitHub secrets: SONATYPE_USERNAME, SONATYPE_PASSWORD"
+            exit 1
+          elif [ "$HTTP_CODE" = "200" ]; then
+            echo "OK: Auth works. Profiles found:"
+            echo "$BODY" | jq '.data[].profileName' 2>/dev/null || echo "$BODY"
+          else
+            echo "Response: $BODY"
+          fi
+
+      - name: Publish to Sonatype staging (Central Portal)
+        # gradle-nexus-publish-plugin 2.0.0 publishes via the new
+        # ossrh-staging-api.central.sonatype.com endpoint (not the
+        # sunset s01.oss.sonatype.org).
+        run: ./gradlew publishToSonatype --no-daemon
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
+
+      - name: Close and release to Maven Central
+        run: |
+          set -e
+
+          echo "=== Transferring deployment to Central Publisher Portal ==="
+
+          # Generate Bearer token from User Token credentials
+          TOKEN=$(echo -n "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" | base64)
+
+          echo "Uploading to Portal with publishing_type=automatic..."
+          RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
+            -H "Authorization: Bearer $TOKEN" \
+            -X POST \
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/io.github.rodrigotimoteo?publishing_type=automatic" 2>&1)
+
+          HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
+          BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
+
+          echo "Response code: $HTTP_CODE"
+          echo "Response body: $BODY"
+
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
+            echo ""
+            echo "OK: Deployment transferred to Portal with auto-publish."
+            echo "Artifacts will appear on Maven Central in ~10-30 minutes."
+            echo "Check: https://central.sonatype.com/publishing/deployments"
+          else
+            echo ""
+            echo "WARN: Portal transfer returned $HTTP_CODE"
+            echo "You may need to publish manually at:"
+            echo "  https://central.sonatype.com/publishing/deployments"
+            exit 1
+          fi
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
 
   release:
     name: Create Release

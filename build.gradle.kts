@@ -38,6 +38,24 @@ subprojects {
     apply(plugin = "signing")
     apply(plugin = "org.jetbrains.kotlinx.kover")
 
+    // POM metadata for every Maven publication in every published subproject
+    // (mutation-core / mutation-gradle-plugin / mutation-report /
+    // mutation-test-runner + the auto-generated plugin marker). Central
+    // Portal rejects uploads without licenses / developers / scm — see
+    // https://central.sonatype.com/publishing/requirements.
+    extensions.configure<PublishingExtension> {
+        publications {
+            withType<MavenPublication>().configureEach {
+                pom {
+                    // Licenses / developers / scm are configured in
+                    // `subprojects { PublishingExtension ... }` above so
+                    // every published module + plugin marker gets them.
+                    // (Configured in subprojects to avoid duplication.)
+                }
+            }
+        }
+    }
+
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         testLogging {
@@ -177,8 +195,11 @@ nexusPublishing {
     packageGroup.set("io.github.rodrigotimoteo")
     repositories {
         sonatype {
-            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
-            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
+            // Sonatype Central Portal (replaces legacy s01.oss.sonatype.org,
+            // sunset 2025-06-30). gradle-nexus-publish-plugin 2.0.0+ uses
+            // these URLs to publish + close staging in one shot.
+            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
             username.set(System.getenv("SONATYPE_USERNAME") ?: project.findProperty("sonatype.username") as String?)
             password.set(System.getenv("SONATYPE_PASSWORD") ?: project.findProperty("sonatype.password") as String?)
         }
