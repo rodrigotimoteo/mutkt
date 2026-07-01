@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.3] - 2026-07-01
+
+### Documentation
+- **Generalized internal references** — Comments, KDoc, and release notes that referred to a specific internal project name have been rewritten to use generic terminology (`multi-flavor library scenario` etc.). No code behavior changes.
+- **CHANGELOG / MIGRATION** — Updated to reference 0.3.3.
+
 ## [0.3.2] - 2026-07-01
 
 ### Android Variant Resolution Fix (multi-flavor library scenario)
