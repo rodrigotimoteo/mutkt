@@ -31,9 +31,11 @@ jobs:
         # sample modules reference the plugin by version 0.3.2, which is not
         # yet on Maven Central during this very release run — including them
         # in the CI build causes a chicken-and-egg plugin-resolution failure.
-        # Samples are verified locally via `./gradlew :multi-app:mutationTest`
-        # before the tag is pushed.
-        run: ./gradlew :mutation-core:build :mutation-gradle-plugin:build :mutation-report:build :mutation-test-runner:build
+        # --configure-on-demand skips project configuration for samples that
+        # have no tasks in the requested task graph. Samples are verified
+        # locally via `./gradlew :multi-app:mutationTest` before the tag
+        # is pushed.
+        run: ./gradlew --configure-on-demand :mutation-core:build :mutation-gradle-plugin:build :mutation-report:build :mutation-test-runner:build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

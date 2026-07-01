@@ -22,7 +22,7 @@ MutKt fully supports Android unit tests via Robolectric. See [docs/ANDROID.md](d
 // build.gradle.kts
 plugins {
     kotlin("jvm") version "2.1.10"
-    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.3.1"
+    id("io.github.rodrigotimoteo.mutation-kotlin") version "0.3.2"
 }
 ```
 
@@ -42,7 +42,7 @@ For explicit control over which code blocks are mutated:
 
 ```kotlin
 dependencies {
-    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.3.1")
+    testImplementation("io.github.rodrigotimoteo:mutation-test-runner:0.3.2")
 }
 
 @ExtendWith(MutKtExtension::class)
@@ -260,7 +260,7 @@ class Service {
 buildscript {
     repositories { mavenCentral() }
     dependencies {
-        classpath("io.github.rodrigotimoteo:mutation-gradle-plugin:0.3.1")
+        classpath("io.github.rodrigotimoteo:mutation-gradle-plugin:0.3.2")
     }
 }
 apply(plugin = "io.github.rodrigotimoteo.mutation-kotlin")
