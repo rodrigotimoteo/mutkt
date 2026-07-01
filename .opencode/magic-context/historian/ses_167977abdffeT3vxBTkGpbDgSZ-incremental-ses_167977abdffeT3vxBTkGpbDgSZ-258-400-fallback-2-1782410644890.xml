@@ -1,0 +1,24 @@
+<output>
+<compartments>
+<compartment start="258" end="290" title="Merge PRs and fix CI pipeline" episode_type="infra,release" importance="42">
+<p1>
+Checked PRs #20 (`fix/review-bugfixes`) and #21 (`fix/wire-everything`) — both reviews passed. Merged both. CI showed two pre-existing failures on master: `MutationEngineIntegrationTest` fails because `mutation-sample` module isn't built first (documented known quirk), and `mutationTest` task not found because plugin isn't applied at root project level. Critical checks all pass (Build, Test Java 17/21, CodeQL, Secret Scanning).
+
+Created PR #22 on `fix/ci-failures`: added `./gradlew :mutation-sample:build` before tests in test and code-coverage jobs, removed non-functional `mutation-test` job. All 6 checks pass. Merged PR #22.
+</p1>
+<p2>
+Merged PRs #20 and #21 after reviews passed. CI had two pre-existing failures: `MutationEngineIntegrationTest` needs `mutation-sample` built first, `mutationTest` task not found at root level. Fixed in PR #22: added sample build step, removed broken mutation-test job. All checks green.
+</p2>
+<p3>
+PRs #20, #21, #22 merged. CI fixed: build mutation-sample before integration tests, remove non-functional mutationTest job.
+</p3>
+<p4>PR #20, #21, #22 merged; CI fix: mutation-sample build + mutationTest job removal</p4>
+</compartment>
+
+<compartment start="291" end="324" title="Dogfooding — mutation-self-test module" episode_type="feature,infra" importance="55">
+<p1>
+U: "wouldnt it be fun to run mutation test on pur own code tho?"
+Set up mutation testing on MutKt's own code. Created `mutation-self-test` module applying the mutation-gradle-plugin to mutate `mutation-core`. First attempt used plugin as external dependency — failed (not published). Switched to project-level application. ASM missing from test classpath — added `libs.asm`. Tests found zero mutations initially because scanner needs caller methods, not just target instructions. Added helper methods invoking mutation targets. All self-tests pass.
+
+Added `./gradlew :mutation-self-test:test` to CI in both test and mutation-test jobs. PR #23 created — all 6 checks pass. Merged.
+</p1

@@ -23,7 +23,7 @@ android {
         }
     }
 
-    // TvJapan-style scenario: the library publishes multiple
+    // Multi-flavor library scenario: the library publishes multiple
     // product-flavor variants. The app must declare a
     // `missingDimensionStrategy("brand", "production")` (or its
     // own `brand` flavor) so Gradle can pick a producer variant.

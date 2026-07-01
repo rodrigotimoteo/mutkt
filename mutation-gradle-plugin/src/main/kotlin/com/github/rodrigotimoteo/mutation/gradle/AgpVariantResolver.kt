@@ -49,7 +49,7 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
      * (e.g. `runtimeConfiguration`, `compileTask`) or trivially
      * resolvable from the variant name. Adding state here has a real
      * cost — it forces every code path that builds a `VariantCapture`
-     * to thread the new value through. The TvJapan fix lives in
+     * to thread the new value through. The multi-flavor fix lives in
      * [buildContext] (where the ArtifactView is applied), not on
      * the capture itself.
      *
@@ -185,7 +185,7 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
             testClassesDirs.from(testCompile.outputs.files)
         }
 
-        // TvJapan-style failure mode (unit test classpath): when
+        // Multi-flavor library failure mode (unit test classpath): when
         // the app has no own product flavors but depends on a
         // library that publishes multiple runtime variants
         // (e.g. `productionDebugRuntimeElements` and
@@ -287,7 +287,7 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
      * `artifactType=jar`. Shared by the main + unit test
      * runtime classpath lookups. See [unitTestArtifactView]'s
      * kdoc for the rationale on why the filter is required
-     * for the TvJapan-style variant ambiguity failure.
+     * for the multi-flavor library variant ambiguity failure.
      */
     private fun artifactViewWithJar(cfg: org.gradle.api.artifacts.Configuration): org.gradle.api.file.FileCollection {
         // Typed Kotlin call: `incoming.artifactView { ... }` is

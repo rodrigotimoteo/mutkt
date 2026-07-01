@@ -7,7 +7,7 @@ package com.example.multishared
  * high.
  *
  * Lives in :multi-shared, which exposes two product flavors
- * (`production`, `staging`) on the `brand` dimension. The TvJapan
+ * (`production`, `staging`) on the `brand` dimension. The multi-flavor
  * scenario: an app depending on this library without
  * `missingDimensionStrategy("brand", "production")` cannot
  * resolve the library's `*RuntimeElements` variants and fails.

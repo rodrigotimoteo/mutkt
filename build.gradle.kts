@@ -110,7 +110,7 @@ subprojects {
     // end requires a TestKit integration test that builds a real
     // AGP sample project (see `mutation-sample-android`). Coverage
     // is reported but not gated below 80% so the resolver's
-    // TvJapan-style fixes ship without dragging the build green
+    // multi-flavor library fixes ship without dragging the build green
     // signal under.
     extensions.configure<kotlinx.kover.gradle.plugin.dsl.KoverProjectExtension> {
         reports {

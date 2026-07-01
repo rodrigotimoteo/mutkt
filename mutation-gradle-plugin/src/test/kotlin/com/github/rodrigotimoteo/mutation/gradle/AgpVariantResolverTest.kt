@@ -459,7 +459,7 @@ class AgpVariantResolverTest {
     fun `formatVariantResolutionError names the unmatched ProductFlavor attribute and suggests a fix`(
         @TempDir tempDir: Path,
     ) {
-        // Reproduces the TvJapan failure message. The formatter
+        // Reproduces the multi-flavor library failure message. The formatter
         // must extract the attribute name + value, name the
         // producer project, and produce a one-line Gradle DSL fix
         // (missingDimensionStrategy) the user can paste into their

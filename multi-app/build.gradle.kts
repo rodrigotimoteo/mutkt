@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         minSdk = 21
-        // TvJapan-style scenario: the consumer app declares the
+        // Multi-flavor library scenario: the consumer app declares the
         // `brand` dimension via missingDimensionStrategy so the
         // resolver picks the producer library's
         // `productionDebugRuntimeElements` (not the unflavored
@@ -37,7 +37,7 @@ android {
         }
     }
 
-    // The sample is a TvJapan-style minimal repro; the lint
+    // The sample is a multi-flavor library minimal repro; the lint
     // vital analyzer is an OOM-prone tool that blows up
     // metaspace on small projects. Disable the lint task chain
     // for the sample to keep `./gradlew build` green without

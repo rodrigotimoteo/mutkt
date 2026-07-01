@@ -58,9 +58,9 @@ class CalculatorTest {
 
 ## What's New in 0.3.2
 
-- **Android variant resolution fix (TvJapan scenario)** — `AgpVariantResolver` wraps the AGP `<variant>RuntimeClasspath` / `<variant>UnitTestRuntimeClasspath` in an `artifactType=jar` `ArtifactView`. Resolves the "Cannot choose between the following variants" ambiguity when the consumer app has no own product flavors but depends on a library that publishes multiple runtime sub-variants on a `flavorDimensions` axis. Add `defaultConfig.missingDimensionStrategy("brand", "production")` (or your own `flavorDimensions`) to keep variant matching deterministic.
+- **Android variant resolution fix (multi-flavor library scenario)** — `AgpVariantResolver` wraps the AGP `<variant>RuntimeClasspath` / `<variant>UnitTestRuntimeClasspath` in an `artifactType=jar` `ArtifactView`. Resolves the "Cannot choose between the following variants" ambiguity when the consumer app has no own product flavors but depends on a library that publishes multiple runtime sub-variants on a `flavorDimensions` axis. Add `defaultConfig.missingDimensionStrategy("brand", "production")` (or your own `flavorDimensions`) to keep variant matching deterministic.
 - **Actionable error formatter** — When variant resolution still fails, the error now names the exact `ProductFlavor:<dim>=<value>` attribute the consumer is missing and suggests a one-line `missingDimensionStrategy` fix.
-- **Sample modules** — `:multi-app` (consumer app with `missingDimensionStrategy`) and `:multi-shared` (library with `production` / `staging` flavors) form a TvJapan-style end-to-end repro. `./gradlew :multi-app:mutationTest` runs the full pipeline.
+- **Sample modules** — `:multi-app` (consumer app with `missingDimensionStrategy`) and `:multi-shared` (library with `production` / `staging` flavors) form a multi-flavor library end-to-end repro. `./gradlew :multi-app:mutationTest` runs the full pipeline.
 - **Publishing structurally impossible for samples** — `multi-app`, `multi-shared`, `mutation-sample*`, and `mutation-self-test` are excluded from publishing by an `afterEvaluate` block that disables every `publish*` / `Upload*` task at configuration time. A future "publish all" CI workflow cannot accidentally ship a sample artifact.
 
 ## What's New in 0.3.1
