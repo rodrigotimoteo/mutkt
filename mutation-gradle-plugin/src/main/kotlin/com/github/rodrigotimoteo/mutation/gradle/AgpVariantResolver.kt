@@ -45,10 +45,21 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
      * later) and the conventional compile-task names so [buildContext]
      * does not need to re-enter the AGP API.
      *
+     * Slim by design: every field has to be either populated by AGP
+     * (e.g. `runtimeConfiguration`, `compileTask`) or trivially
+     * resolvable from the variant name. Adding state here has a real
+     * cost — it forces every code path that builds a `VariantCapture`
+     * to thread the new value through. The TvJapan fix lives in
+     * [buildContext] (where the ArtifactView is applied), not on
+     * the capture itself.
+     *
      * @property name Variant name as reported by AGP (e.g. "debug").
      * @property runtimeConfiguration Lazy [FileCollection] for the
      *   variant's runtime classpath. Captured from the variant API at
-     *   registration time; resolved at execution time.
+     *   registration time; resolved at execution time. Used as a
+     *   fallback in [buildContext] when the configuration-name lookup
+     *   fails (e.g. older AGP without the per-variant
+     *   `<variant>RuntimeClasspath` configuration).
      * @property compileTask Name of the Kotlin compile task for this
      *   variant (e.g. `compileDebugKotlin`).
      * @property testCompileTask Name of the Kotlin unit-test compile
@@ -136,7 +147,31 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
         project: Project,
         capture: VariantCapture,
     ): AndroidMutationContext {
-        val runtimeClasspath = objectFactory.fileCollection().from(capture.runtimeConfiguration)
+        // The main runtime classpath goes through the same
+        // `artifactType=jar` ArtifactView treatment as the unit
+        // test classpath below. AGP's `variant.runtimeConfiguration`
+        // (e.g. `debugRuntimeClasspath`) is created without
+        // `artifactType=jar` when the consumer has no own product
+        // flavors — even though it carries the right
+        // `BuildTypeAttr` / `ProductFlavor:*` attributes from the
+        // `missingDimensionStrategy`. The library's
+        // `*RuntimeElements` configuration publishes multiple
+        // `artifactType` sub-variants and the consumer needs to
+        // declare which one it wants. Without the filter, Gradle
+        // raises `Cannot choose between the following variants`.
+        val mainRuntimeCfg = findMainRuntimeConfiguration(project, capture.name)
+        val runtimeClasspath =
+            if (mainRuntimeCfg != null) {
+                val jarFiltered = mainRuntimeArtifactView(mainRuntimeCfg)
+                objectFactory.fileCollection().from(jarFiltered).also {
+                    project.logger.info(
+                        "Using artifactType=jar filtered view of '${mainRuntimeCfg.name}' " +
+                            "for variant '${capture.name}'",
+                    )
+                }
+            } else {
+                objectFactory.fileCollection().from(capture.runtimeConfiguration)
+            }
 
         val classesDirs = objectFactory.fileCollection()
         val mainCompile = project.tasks.findByName(capture.compileTask)
@@ -150,24 +185,26 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
             testClassesDirs.from(testCompile.outputs.files)
         }
 
-        // AGP's `variant.runtimeConfiguration` exposes the app's runtime
-        // classpath, NOT the unit-test runtime classpath. For mutation
-        // testing we need testImplementation deps (JUnit, MockK, Mockito,
-        // Robolectric) on the classpath or scanning the test classes for
-        // mutation kill-checks will ClassNotFound. Merge the conventional
-        // `debugUnitTestRuntimeClasspath` (and its release twin) into the
-        // resolved classpath so MockK / Mockito / Robolectric are visible
-        // to the mutation classloader.
-        val cap = capture.name.replaceFirstChar { it.uppercaseChar() }
-        listOf("${capture.name}UnitTestRuntimeClasspath", "${cap}UnitTestRuntimeClasspath")
-            .distinct()
-            .forEach { configName ->
-                val cfg = project.configurations.findByName(configName)
-                if (cfg != null) {
-                    runtimeClasspath.from(cfg)
-                    project.logger.info("Adding unit-test runtime classpath: $configName")
-                }
-            }
+        // TvJapan-style failure mode (unit test classpath): when
+        // the app has no own product flavors but depends on a
+        // library that publishes multiple runtime variants
+        // (e.g. `productionDebugRuntimeElements` and
+        // `stagingDebugRuntimeElements` on a `brand` dimension),
+        // the app's `debugUnitTestRuntimeClasspath` is set up with
+        // `BuildTypeAttr=debug` + `ProductFlavor:brand=production`
+        // (via the app's `defaultConfig.missingDimensionStrategy`)
+        // but is MISSING `artifactType=jar`. Same fix as the main
+        // runtime classpath above: wrap the configuration in an
+        // `ArtifactView` that requires `artifactType=jar`.
+        val unitTestCfg = findUnitTestRuntimeConfiguration(project, capture.name)
+        if (unitTestCfg != null) {
+            val jarFiltered = unitTestArtifactView(unitTestCfg)
+            runtimeClasspath.from(jarFiltered)
+            project.logger.info(
+                "Using artifactType=jar filtered view of '${unitTestCfg.name}' " +
+                    "for variant '${capture.name}'",
+            )
+        }
 
         val (mainClassesDir, testClassesDir) = findVariantClassesDirs(project, capture)
         val androidJar = locateAndroidJar(project, project.logger)
@@ -183,6 +220,93 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
             compileTask = capture.compileTask,
             testCompileTask = capture.testCompileTask,
         )
+    }
+
+    /**
+     * Locate the unit-test runtime classpath [Configuration] for the
+     * captured variant. AGP creates a per-variant configuration with
+     * the conventional name `<variant>UnitTestRuntimeClasspath`
+     * (e.g. `productionDebugUnitTestRuntimeClasspath`); the resolver
+     * also probes the capitalized form for AGP quirk tolerance.
+     *
+     * Returns `null` when no matching configuration exists. The
+     * caller falls back to a heuristic or skips the test classpath
+     * contribution in that case.
+     */
+    private fun findUnitTestRuntimeConfiguration(
+        project: Project,
+        variantName: String,
+    ): org.gradle.api.artifacts.Configuration? {
+        val cap = variantName.replaceFirstChar { it.uppercaseChar() }
+        val candidates = listOf("${variantName}UnitTestRuntimeClasspath", "${cap}UnitTestRuntimeClasspath")
+        for (name in candidates) {
+            val cfg = project.configurations.findByName(name)
+            if (cfg != null) return cfg
+        }
+        return null
+    }
+
+    /**
+     * Locate the main runtime classpath [Configuration] for the
+     * captured variant. AGP creates a per-variant configuration
+     * with the conventional name `<variant>RuntimeClasspath`
+     * (e.g. `productionDebugRuntimeClasspath`); the resolver
+     * also probes the capitalized form for AGP quirk tolerance.
+     *
+     * Returns `null` when no matching configuration exists. The
+     * caller falls back to the captured `runtimeConfiguration`
+     * (a `FileCollection` from `variant.runtimeConfiguration`).
+     */
+    private fun findMainRuntimeConfiguration(
+        project: Project,
+        variantName: String,
+    ): org.gradle.api.artifacts.Configuration? {
+        val cap = variantName.replaceFirstChar { it.uppercaseChar() }
+        val candidates = listOf("${variantName}RuntimeClasspath", "${cap}RuntimeClasspath")
+        for (name in candidates) {
+            val cfg = project.configurations.findByName(name)
+            if (cfg != null) return cfg
+        }
+        return null
+    }
+
+    /**
+     * Build an `artifactType=jar` `ArtifactView` of the main
+     * runtime configuration. See [unitTestArtifactView] for the
+     * rationale — both classpaths need the filter to keep
+     * flavored project dependencies resolvable.
+     */
+    private fun mainRuntimeArtifactView(cfg: org.gradle.api.artifacts.Configuration): org.gradle.api.file.FileCollection =
+        artifactViewWithJar(cfg)
+
+    private fun unitTestArtifactView(cfg: org.gradle.api.artifacts.Configuration): org.gradle.api.file.FileCollection =
+        artifactViewWithJar(cfg)
+
+    /**
+     * Wrap [cfg] in an `ArtifactView` that requires
+     * `artifactType=jar`. Shared by the main + unit test
+     * runtime classpath lookups. See [unitTestArtifactView]'s
+     * kdoc for the rationale on why the filter is required
+     * for the TvJapan-style variant ambiguity failure.
+     */
+    private fun artifactViewWithJar(cfg: org.gradle.api.artifacts.Configuration): org.gradle.api.file.FileCollection {
+        // Typed Kotlin call: `incoming.artifactView { ... }` is
+        // stable across Gradle 5.x — 8.x and the
+        // `AttributeContainer.attribute(Attribute<T>, T)` method
+        // on the ViewConfiguration's attributes is on
+        // `gradle-core-api`. No reflection needed: the
+        // `ArtifactView$ViewConfiguration` and
+        // `AttributeContainer` types are both in the public
+        // Gradle API and the plugin already declares
+        // `implementation(gradleApi())` in its build script.
+        val view =
+            cfg.incoming.artifactView {
+                it.attributes.attribute(
+                    org.gradle.api.attributes.Attribute.of("artifactType", String::class.java),
+                    "jar",
+                )
+            }
+        return view.files
     }
 
     /**
@@ -388,4 +512,85 @@ class AgpVariantResolver(private val objectFactory: ObjectFactory) {
                 false
             }
         }
+
+    /**
+     * Build a human-readable error message for a failed Android
+     * variant resolution. The message names the exact unmatched
+     * attribute and the consumer configuration that needed it, so
+     * users get a one-line fix (`missingDimensionStrategy(...)`)
+     * instead of a generic "cannot choose between variants" stack.
+     *
+     * Format:
+     * ```
+     * Could not resolve Android variant '<variant>' for project '<project>':
+     *   The consumer's <config> configuration is missing attribute
+     *   '<attribute>=<value>' that the producer '<producer>' requires.
+     * Fix: add `missingDimensionStrategy("<dimension>", "<value>")` to the
+     * consumer's `android.defaultConfig { }` block (or wire
+     * `mutationTest.classpath` manually).
+     * ```
+     *
+     * Returns `null` when the exception does not match the AGP
+     * variant-resolution error pattern; callers fall back to the
+     * raw exception in that case.
+     */
+    @Suppress("ReturnCount")
+    fun formatVariantResolutionError(
+        throwable: Throwable,
+        capture: VariantCapture,
+        project: Project,
+    ): String? {
+        val message = throwable.message ?: return null
+        // Gradle's "Cannot choose between the following variants" /
+        // "Could not resolve" errors mention attributes in two
+        // shapes: `<name>=<value>` (constraint failure) and
+        // `<name>='<value>'` (the consumer / producer attribute
+        // listing). We accept both so the same formatter handles
+        // AGP 7.x and 8.x error formats. The first matching
+        // `com.android.build.api.attributes.ProductFlavor:*` entry
+        // wins because that is the dimension the consumer is
+        // missing — `BuildTypeAttr` is usually present.
+        val attrMatch =
+            Regex(
+                """(com\.android\.build\.api\.attributes\.[A-Za-z]+):([A-Za-z][A-Za-z0-9_\-]*)=['"]?([^'\s,"]+)['"]?""",
+            ).find(message)
+        val attr = attrMatch?.value
+        val dim = attrMatch?.groupValues?.getOrNull(2)
+        val value = attrMatch?.groupValues?.getOrNull(3)
+        val producer = guessProducerProject(message, project)
+        val sb = StringBuilder()
+        sb.append("Could not resolve Android variant '").append(capture.name)
+            .append("' for project '").append(project.path).append("'.\n")
+        if (attr != null) {
+            sb.append("  The consumer's runtime classpath is missing attribute\n")
+            sb.append("  '").append(attr).append("' that the producer")
+            if (producer != null) sb.append(" '").append(producer).append("'")
+            sb.append(" requires.\n")
+        } else {
+            sb.append("  Variant resolution failed: ").append(message.lineSequence().first()).append("\n")
+        }
+        if (dim != null && value != null) {
+            sb.append("Fix: add `missingDimensionStrategy(\"").append(dim)
+                .append("\", \"").append(value).append("\")` to the consumer's\n")
+            sb.append("`android.defaultConfig { }` block in `").append(project.buildFile.name)
+                .append("`, or wire `mutationTest.classpath` manually\n")
+            sb.append("with the producer's `<variant>RuntimeElements` configuration.\n")
+        } else {
+            sb.append("Fix: ensure the consumer's `defaultConfig` declares a\n")
+            sb.append("`missingDimensionStrategy` for every flavor dimension the\n")
+            sb.append("producer publishes, or restrict `mutationTest.androidVariant`\n")
+            sb.append("to a variant the producer exposes.\n")
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Best-effort extraction of the producer project path from a
+     * Gradle variant-resolution error message. Returns `null` when
+     * no `project ':...'` token is present.
+     */
+    private fun guessProducerProject(
+        message: String,
+        @Suppress("UNUSED_PARAMETER") project: Project,
+    ): String? = Regex("""project '(:[^']+)'""").find(message)?.groupValues?.getOrNull(1)
 }

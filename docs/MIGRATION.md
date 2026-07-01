@@ -2,6 +2,22 @@
 
 This guide helps you migrate between versions of the Kotlin Mutation Testing library.
 
+## From 0.3.1 to 0.3.2
+
+### Breaking Changes
+
+None. 0.3.2 is a pure enhancement release — every 0.3.1 configuration continues to work without changes.
+
+### New Behavior
+
+- **Android variant resolution** — `:app` modules that depend on a library publishing multiple `*RuntimeElements` sub-variants (e.g. `flavorDimensions += "brand"` with `production` / `staging` flavors) no longer hit the `Cannot choose between the following variants` error during `./gradlew mutationTest`. The plugin now wraps the AGP-provided `<variant>RuntimeClasspath` and `<variant>UnitTestRuntimeClasspath` configurations in an `artifactType=jar` `ArtifactView` so Gradle can disambiguate the library's sub-variants. Projects that previously had to wire `mutationTest.classpath` manually as a workaround can now drop that block.
+- **Actionable variant errors** — When variant resolution still fails for a reason unrelated to `artifactType`, the error message now names the exact `ProductFlavor:<dim>=<value>` attribute the consumer is missing and suggests a one-line `missingDimensionStrategy("<dim>", "<value>")` fix. Past behavior was the raw Gradle stack trace with no actionable guidance.
+- **Unknown Android context failures** — `MutationPlugin.resolveAndroidContext` now logs unknown exceptions at `error` level with stack trace (was `warn` with message-only). Misconfigurations surface in the build log.
+
+### No Configuration Change Required
+
+The 0.3.2 variant resolution fix is automatic for any project that applies the plugin and has a real Android plugin on the classpath. No new DSL blocks, no behavior opt-ins.
+
 ## From 0.3.0 to 0.3.1
 
 ### Breaking Changes

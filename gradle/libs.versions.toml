@@ -20,7 +20,7 @@ mockito = "5.14.2"
 mockitoKotlin = "5.4.0"
 androidxTestExtJunit = "1.2.1"
 androidxTestCore = "1.5.0"
-mutationPlugin = "0.3.0"
+mutationPlugin = "0.3.2"
 
 [libraries]
 # Kotlin
@@ -73,6 +73,7 @@ agp = { module = "com.android.tools.build:gradle", version.ref = "agp" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
 mutation-kotlin = { id = "io.github.rodrigotimoteo.mutation-kotlin", version.ref = "mutationPlugin" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

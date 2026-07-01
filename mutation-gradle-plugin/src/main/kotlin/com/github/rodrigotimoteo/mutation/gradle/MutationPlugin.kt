@@ -349,7 +349,24 @@ class MutationPlugin : Plugin<Project> {
                 }
                 return
             }
-            val context = resolver.buildContext(project, capture)
+            val context =
+                try {
+                    resolver.buildContext(project, capture)
+                } catch (e: Exception) {
+                    // Variant resolution can fail when a project
+                    // dependency exposes multiple runtime variants and
+                    // the consumer's classpath is missing a flavor
+                    // dimension attribute. AGP raises a structured
+                    // `Cannot choose between the following variants`
+                    // error naming the unmatched attribute; surface
+                    // that to the user verbatim with a concrete fix.
+                    val formatted = resolver.formatVariantResolutionError(e, capture, project)
+                    if (formatted != null) {
+                        throw org.gradle.api.GradleException(formatted, e)
+                    }
+                    // Unknown failure shape — rethrow the original.
+                    throw e
+                }
             extension.androidContext.set(context)
             mutationTask.configure { task ->
                 task.dependsOn(context.compileTask, context.testCompileTask)
@@ -373,8 +390,16 @@ class MutationPlugin : Plugin<Project> {
             )
         } catch (e: NoClassDefFoundError) {
             // AGP not on classpath — pure-JVM project, no variant context.
+        } catch (e: org.gradle.api.GradleException) {
+            // Re-throw GradleException (our formatted variant-resolution
+            // errors) so the user sees the actionable message and
+            // `caused by` chain instead of a wrapped warning.
+            throw e
         } catch (e: Exception) {
-            project.logger.warn("Could not resolve Android variant context: ${e.message}")
+            // Unknown failure shape — log at error level so misconfigurations
+            // are visible, but skip the Android context so the build can
+            // continue (other modules may still apply successfully).
+            project.logger.error("Could not resolve Android variant context", e)
         }
     }
 

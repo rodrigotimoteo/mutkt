@@ -454,4 +454,197 @@ class AgpVariantResolverTest {
         method.isAccessible = true
         return method.invoke(resolver, project) as Boolean
     }
+
+    @Test
+    fun `formatVariantResolutionError names the unmatched ProductFlavor attribute and suggests a fix`(
+        @TempDir tempDir: Path,
+    ) {
+        // Reproduces the TvJapan failure message. The formatter
+        // must extract the attribute name + value, name the
+        // producer project, and produce a one-line Gradle DSL fix
+        // (missingDimensionStrategy) the user can paste into their
+        // build script.
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val raw =
+            """
+            > Could not resolve project ':sharedTestCode'.
+              Required by:
+                  project :app
+              > Cannot choose between the following variants of project :sharedTestCode:
+                  - productionDebugRuntimeElements
+                  - stagingDebugRuntimeElements
+                All of them match the consumer attributes:
+                  - com.android.build.api.attributes.BuildTypeAttr='debug'
+                The following variants are also available:
+                  - com.android.build.api.attributes.ProductFlavor:brand='production'
+                  - com.android.build.api.attributes.ProductFlavor:brand='staging'
+            """.trimIndent()
+        val ex = RuntimeException(raw)
+        val formatted = r.formatVariantResolutionError(ex, capture, localProject)
+        assertThat(formatted).isNotNull
+        assertThat(formatted!!).contains("brand")
+        assertThat(formatted).contains("production")
+        assertThat(formatted).contains("missingDimensionStrategy")
+        assertThat(formatted).contains(":sharedTestCode")
+    }
+
+    @Test
+    fun `formatVariantResolutionError returns null when the exception does not match the AGP pattern`(
+        @TempDir tempDir: Path,
+    ) {
+        // Sanity check: a generic exception (e.g. NPE) must NOT be
+        // re-formatted. Callers fall back to re-throwing the
+        // original exception in that case, preserving the stack
+        // trace for debugging.
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val formatted = r.formatVariantResolutionError(NullPointerException(), capture, localProject)
+        assertThat(formatted).isNull()
+    }
+
+    @Test
+    fun `formatVariantResolutionError produces a generic fix message when the attribute is missing`(
+        @TempDir tempDir: Path,
+    ) {
+        // The "Cannot choose between variants" error sometimes
+        // doesn't include a structured attribute token. The
+        // formatter must still produce a useful message (still
+        // name the variant, still suggest missingDimensionStrategy
+        // / androidVariant as fallbacks) so the user is not left
+        // with just a Gradle stack trace.
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val capture =
+            AgpVariantResolver.VariantCapture(
+                name = "debug",
+                runtimeConfiguration = localProject.objects.fileCollection(),
+                compileTask = "compileDebugKotlin",
+                testCompileTask = "compileDebugUnitTestKotlin",
+            )
+        val formatted =
+            r.formatVariantResolutionError(
+                RuntimeException("Could not resolve :sharedTestCode"),
+                capture,
+                localProject,
+            )
+        assertThat(formatted).isNotNull
+        assertThat(formatted!!).contains("missingDimensionStrategy")
+    }
+
+    @Test
+    fun `findMainRuntimeConfiguration returns null when no runtime classpath exists`(
+        @TempDir tempDir: Path,
+    ) {
+        // An empty project has no AGP-created runtime classpath
+        // configuration. The resolver must return null and the
+        // buildContext must fall back to the captured
+        // `runtimeConfiguration` from the variant API.
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val method =
+            AgpVariantResolver::class.java.getDeclaredMethod(
+                "findMainRuntimeConfiguration",
+                org.gradle.api.Project::class.java,
+                String::class.java,
+            )
+        method.isAccessible = true
+        val result = method.invoke(r, localProject, "debug")
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `findMainRuntimeConfiguration returns the configuration when present`(
+        @TempDir tempDir: Path,
+    ) {
+        // When the project's AGP-style runtime classpath is
+        // registered, the resolver must return it so the
+        // ArtifactView wrap can apply `artifactType=jar`. The
+        // exact name is `<variant>RuntimeClasspath`; we also
+        // probe the capitalized form.
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        localProject.configurations.create("debugRuntimeClasspath")
+        val method =
+            AgpVariantResolver::class.java.getDeclaredMethod(
+                "findMainRuntimeConfiguration",
+                org.gradle.api.Project::class.java,
+                String::class.java,
+            )
+        method.isAccessible = true
+        val result = method.invoke(r, localProject, "debug")
+        assertThat(result).isNotNull
+        assertThat((result as org.gradle.api.artifacts.Configuration).name).isEqualTo("debugRuntimeClasspath")
+    }
+
+    @Test
+    fun `findMainRuntimeConfiguration matches the capitalized variant form`(
+        @TempDir tempDir: Path,
+    ) {
+        // AGP quirk tolerance: some AGP versions create the
+        // configuration with the capitalized variant name
+        // (e.g. `DebugRuntimeClasspath`). The resolver must
+        // still find it.
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        localProject.configurations.create("DebugRuntimeClasspath")
+        val method =
+            AgpVariantResolver::class.java.getDeclaredMethod(
+                "findMainRuntimeConfiguration",
+                org.gradle.api.Project::class.java,
+                String::class.java,
+            )
+        method.isAccessible = true
+        val result = method.invoke(r, localProject, "debug")
+        assertThat(result).isNotNull
+    }
+
+    @Test
+    fun `findUnitTestRuntimeConfiguration returns null when no classpath exists`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        val method =
+            AgpVariantResolver::class.java.getDeclaredMethod(
+                "findUnitTestRuntimeConfiguration",
+                org.gradle.api.Project::class.java,
+                String::class.java,
+            )
+        method.isAccessible = true
+        val result = method.invoke(r, localProject, "debug")
+        assertThat(result).isNull()
+    }
+
+    @Test
+    fun `findUnitTestRuntimeConfiguration returns the configuration when present`(
+        @TempDir tempDir: Path,
+    ) {
+        val localProject = ProjectBuilder.builder().build()
+        val r = AgpVariantResolver(localProject.objects)
+        localProject.configurations.create("debugUnitTestRuntimeClasspath")
+        val method =
+            AgpVariantResolver::class.java.getDeclaredMethod(
+                "findUnitTestRuntimeConfiguration",
+                org.gradle.api.Project::class.java,
+                String::class.java,
+            )
+        method.isAccessible = true
+        val result = method.invoke(r, localProject, "debug")
+        assertThat(result).isNotNull
+    }
 }
