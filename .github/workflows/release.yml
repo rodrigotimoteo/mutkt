@@ -122,7 +122,12 @@ jobs:
 
       - name: Close and release to Maven Central
         run: |
-          set -e
+          # NOTE: `set -e` is intentionally omitted. The Portal transfer
+          # returns 400 when a component version already exists on Maven
+          # Central (e.g. a re-release with the same version). Treat that
+          # as success — the artifacts are already on Maven Central from
+          # the original publish. Any other non-2xx is still a real
+          # failure that surfaces to the workflow status.
 
           echo "=== Transferring deployment to Central Publisher Portal ==="
 
@@ -146,6 +151,10 @@ jobs:
             echo "OK: Deployment transferred to Portal with auto-publish."
             echo "Artifacts will appear on Maven Central in ~10-30 minutes."
             echo "Check: https://central.sonatype.com/publishing/deployments"
+          elif echo "$BODY" | grep -q "already exists"; then
+            echo ""
+            echo "OK: Components already exist on Maven Central (re-release)."
+            echo "Skipping portal transfer — original publish is still live."
           else
             echo ""
             echo "WARN: Portal transfer returned $HTTP_CODE"
