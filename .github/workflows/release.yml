@@ -164,7 +164,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           generate_release_notes: false
-          body_path: CHANGELOG.md
+          body_path: docs/releases/${{ github.ref_name }}.md
           fail_on_unmatched_files: false
           files: |
             dist/**/*.jar
