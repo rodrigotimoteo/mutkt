@@ -36,12 +36,13 @@ jobs:
         # locally via `./gradlew :multi-app:mutationTest` before the tag
         # is pushed.
         #
-        # :mutation-sample:build is also included because AsmDebugTest +
-        # MutatorDebugTest read the compiled Calculator.class from
-        # mutation-sample/build/classes/kotlin/main (memory item: "Integration
-        # test depends on mutation-sample"). :mutation-sample is pure-JVM and
-        # has no plugin version resolution issue, so it builds safely.
-        run: ./gradlew --configure-on-demand :mutation-core:build :mutation-gradle-plugin:build :mutation-report:build :mutation-test-runner:build :mutation-sample:build
+        # :mutation-sample:build is built FIRST so the compiled Calculator.class
+        # exists before :mutation-test-runner:build runs. AsmDebugTest +
+        # MutatorDebugTest read mutation-sample/build/classes/kotlin/main
+        # (memory item: "Integration test depends on mutation-sample").
+        # :mutation-sample is pure-JVM and has no plugin version resolution
+        # issue, so it builds safely.
+        run: ./gradlew --configure-on-demand :mutation-sample:build :mutation-core:build :mutation-gradle-plugin:build :mutation-report:build :mutation-test-runner:build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
