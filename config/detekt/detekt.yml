@@ -1,0 +1,21 @@
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    active: true
+    threshold: 40
+
+# Type resolution is required, so this runs in detektMain only (see mutkt.quality).
+style:
+  ForbiddenMethodCall:
+    active: true
+    methods:
+      - value: 'kotlin.io.println'
+        reason: 'Main code does not print; return values or throw.'
+      - value: 'kotlin.io.print'
+        reason: 'Main code does not print; return values or throw.'
+      - value: 'java.io.PrintStream.println'
+        reason: 'Main code does not print or write to System.err.'
+      - value: 'java.io.PrintStream.print'
+        reason: 'Main code does not print or write to System.err.'
