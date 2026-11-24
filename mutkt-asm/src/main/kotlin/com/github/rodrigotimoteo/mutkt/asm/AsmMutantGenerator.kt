@@ -37,7 +37,8 @@ public class AsmMutantGenerator internal constructor(
     override fun discover(classes: List<ClassFile>): List<Mutant> {
         val byName = classes.associate { it.name to it.bytes }
         val hierarchy: Hierarchy = { type -> byName[type.replace('/', '.')] ?: classpath(type) }
-        val planned = classes.sortedBy { it.name }.flatMap { plannedFor(it.bytes, hierarchy) }
+        val suppressions = Suppressions(classes.map { it.bytes }, operators.map { it.id })
+        val planned = classes.sortedBy { it.name }.flatMap { plannedFor(it.bytes, hierarchy, suppressions) }
         val byId = planned.associateBy { it.mutant.id }
         require(byId.size == planned.size) {
             "Duplicate mutant ids (duplicate class names or operator ids): " +
@@ -58,10 +59,11 @@ public class AsmMutantGenerator internal constructor(
     private fun plannedFor(
         bytes: ByteArray,
         hierarchy: Hierarchy,
+        suppressions: Suppressions,
     ): List<Planned> {
         val unchanged by lazy { HierarchyClassWriter(hierarchy).also { parse(bytes).accept(it) }.toByteArray() }
         return operators.flatMap { op ->
-            discover(bytes, op)
+            discover(bytes, op, suppressions)
                 .filterNot { mutate(bytes, op, it, hierarchy).contentEquals(unchanged) }
                 .map { Planned(mutantOf(op, it), op, it, bytes) }
         }
