@@ -1,37 +1,14 @@
-## Description
+## What and why
 
-Brief description of changes
+Linear issue: ROD-
 
-## Type of Change
+## Verified
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
-- [ ] Refactoring
-- [ ] Performance improvement
-- [ ] Test update
+- [ ] `./gradlew build` green locally
+- [ ] Tests added first and fail without the change
+- [ ] Layering respected (architecture tests green); no file over size limits
+- [ ] `mutkt-reviewer` run (or trivial change)
+- [ ] Docs / ADR updated if behavior or a decision changed
 
-## Testing
+## Not verified / follow-ups
 
-- [ ] Unit tests added/updated
-- [ ] Integration tests added/updated
-- [ ] Manual testing performed
-- [ ] All existing tests pass
-
-## Checklist
-
-- [ ] Code follows project style guidelines
-- [ ] Self-reviewed code
-- [ ] Comments added for complex code
-- [ ] Documentation updated
-- [ ] No breaking changes (or documented in description)
-- [ ] Tests added that prove fix/feature works
-
-## Related Issues
-
-Closes #(issue number)
-
-## Screenshots (if applicable)
-
-Add screenshots to help explain your changes

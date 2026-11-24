@@ -2,11 +2,10 @@ name: Security
 
 on:
   push:
-    branches: [main, master]
+    branches: [master, main, "rebuild/**"]
   pull_request:
-    branches: [main, master]
   schedule:
-    - cron: '0 0 * * 1'  # Weekly on Monday at midnight
+    - cron: "0 0 * * 1"
 
 permissions:
   contents: read
@@ -14,35 +13,29 @@ permissions:
 
 jobs:
   codeql:
-    name: CodeQL Analysis
+    name: CodeQL
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:java-kotlin"
 
-  secret-scanning:
-    name: Secret Scanning
+  secrets:
+    name: Secret scan
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Scan for secrets
-        uses: trufflesecurity/trufflehog@v3.95.5
+      - uses: trufflesecurity/trufflehog@v3.95.5
         with:
           extra_args: --only-verified

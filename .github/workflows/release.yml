@@ -1,196 +1,41 @@
 name: Release
 
+# Scaffold only. Real publishing is implemented in Linear issue ROD-121 (P4).
+# Until then a tag run verifies the build and then FAILS at the publish step on purpose,
+# so a stray tag cannot publish anything.
+
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Verify and publish to the local Maven repo only
+        type: boolean
+        default: true
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'corretto'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build
-        # Build only the published modules. The :multi-app / :multi-shared
-        # sample modules reference the plugin by version 0.3.2, which is not
-        # yet on Maven Central during this very release run — including them
-        # in the CI build causes a chicken-and-egg plugin-resolution failure.
-        # --configure-on-demand skips project configuration for samples that
-        # have no tasks in the requested task graph. Samples are verified
-        # locally via `./gradlew :multi-app:mutationTest` before the tag
-        # is pushed.
-        #
-        # :mutation-sample:build is built FIRST so the compiled Calculator.class
-        # exists before :mutation-test-runner:build runs. AsmDebugTest +
-        # MutatorDebugTest read mutation-sample/build/classes/kotlin/main
-        # (memory item: "Integration test depends on mutation-sample").
-        # :mutation-sample is pure-JVM and has no plugin version resolution
-        # issue, so it builds safely.
-        run: ./gradlew --configure-on-demand :mutation-sample:build :mutation-core:build :mutation-gradle-plugin:build :mutation-report:build :mutation-test-runner:build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          retention-days: 7
-          path: |
-            **/build/libs/*.jar
-            **/build/libs/*.pom
-            **/build/libs/*.module
-            **/build/publications/maven/**/*
+  verify:
+    uses: ./.github/workflows/ci.yml
 
   publish:
     name: Publish
+    needs: verify
     runs-on: ubuntu-latest
-    needs: build
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'corretto'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Publish to GitHub Packages
-        run: ./gradlew publishMavenPublicationToGitHubPackagesRepository || echo "GitHub Packages publish skipped (version may already exist)"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify Sonatype credentials (informational only)
-        # Central Portal's /service/local/staging/profiles endpoint
-        # returns 401 to basic auth (it expects the legacy OSSRH realm),
-        # but the gradle publish + manual upload endpoints below accept
-        # the same User Token credentials via Bearer. Treat this as a
-        # hint, not a gate. The real auth check is the gradle publish
-        # task that follows.
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Dry run (local publish)
+        run: ./gradlew publishToMavenLocal
+      - name: Real publish (not configured yet)
+        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
         run: |
-          echo "Testing Sonatype auth (informational; may 401 even when valid)..."
-          RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
-            -u "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" \
-            "https://ossrh-staging-api.central.sonatype.com/service/local/staging/profiles" 2>&1)
-          HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
-          BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
-          echo "Auth check HTTP code: $HTTP_CODE"
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "Auth probe ok. Profiles:"
-            echo "$BODY" | jq '.data[].profileName' 2>/dev/null || echo "$BODY"
-          else
-            echo "Auth probe returned $HTTP_CODE (continuing — real check is gradle publish below)"
-            echo "Response: $BODY"
-          fi
-
-      - name: Publish to Sonatype staging (Central Portal)
-        # Plain `maven-publish` (not gradle-nexus-publish-plugin) — v0.3.0
-        # used this approach and it dodges the Gradle 8.10 strict task
-        # dependency validation error on `signPluginMavenPublication`
-        # outputs that the plugin triggers.
-        # mutation-gradle-plugin publishes ALL publications (maven +
-        # pluginMaven + plugin marker). The others publish only the
-        # single `maven` publication.
-        run: |
-          set -e
-          ./gradlew :mutation-gradle-plugin:publishAllPublicationsToMavenCentralRepository --no-daemon
-          ./gradlew :mutation-core:publishMavenPublicationToMavenCentralRepository --no-daemon
-          ./gradlew :mutation-report:publishMavenPublicationToMavenCentralRepository --no-daemon
-          ./gradlew :mutation-test-runner:publishMavenPublicationToMavenCentralRepository --no-daemon
-        env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
-          GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
-
-      - name: Close and release to Maven Central
-        run: |
-          # NOTE: `set -e` is intentionally omitted. The Portal transfer
-          # returns 400 when a component version already exists on Maven
-          # Central (e.g. a re-release with the same version). Treat that
-          # as success — the artifacts are already on Maven Central from
-          # the original publish. Any other non-2xx is still a real
-          # failure that surfaces to the workflow status.
-
-          echo "=== Transferring deployment to Central Publisher Portal ==="
-
-          # Generate Bearer token from User Token credentials
-          TOKEN=$(echo -n "$SONATYPE_USERNAME:$SONATYPE_PASSWORD" | base64)
-
-          echo "Uploading to Portal with publishing_type=automatic..."
-          RESP=$(curl -sS -w "\nHTTP_CODE:%{http_code}" \
-            -H "Authorization: Bearer $TOKEN" \
-            -X POST \
-            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/io.github.rodrigotimoteo?publishing_type=automatic" 2>&1)
-
-          HTTP_CODE=$(echo "$RESP" | grep "HTTP_CODE:" | cut -d: -f2)
-          BODY=$(echo "$RESP" | sed '/HTTP_CODE:/d')
-
-          echo "Response code: $HTTP_CODE"
-          echo "Response body: $BODY"
-
-          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
-            echo ""
-            echo "OK: Deployment transferred to Portal with auto-publish."
-            echo "Artifacts will appear on Maven Central in ~10-30 minutes."
-            echo "Check: https://central.sonatype.com/publishing/deployments"
-          elif echo "$BODY" | grep -q "already exists"; then
-            echo ""
-            echo "OK: Components already exist on Maven Central (re-release)."
-            echo "Skipping portal transfer — original publish is still live."
-          else
-            echo ""
-            echo "WARN: Portal transfer returned $HTTP_CODE"
-            echo "You may need to publish manually at:"
-            echo "  https://central.sonatype.com/publishing/deployments"
-            exit 1
-          fi
-        env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    needs: publish
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-          path: dist
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          generate_release_notes: false
-          body_path: docs/releases/${{ github.ref_name }}.md
-          fail_on_unmatched_files: false
-          files: |
-            dist/**/*.jar
-            dist/**/*.pom
-            dist/**/*.module
+          echo "Publishing is not configured yet (ROD-121). Refusing to publish."
+          exit 1

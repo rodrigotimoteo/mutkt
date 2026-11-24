@@ -1,108 +1,89 @@
-# MutKt
+# MutKt (rebuild)
 
-Kotlin mutation testing library — PITest-style for Kotlin/JVM. Users add Gradle plugin, run existing tests against mutated bytecode. Zero test changes required.
+Mutation testing for Kotlin/JVM: a Gradle plugin that mutates compiled bytecode and runs the project's existing JUnit tests against each mutant. Zero test changes required.
+
+This branch (`rebuild/v1`) is a from-zero rebuild. The old code lives on `master` and tag `v0.3.3`: use it only as a behavior reference (`git worktree add ../mutkt-legacy v0.3.3`), never copy code from it.
+
+Work comes from Linear: team ROD, project **MutKt Rebuild**. Read the issue, its blockers, and the project documents (architecture, legacy inventory, gap register) before starting.
+
+## Principles
+
+1. **Clean architecture.** Dependencies point inward: `domain` ← `application` ← adapters (`asm`, `junit`, `report`, `gradle`).
+2. **YAGNI.** No feature, option, port or abstraction without an open task that needs it. Deferred features stay in Linear (P6/P7).
+3. **Short code.** Main files ≤ 300 lines, test files ≤ 400, one operator per file, functions ≤ 40 lines.
+4. **Correct before fast.** No performance work until the 1.0 RC (ROD-135).
+5. **Real inputs in tests.** Bytecode tests run on real compiler output, not hand-made ASM only.
+
+## Code style (low verbosity)
+
+- Say it once: no restating comments, no KDoc on private code, one-line KDoc on public API only.
+- Comments explain *why* (a bytecode quirk, a decision). Never narrate history, tickets or "previously".
+- Prefer small immutable data classes, expression bodies, `when`, sealed types; no helper classes for one call site.
+- No config knob, flag, interface or module "for later". Delete dead code in the same change.
+- Errors: fail fast with one clear message; no catch-and-log-and-continue.
+- Linear holds tasks and decisions only; code facts live in code and `docs/`, not in issue prose.
 
 ## Modules
 
-| Module | Purpose | Key class |
-|--------|---------|-----------|
-| `mutation-core` | ASM-based bytecode scanner, mutators, engine, reports | `MutationEngine`, `Mutator` |
-| `mutation-test-runner` | JUnit Platform launcher, reflection-based test execution | `MutationTestRunner`, `MutKtExtension` |
-| `mutation-gradle-plugin` | Gradle plugin, DSL, task wiring, HTML/Console reports | `MutationPlugin`, `MutationTask` |
-| `mutation-sample` | Demo app — **not published**, excluded from kover/publishing | `Calculator` |
-| `mutation-sample-android` | Android sample (Robolectric) — **not published**, excluded from kover/publishing | `MainActivity` |
-| `mutation-self-test` | Library testing itself — **not published**, excluded from kover/publishing | — |
+| Module | Role | May depend on |
+|---|---|---|
+| `mutkt-annotations` | `@SuppressMutations` only | nothing |
+| `mutkt-core` | `domain/` (Mutant, Status, Report, Score) and `application/` (use cases, ports, config) | nothing outside Kotlin stdlib |
+| `mutkt-asm` | Operator framework, operators, `MutantGenerator` adapter | core, annotations, ASM |
+| `mutkt-junit` | Isolated class loader, JUnit Platform `TestExecutor` | core, JUnit Platform Launcher |
+| `mutkt-report` | Console, HTML, JSON writers | core |
+| `mutkt-gradle` | Plugin, DSL, task, worker, wiring | everything above |
+| `mutkt-testing` | Unpublished test support: `ClassBuilder`, `compileKotlin`, port fakes | core |
 
-## Build Commands
+Adapters never depend on each other. Only `mutkt-gradle` wires them together. Architecture tests (ROD-77) enforce this.
+
+Ports (application layer): `ClassSource`, `MutantGenerator`, `TestExecutor`, `ReportWriter`, `SourceLookup`. Add a port only when a task needs one.
+
+## Hard rules
+
+- No `object` singletons with mutable state; no global registries.
+- No `println`/`System.err` in main code.
+- Domain classes hold no bytecode and no framework types.
+- Mutant ids include the method descriptor.
+- One operator definition drives both discovery and application (`sites()` then `apply()`); never duplicate predicates.
+- Operators never reference other operators.
+- Versions only in `gradle/libs.versions.toml`.
+- Public API of published modules is explicit (`explicitApi()`).
+
+## Provisional decisions (change in Linear before they bite)
+
+Defaults until the decision issues close: package `io.github.rodrigotimoteo.mutkt` (ROD-81); statuses `KILLED, SURVIVED, TIMEOUT, NO_COVERAGE, ERROR`, score = (KILLED + TIMEOUT) / (total − ERROR) (ROD-82); reports console + HTML + Stryker-schema JSON (ROD-83); no JUnit extension API/runner module (ROD-84); JDK 17 and 21, Jupiter engine by default (ROD-85).
+
+## Commands
 
 ```bash
-# Full build (compile + lint + test)
-./gradlew build
-
-# Tests only (all modules)
-./gradlew test
-
-# Single module tests
-./gradlew :mutation-core:test
-./gradlew :mutation-test-runner:test
-./gradlew :mutation-gradle-plugin:test
-
-# Lint (CI runs ktlint then detekt)
-./gradlew ktlintCheck
-./gradlew detekt
-./gradlew ktlintFormat  # auto-fix
-
-# Coverage reports
-./gradlew koverHtmlReport
-# Per-module report: mutation-*/build/reports/kover/html/index.html
-
-# Mutation test (the library testing itself)
-./gradlew mutationTest
-
-# Documentation (Dokka 2.2.0 V2)
-./gradlew dokkaGenerate  # all modules aggregated
-# Output: build/dokka/html/index.html
+./gradlew build                  # compile + all checks + tests
+./gradlew :mutkt-core:test       # one module
+./gradlew ktlintCheck detekt     # lint (CI order: ktlint, detekt, test, build)
+./gradlew ktlintFormat           # auto-fix style
+./gradlew koverVerify            # coverage gate (85% line per published module)
 ```
 
-## CI Order
+Inline comments inside argument lists break ktlint: put comments on their own line.
 
-CI runs: `ktlintCheck` → `detekt` → `test` → `build` → `koverXmlReport` (Codecov).
+## Workflow (humans and agents)
 
-## Testing Quirks
+1. Pick an unblocked issue in the lowest open milestone. Check its label: `agent:worker`, `agent:implementer` or `agent:deep`.
+2. Write the failing test first, then the smallest change that passes. Use skill `mutkt-dev`; for operators also `mutkt-operator`; for tests `mutkt-testing`.
+3. Run module checks, then the full `./gradlew build` before reporting.
+4. Run the `mutkt-reviewer` agent on every non-trivial diff. Fix findings or record why not.
+5. Update the Linear issue (status + one comment: what changed, what was verified, what was not).
+6. Commit and push as you go: small commits that each build and pass tests, several per issue is fine. Messages explain why and reference the issue (`ROD-n`). Push after each meaningful commit.
 
-- **Gradle plugin tests need `--add-opens`** — already configured in `mutation-gradle-plugin/build.gradle.kts` (`--add-opens=java.base/java.lang=ALL-UNNAMED` etc.)
-- **Integration test depends on mutation-sample** — `MutationEngineIntegrationTest` requires `mutation-sample` to be built first. Run `./gradlew :mutation-sample:build` before if it fails.
-- **MockK** available in all test modules via `libs.mockk`
-- **ASM bytecode construction** — scanner/applier tests build minimal classes using `ClassWriter(Opcodes.V17)` with `<init>` constructor. Use the `buildClassWithMethod` helper pattern from existing tests.
-- **MutationRegistry is a global singleton** — tests must call `MutationRegistry.reset()` in `@BeforeEach`/`@AfterEach` to avoid bleeding state.
-- **Inline comments in function argument lists** cause ktlint failures — move comments to separate lines.
+### Branches, worktrees, PRs
 
-## Architecture
+- `rebuild/v1` is the integration branch. Each issue works on its own branch off it, named with Linear's branch name (e.g. `rodrigotimoteo2603/rod-86-domain-model…`).
+- One task at a time in this checkout. For a second concurrent task use a separate worktree: `git worktree add ../mutkt-rod-NN -b <branch> rebuild/v1`. Never run two tasks in the same working tree; remove the worktree after merge.
+- Merge only through a PR into `rebuild/v1` (CI green, reviewer pass done). Squash is not required; keep the useful commits.
+- Subagents write code but do not commit or push; the main session reviews the diff, re-runs checks, then commits and pushes. Never tag, publish, force-push, or touch secrets without the owner.
 
-### Bytecode Mutation Pipeline
-```
-MutantClassLoader → loads original + mutated bytecode
-Mutator.scanMutations() → finds mutation points via ClassVisitor
-Mutator.applyMutation() → applies single mutation to bytecode
-MutationEngine.runMutationTesting() → orchestrates scan → mutate → test → report
-```
+Subagent briefs follow `docs/agent-brief-template.md`. Agent output is a claim: re-run the checks and read the diff.
 
-### Key Internal Types
-- `Mutator` — main entry for scanning/applying mutations. Contains private visitor classes (`MutationScannerVisitor`, `MutationApplierMethodVisitor`)
-- `MutationInfo` — data class for a single mutation point (operator, class, method, line, opcode)
-- `MutationRegistry` — global singleton tracking mutations in JUnit runs
-- `MutantClassLoader` — classloader that replaces target class bytes with mutated versions
-- `MutKtCache` — file-based cache for mutation results (`.mutkt/cache/`)
-- `BaselineStorage` — baseline tracking for incremental analysis (`.mutkt/baseline`)
-- `SubsumptionAnalyzer` — detects redundant mutations via bytecode comparison
-- `WeakMutationAnalyzer` — skips unreachable mutations using coverage data
-- `TestStrengthOrdering` — runs strongest tests first based on history
-- `ConsoleReporter` — real-time progress bar and summary
-- `HtmlReportGenerator` — static HTML report with per-class breakdown
+## Definition of done
 
-### Kotlin-Specific Mutators
-- Logic inlined into `Mutator.kt` (private visitors `MutationScannerMethodVisitor`, `MutationApplierMethodVisitor`)
-- Detection uses `@kotlin.Metadata` annotation presence on bytecode
-- `isKotlinSyntheticMethod` helper in `KotlinSyntheticUtils.kt` — precise pattern, prefer this for synthetic-method detection
-
-## Conventions
-
-- **Group ID**: `io.github.rodrigotimoteo` (verified Maven Central namespace — NOT `com.github.rodrigotimoteo`)
-- **Kotlin 2.1.10**, JVM target 17, ASM 9.10.1
-- **Version catalog**: `gradle/libs.versions.toml` — all deps via `libs.*`, no inline versions
-- **Publishing**: Maven Central via Sonatype (needs `SONATYPE_USERNAME`/`SONATYPE_PASSWORD` env vars + GPG key) — `gradle-nexus-publish-plugin`
-- **Coverage threshold**: 85% line per module enforced by Kover 0.9.0 (verify rule)
-- **Detekt**: `maxIssues: 0`, `LongMethod: 60`, `LongParameterList: 8/10`, `ComplexMethod: 15`
-- **16 mutation operators**: 6 MVP + 4 Kotlin-specific + 6 Quick Win
-
-## Known Gotchas
-
-- `isCollectionOrArrayStatic` uses **dotted** class names (`java.util.List`), not slashed (`java/util/List`) — `Type.className` returns dotted form
-- `MutantClassLoader` caches `Class<*>` instances in `mutatedCache` — calling `defineClass` twice throws `LinkageError`
-- `@SuppressMutations` with no operators suppresses all; with `operators = [...]` suppresses only those operators. The presence alone is the trigger; `operators` only narrows the set.
-- `Thread.currentThread().threadId()` is Java 21 API — use `Thread.currentThread().id` (available since Java 1.0, identical value)
-- Dokka 2.2.0 uses V2 plugin API — root aggregator needs `dependencies { dokka(project(":x")) }` blocks, not `dokkaHtml` (V1)
-- GitHub Pages: Dokka docs auto-deploy via `.github/workflows/dokka.yml` on push to master
-- GitHub repo: `rodrigotimoteo/mutkt`
-- **KMP source dirs** — `GitChangeDetector.DEFAULT_SOURCE_DIRS` covers: pure-JVM (`src/main/{kotlin,java}`), KMP common/jvm/android, iOS (`iosMain`, `iosArm64Main`, `iosX64Main`, `iosSimulatorArm64Main`), desktop (`linuxMain`, `macosMain`, `mingwX64Main`, `mingwX86Main`), web (`jsMain`, `wasmJsMain`, `wasmWasiMain`). Add new KMP targets here.
-- **JUnit engine default** — `MutationEngine.engineIds` defaults to `["junit-jupiter", "junit-vintage", "junit-platform-suite-engine"]`. The suite engine discovers `@Suite` classes — restrict `engineIds` if you don't want that.
+Acceptance criteria in the issue met; tests added; `./gradlew build` green; no file over the size limits; architecture tests green; reviewer pass done; docs row/ADR updated when behavior or a decision changed.

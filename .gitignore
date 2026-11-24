@@ -24,9 +24,6 @@ Thumbs.db
 # Logs
 *.log
 
-# Project files (not for distribution)
-plan.md
-*.original.md
 
 # MutKt runtime state (cache, baseline, kill sets, etc.)
 .mutkt/
@@ -34,3 +31,8 @@ plan.md
 # Local configuration
 local.properties
 .env
+
+# Stray compiled output and tool state
+*.class
+.opencode/
+.claude/settings.local.json
