@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.asm
 import com.github.rodrigotimoteo.mutkt.asm.operators.ArithmeticOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ConditionalsBoundaryOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NegateConditionalsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.ReturnValsOperator
 
 /** Every operator, in the order they are applied and reported. */
 internal object Operators {
@@ -11,5 +12,6 @@ internal object Operators {
             NegateConditionalsOperator,
             ArithmeticOperator,
             ConditionalsBoundaryOperator,
+            ReturnValsOperator,
         )
 }
