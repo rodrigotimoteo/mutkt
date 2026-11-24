@@ -78,8 +78,21 @@ class ArchitectureTest {
         assertImportsOnly(sources("mutkt-core", "domain"), "kotlin.", "$ROOT.domain.")
 
     @Test
-    fun `application imports only kotlin, domain and application`() =
-        assertImportsOnly(sources("mutkt-core", "application"), "kotlin.", "$ROOT.domain.", "$ROOT.application.")
+    fun `application imports only kotlin, domain, application and java concurrency`() =
+        // Narrow exception: only the classes the analysis use case needs for its thread pool (owner decision, ROD-98).
+        assertImportsOnly(
+            sources("mutkt-core", "application"),
+            "kotlin.",
+            "$ROOT.domain.",
+            "$ROOT.application.",
+            "java.util.concurrent.Callable",
+            "java.util.concurrent.ExecutionException",
+            "java.util.concurrent.ExecutorCompletionService",
+            "java.util.concurrent.ExecutorService",
+            "java.util.concurrent.Executors",
+            "java.util.concurrent.Future",
+            "java.util.concurrent.TimeUnit",
+        )
 
     @Test
     fun `core imports no third-party code`() =
