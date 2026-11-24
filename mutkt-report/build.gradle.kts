@@ -4,4 +4,6 @@ plugins {
 
 dependencies {
     implementation(project(":mutkt-core"))
+
+    testImplementation(project(":mutkt-testing"))
 }
