@@ -1,0 +1,21 @@
+package com.github.rodrigotimoteo.mutkt.application.port
+
+/** Result of running the tests against one mutant; mapping it to a `MutantStatus` is the use case's job. */
+public sealed interface Outcome {
+    /** A test failed; [by] names it. */
+    public data class Killed(
+        val by: String,
+    ) : Outcome
+
+    public data object Survived : Outcome
+
+    /** No test exercised the mutant. */
+    public data object NoTests : Outcome
+
+    /** The mutant could not be loaded or run. */
+    public data class LoadError(
+        val message: String,
+    ) : Outcome
+
+    public data object Timeout : Outcome
+}
