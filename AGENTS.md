@@ -60,7 +60,7 @@ Port fakes land here with ROD-87.
 
 - Code package `com.github.rodrigotimoteo.mutkt`; Maven group and plugin id `io.github.rodrigotimoteo` (Central rejects `com.github.*`; confirmed by owner). Package and group intentionally differ (ROD-81).
 - Statuses `KILLED, SURVIVED, TIMEOUT, NO_COVERAGE, ERROR`; score = (KILLED + TIMEOUT) / (total − ERROR) (ROD-82).
-- Reports: console + HTML + Stryker-schema JSON (ROD-83, default, not yet confirmed).
+- Reports: console + HTML + Stryker-schema JSON (ROD-83).
 - No JUnit extension API or runner module (ROD-84).
 - JDK 17 and 21, Gradle 8.x, Jupiter engine by default; vintage/suite opt-in (ROD-85).
 
