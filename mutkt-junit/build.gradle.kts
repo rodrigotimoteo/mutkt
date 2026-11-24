@@ -6,4 +6,6 @@ dependencies {
     implementation(project(":mutkt-core"))
     implementation(platform(libs.junit.bom))
     implementation(libs.junit.platform.launcher)
+
+    testImplementation(project(":mutkt-testing"))
 }
