@@ -1,4 +1,4 @@
-import org.jlleitschuh.gradle.ktlint.tasks.KtLintCheckTask
+import org.jlleitschuh.gradle.ktlint.tasks.BaseKtLintCheckTask
 
 plugins {
     `kotlin-dsl`
@@ -10,7 +10,7 @@ ktlint {
 }
 
 // kotlin-dsl adds generated sources under build/ to the main source set; lint only what is written by hand.
-tasks.withType<KtLintCheckTask>().matching { "SourceSet" in it.name }.configureEach {
+tasks.withType<BaseKtLintCheckTask>().matching { "SourceSet" in it.name }.configureEach {
     setSource(fileTree("src").matching { include("**/*.kt") })
 }
 
