@@ -35,7 +35,7 @@ Work comes from Linear: team ROD, project **MutKt Rebuild**. Read the issue, its
 | `mutkt-gradle` | Plugin, DSL, task, worker, wiring | everything above |
 | `mutkt-testing` | Unpublished test support: `ClassBuilder`, `compileKotlin`, port fakes | core, ASM, kotlin-compile-testing |
 
-Adapters never depend on each other. Only `mutkt-gradle` wires them together. Architecture tests (ROD-77) enforce this.
+Adapters never depend on each other. Only `mutkt-gradle` wires them together. Architecture tests (ROD-77) enforce this. Adapters may use `mutkt-testing` in test scope only.
 
 Ports (application layer): `ClassSource`, `MutantGenerator`, `TestExecutor`, `ReportWriter`, `SourceLookup`. Add a port only when a task needs one.
 
