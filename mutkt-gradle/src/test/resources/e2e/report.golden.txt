@@ -1,0 +1,22 @@
+Mutation report
+Mutants: 17
+  KILLED       14
+  SURVIVED     2
+  TIMEOUT      1
+  NO_COVERAGE  0
+  ERROR        0
+Score: 88.2%
+
+Class           Detected  Score
+a.b.Calculator     11/12  91.7%
+a.b.Grader           4/5  80.0%
+
+Survivors (2)
+a.b.Calculator.isPositive(I)Z (a.b.Calculator:10)  conditionals-boundary  ifle -> iflt
+       9 | 
+  >   10 |     fun isPositive(n: Int): Boolean = n > 0
+      11 | 
+a.b.Grader.grade(I)Ljava/lang/String; (a.b.Grader:29)  conditionals-boundary  if_icmplt -> if_icmple
+      28 |             "A"
+  >   29 |         } else if (score >= 60) {
+      30 |             "B"
