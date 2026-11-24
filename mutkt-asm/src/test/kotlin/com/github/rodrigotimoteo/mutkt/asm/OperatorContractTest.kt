@@ -14,8 +14,7 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import java.util.stream.Stream
 
-// New operators go here; switch to Operators.all once it exists.
-internal fun operatorsUnderTest(): List<Operator> = listOf(ToyOperator)
+internal fun operatorsUnderTest(): List<Operator> = listOf(ToyOperator) + Operators.all
 
 internal class OperatorContractTest {
     // Corpus first, then the test runtime classpath (Kotlin stdlib); JDK types fall through to the platform.
