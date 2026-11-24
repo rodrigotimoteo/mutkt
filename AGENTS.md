@@ -52,7 +52,7 @@ Ports (application layer): `ClassSource`, `MutantGenerator`, `TestExecutor`, `Re
 
 ## Decisions
 
-- Package `com.github.rodrigotimoteo.mutkt` (ROD-81). The legacy `io.github…` identifiers are deprecated in code; the Maven Central group/plugin id is **open** until Central/Plugin Portal namespace verification for `com.github` is confirmed.
+- Code package `com.github.rodrigotimoteo.mutkt`; Maven group and plugin id `io.github.rodrigotimoteo` (Central rejects `com.github.*`; confirmed by owner). Package and group intentionally differ (ROD-81).
 - Statuses `KILLED, SURVIVED, TIMEOUT, NO_COVERAGE, ERROR`; score = (KILLED + TIMEOUT) / (total − ERROR) (ROD-82).
 - Reports: console + HTML + Stryker-schema JSON (ROD-83, default, not yet confirmed).
 - No JUnit extension API or runner module (ROD-84).

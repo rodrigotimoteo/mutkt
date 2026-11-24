@@ -4,7 +4,7 @@ One file per decision: `NNNN-title.md` with Context, Decision, Consequences. Sou
 
 | ADR | Topic | Linear | Status |
 |---|---|---|---|
-| 0001 | Package name, coordinates, plugin id | ROD-81 | accepted (package); Central group open |
+| 0001 | Package name, coordinates, plugin id | ROD-81 | accepted (package com.github…, group io.github…) |
 | 0002 | Statuses and score | ROD-82 | accepted |
 | 0003 | Report formats | ROD-83 | proposed |
 | 0004 | No test-side API / runner module | ROD-84 | accepted |
