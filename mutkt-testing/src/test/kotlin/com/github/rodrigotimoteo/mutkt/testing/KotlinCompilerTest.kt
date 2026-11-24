@@ -5,6 +5,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
+private const val JUPITER_SOURCE = """
+package p
+import org.junit.jupiter.api.Test
+class SampleTest { @Test fun works() {} }
+"""
+
 class KotlinCompilerTest {
     @Test
     fun `compiles source to class bytes keyed by binary name`() {
@@ -19,6 +25,20 @@ class KotlinCompilerTest {
         val classes = compileKotlin("package p\nfun twice(x: Int) = x * 2")
 
         assertEquals(10, loadAndInvoke(classes, "p.SourceKt", "twice", 5))
+    }
+
+    @Test
+    fun `inherited classpath compiles Jupiter tests`() {
+        val classes = compileKotlin(JUPITER_SOURCE, inheritClassPath = true)
+
+        assertEquals(setOf("p.SampleTest"), classes.keys)
+    }
+
+    @Test
+    fun `own classpath only fails with unresolved reference`() {
+        val error = assertThrows<IllegalStateException> { compileKotlin(JUPITER_SOURCE) }
+
+        assertTrue(error.message.orEmpty().contains("Unresolved reference"), error.message)
     }
 
     @Test
