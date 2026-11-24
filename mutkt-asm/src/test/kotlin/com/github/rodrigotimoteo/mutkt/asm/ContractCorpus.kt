@@ -121,6 +121,14 @@ private val SOURCE =
             else -> -1
         }
 
+    fun names(n: Int): List<String> = if (n > 0) listOf("a") else emptyList()
+    fun lookup(n: Int): Map<String, Int> = mapOf("a" to n)
+    fun uniques(n: Int): Set<Int> = setOf(n)
+    fun all(n: Int): Collection<Int> = listOf(n)
+    fun buffer(n: Int): IntArray = IntArray(n)
+    fun grid(n: Int): Array<IntArray> = arrayOf(IntArray(n))
+    fun labels(n: Int): Array<String> = arrayOf("a")
+
     // Dense constants compile to a TABLESWITCH.
     fun month(n: Int): Int =
         when (n) {
