@@ -1,6 +1,8 @@
 package com.github.rodrigotimoteo.mutkt.asm
 
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
+import com.github.rodrigotimoteo.mutkt.asm.operators.ArithmeticOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.ConditionalsBoundaryOperator
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -8,12 +10,15 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 class SuppressionTest {
+    // Explicit so the tests do not change when operators are added to Operators.all.
+    private val operators = listOf(ArithmeticOperator, ConditionalsBoundaryOperator)
+
     private fun filesOf(source: String) =
         compileKotlin("import com.github.rodrigotimoteo.mutkt.annotations.SuppressMutations\n$source", true)
             .map { (name, bytes) -> ClassFile(name, bytes) }
 
     private fun operatorsByMethod(source: String): Map<String, Set<String>> =
-        AsmMutantGenerator { null }
+        AsmMutantGenerator(operators) { null }
             .discover(filesOf(source))
             .groupBy({ "${it.className}.${it.methodName}" }, { it.operator.value })
             .mapValues { it.value.toSet() }
@@ -144,7 +149,7 @@ class SuppressionTest {
     @Test
     fun `annotating one overload leaves its siblings mutated`() {
         val mutants =
-            AsmMutantGenerator { null }.discover(
+            AsmMutantGenerator(operators) { null }.discover(
                 filesOf(
                     """
                     class C {
