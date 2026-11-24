@@ -20,7 +20,14 @@ private val ALLOWED_PROJECTS =
         "mutkt-junit" to setOf("mutkt-core"),
         "mutkt-report" to setOf("mutkt-core"),
         "mutkt-testing" to setOf("mutkt-core"),
+        "mutkt-gradle" to setOf("mutkt-core", "mutkt-annotations", "mutkt-asm", "mutkt-junit", "mutkt-report"),
     )
+
+// Adapters may use mutkt-testing for fixtures, in test scope only; no module may in main scope.
+private const val TEST_SUPPORT = "mutkt-testing"
+private val TEST_SUPPORT_USERS = setOf("mutkt-asm", "mutkt-junit", "mutkt-report", "mutkt-gradle")
+private const val TEST_SCOPE = "testImplementation"
+private val PROJECT_DEPENDENCY = Regex("""(?:(\w+)\(\s*)?project\(":([^"]+)"\)""")
 
 private val ADAPTERS = listOf("asm", "junit", "report", "gradle")
 
@@ -92,15 +99,26 @@ class ArchitectureTest {
             ALLOWED_PROJECTS.flatMap { (module, allowed) ->
                 val text = File(root, "$module/build.gradle.kts").readText()
                 val declared =
-                    Regex("""project\(":([^"]+)"\)""")
+                    PROJECT_DEPENDENCY
                         .findAll(text)
-                        .map { it.groupValues[1] }
-                        .filter { it !in allowed }
-                        .map { "$module -> $it" }
+                        .map { it.groupValues[1] to it.groupValues[2] }
+                        .filter { (configuration, target) -> !isAllowed(module, allowed, configuration, target) }
+                        .map { (configuration, target) -> "$module -> $target (${configuration.ifEmpty { "?" }})" }
                 val unchecked = UNCHECKED_PROJECT_FORMS.findAll(text).map { "$module uses ${it.value}" }
                 (declared + unchecked).toList()
             }
         assertTrue(violations.isEmpty(), "Disallowed project dependencies: $violations")
+    }
+
+    private fun isAllowed(
+        module: String,
+        allowed: Set<String>,
+        configuration: String,
+        target: String,
+    ) = if (target == TEST_SUPPORT) {
+        module in TEST_SUPPORT_USERS && configuration == TEST_SCOPE
+    } else {
+        target in allowed
     }
 
     @Test
