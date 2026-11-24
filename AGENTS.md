@@ -50,9 +50,13 @@ Ports (application layer): `ClassSource`, `MutantGenerator`, `TestExecutor`, `Re
 - Versions only in `gradle/libs.versions.toml`.
 - Public API of published modules is explicit (`explicitApi()`).
 
-## Provisional decisions (change in Linear before they bite)
+## Decisions
 
-Defaults until the decision issues close: package `io.github.rodrigotimoteo.mutkt` (ROD-81); statuses `KILLED, SURVIVED, TIMEOUT, NO_COVERAGE, ERROR`, score = (KILLED + TIMEOUT) / (total − ERROR) (ROD-82); reports console + HTML + Stryker-schema JSON (ROD-83); no JUnit extension API/runner module (ROD-84); JDK 17 and 21, Jupiter engine by default (ROD-85).
+- Package `com.github.rodrigotimoteo.mutkt` (ROD-81). The legacy `io.github…` identifiers are deprecated in code; the Maven Central group/plugin id is **open** until Central/Plugin Portal namespace verification for `com.github` is confirmed.
+- Statuses `KILLED, SURVIVED, TIMEOUT, NO_COVERAGE, ERROR`; score = (KILLED + TIMEOUT) / (total − ERROR) (ROD-82).
+- Reports: console + HTML + Stryker-schema JSON (ROD-83, default, not yet confirmed).
+- No JUnit extension API or runner module (ROD-84).
+- JDK 17 and 21, Gradle 8.x, Jupiter engine by default; vintage/suite opt-in (ROD-85).
 
 ## Commands
 
