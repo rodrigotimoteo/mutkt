@@ -65,18 +65,22 @@ class RunMutationAnalysisTest {
     @Test
     fun `keeps discovery order when mutants finish out of order`() {
         val mutants = (0 until 4).map { mutant(ordinal = it) }
-        val othersDone = CountDownLatch(mutants.size - 1)
+        // Released by progress (the calling thread), i.e. after the others' results were collected; counting
+        // down inside the executor would let the first mutant overtake a result still in flight.
+        val othersReported = CountDownLatch(mutants.size - 1)
         val executor =
             FakeExecutor {
                 if (it == mutants.first()) {
-                    assertTrue(othersDone.await(WAIT_SECONDS, TimeUnit.SECONDS))
-                } else {
-                    othersDone.countDown()
+                    assertTrue(othersReported.await(WAIT_SECONDS, TimeUnit.SECONDS))
                 }
                 Outcome.Survived
             }
         val progress = ConcurrentLinkedQueue<MutantResult>()
-        val report = analysis(mutants, executor).run(progress::add)
+        val report =
+            analysis(mutants, executor).run {
+                progress.add(it)
+                othersReported.countDown()
+            }
         assertEquals(mutants, report.results.map { it.mutant })
         assertEquals(mutants.first(), progress.last().mutant)
     }
