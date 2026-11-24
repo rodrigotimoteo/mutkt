@@ -11,9 +11,21 @@ import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder.request
 import org.junit.platform.launcher.core.LauncherFactory
 import java.lang.reflect.Modifier
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.time.Duration
 
-/** Runs the project's Jupiter tests in isolated class loaders, one fresh set per mutant. */
+/**
+ * Runs the project's Jupiter tests in isolated class loaders, one fresh set per mutant.
+ *
+ * Each run executes on its own daemon thread and the deadline starts when the launcher starts the tests.
+ * On timeout the thread is interrupted and abandoned: an uninterruptible loop keeps burning a core and its
+ * class loader stays in memory until the JVM exits. Only a forked JVM can kill it for real (ROD-104).
+ * A mutant that ignores interrupts is likewise abandoned but keeps running.
+ */
 public class JUnitTestExecutor(
     projectClasses: List<ClassFile>,
     testClasses: List<ClassFile>,
@@ -29,21 +41,39 @@ public class JUnitTestExecutor(
 
     @Volatile private var closed = false
 
-    // The deadline is enforced by the timeout wrapper, not here.
     override fun run(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
     ): Outcome {
+        require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { "JUnitTestExecutor is closed, cannot run ${mutant.id}" }
         return MutantClassLoader(base, classes + (mutant.className to bytes)).use { loader ->
-            // Launcher and engines discover and load through the context loader.
-            val previous = Thread.currentThread().contextClassLoader
-            Thread.currentThread().contextClassLoader = loader
+            val started = CountDownLatch(1)
+            val task =
+                FutureTask {
+                    // Launcher and engines discover and load through the context loader.
+                    Thread.currentThread().contextClassLoader = loader
+                    try {
+                        execute(mutant, loader, started)
+                    } finally {
+                        started.countDown()
+                    }
+                }
+            Thread(task, "mutkt-mutant-${mutant.id.hashCode()}")
+                .apply { isDaemon = true }
+                .start()
             try {
-                execute(mutant, loader)
+                // Class loading and linking happen before the latch, so they are not charged to the deadline.
+                started.await()
+                task.get(deadline.inWholeNanoseconds, TimeUnit.NANOSECONDS)
+            } catch (_: TimeoutException) {
+                Outcome.Timeout
+            } catch (e: ExecutionException) {
+                throw e.cause ?: e
             } finally {
-                Thread.currentThread().contextClassLoader = previous
+                // No-op when finished; otherwise (timeout, caller interrupted) interrupts the worker and abandons it.
+                task.cancel(true)
             }
         }
     }
@@ -56,6 +86,7 @@ public class JUnitTestExecutor(
     private fun execute(
         mutant: Mutant,
         loader: ClassLoader,
+        started: CountDownLatch,
     ): Outcome {
         // A mutant or test class that cannot link is a broken input, not a kill.
         // declaredMethods links the mutant, which is what surfaces VerifyError before any test touches it.
@@ -66,7 +97,7 @@ public class JUnitTestExecutor(
             } catch (e: LinkageError) {
                 return Outcome.LoadError(e.toString())
             }
-        return runTests(types)
+        return runTests(types, started)
     }
 
     // @Nested classes run through their enclosing class; selecting them too would run them twice.
@@ -75,17 +106,22 @@ public class JUnitTestExecutor(
             !type.isAnonymousClass &&
             (type.enclosingClass == null || Modifier.isStatic(type.modifiers))
 
-    private fun runTests(types: List<Class<*>>): Outcome {
+    private fun runTests(
+        types: List<Class<*>>,
+        started: CountDownLatch,
+    ): Outcome {
         // A new launcher per run: nothing is cached between runs, and engines must be found via this loader.
         val launcher = LauncherFactory.create(LauncherConfig.builder().enableTestEngineAutoRegistration(true).build())
-        var started = 0
-        for (type in types) {
+        started.countDown()
+        var testsStarted = 0
+        // An abandoned (interrupted) worker must not run the remaining classes against a closed loader.
+        for (type in types.asSequence().takeWhile { !Thread.currentThread().isInterrupted }) {
             val listener = OutcomeListener()
             launcher.execute(request(type), listener)
-            started += listener.started
+            testsStarted += listener.started
             listener.killedBy?.let { return Outcome.Killed(it) }
         }
-        return if (started == 0) Outcome.NoTests else Outcome.Survived
+        return if (testsStarted == 0) Outcome.NoTests else Outcome.Survived
     }
 
     private fun request(type: Class<*>) =
