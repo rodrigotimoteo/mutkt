@@ -7,6 +7,7 @@ ktlintGradle = "12.3.0"
 ktlint = "1.5.0"
 detekt = "1.23.8"
 kover = "0.9.1"
+kctfork = "0.7.1"
 
 [plugins]
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
@@ -17,6 +18,7 @@ asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+kctfork-core = { module = "dev.zacsweers.kctfork:core", version.ref = "kctfork" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 ktlint-gradle-plugin = { module = "org.jlleitschuh.gradle:ktlint-gradle", version.ref = "ktlintGradle" }
 detekt-gradle-plugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detekt" }

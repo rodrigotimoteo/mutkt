@@ -33,7 +33,7 @@ Work comes from Linear: team ROD, project **MutKt Rebuild**. Read the issue, its
 | `mutkt-junit` | Isolated class loader, JUnit Platform `TestExecutor` | core, JUnit Platform Launcher |
 | `mutkt-report` | Console, HTML, JSON writers | core |
 | `mutkt-gradle` | Plugin, DSL, task, worker, wiring | everything above |
-| `mutkt-testing` | Unpublished test support: `ClassBuilder`, `compileKotlin`, port fakes | core |
+| `mutkt-testing` | Unpublished test support: `ClassBuilder`, `compileKotlin`, port fakes | core, ASM, kotlin-compile-testing |
 
 Adapters never depend on each other. Only `mutkt-gradle` wires them together. Architecture tests (ROD-77) enforce this.
 
@@ -49,6 +49,12 @@ Ports (application layer): `ClassSource`, `MutantGenerator`, `TestExecutor`, `Re
 - Operators never reference other operators.
 - Versions only in `gradle/libs.versions.toml`.
 - Public API of published modules is explicit (`explicitApi()`).
+
+## Test fixtures
+
+`mutkt-testing` is the only way to build bytecode in tests: `compileKotlin("""...""")` for real compiler output, `buildClass(...)` for a one-method ASM class, `loadAndInvoke(...)` to run it in an isolated loader.
+Do not write ASM `ClassWriter` code or custom class loaders in module tests. Extend the fixtures instead.
+Port fakes land here with ROD-87.
 
 ## Decisions
 
