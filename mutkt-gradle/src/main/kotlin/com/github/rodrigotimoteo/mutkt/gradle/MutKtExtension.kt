@@ -6,7 +6,7 @@ import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Nested
 
-internal val DEFAULT_ENGINES: Set<String> = setOf("jupiter")
+internal val DEFAULT_ENGINES: Set<String> = setOf("junit-jupiter")
 
 /** The `mutkt { }` DSL. Defaults are documented in docs/dsl.md. */
 public abstract class MutKtExtension {
@@ -34,13 +34,13 @@ public abstract class MutKtExtension {
     /** Minimum mutation score in percent (0..100); the build fails below it. Unset means no gate. */
     public abstract val failBelowScore: Property<Int>
 
-    /** JUnit Platform engines to run. */
+    /** JUnit engine ids to run (`junit-jupiter`, `junit-vintage`); each must be on the test runtime classpath. */
     public abstract val engines: SetProperty<String>
 
-    /** Only run tests carrying one of these tags. */
+    /** Only run tests matching one of these JUnit tag expressions; empty means all. */
     public abstract val includeTags: SetProperty<String>
 
-    /** Skip tests carrying one of these tags. */
+    /** Skip tests matching one of these JUnit tag expressions. */
     public abstract val excludeTags: SetProperty<String>
 
     /** The `reports { }` block. */

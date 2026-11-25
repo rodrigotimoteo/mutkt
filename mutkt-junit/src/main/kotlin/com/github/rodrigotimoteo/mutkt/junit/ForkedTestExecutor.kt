@@ -152,7 +152,10 @@ public class ForkedTestExecutor(
     private fun writeStartupFile(): Path {
         val lines =
             listOf("projectClassDir=${settings.projectClassDir}", "testClassDir=${settings.testClassDir}") +
-                settings.classpath.map { "classpath=$it" }
+                settings.classpath.map { "classpath=$it" } +
+                settings.engines.map { "engine=$it" } +
+                settings.includeTags.map { "includeTag=$it" } +
+                settings.excludeTags.map { "excludeTag=$it" }
         return Files.write(Files.createTempDirectory("mutkt-fork").resolve("startup.properties"), lines)
     }
 }

@@ -31,6 +31,10 @@ public class AsmMutantGenerator internal constructor(
 ) : MutantGenerator {
     public constructor(classpath: (String) -> ByteArray?) : this(Operators.all, classpath)
 
+    /** Enables only the operators with these ids (empty means all); an unknown id fails with the valid ones. */
+    public constructor(operatorIds: Set<String>, classpath: (String) -> ByteArray?) :
+        this(Operators.byId(operatorIds), classpath)
+
     @Volatile
     private var plan: Plan? = null
 

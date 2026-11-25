@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.io.File
+import java.nio.file.Path
 
 class MutKtTaskTest {
     private fun project(vararg plugins: String): Project =
@@ -185,22 +186,24 @@ class MutKtTaskTest {
     }
 
     @Test
-    fun `rejects each setting the adapters cannot honour yet`() {
-        val cases =
-            mapOf<String, (MutKtExtension) -> Unit>(
-                "operators" to { it.operators.add("arithmetic") },
-                "engines" to { it.engines.add("vintage") },
-                "includeTags" to { it.includeTags.add("fast") },
-                "excludeTags" to { it.excludeTags.add("slow") },
-            )
-        cases.forEach { (name, configure) ->
-            val project = project("java")
-            configure(project.mutkt())
+    fun `selection settings are wired from the extension`() {
+        val project = project("java")
+        project.mutkt().operators.add("arithmetic")
+        project.mutkt().engines.set(setOf("junit-jupiter", "junit-vintage"))
+        project.mutkt().includeTags.add("fast")
+        project.mutkt().excludeTags.add("slow")
+        val task = project.task()
 
-            val failure = assertThrows<GradleException> { project.task().runAnalysis() }
+        assertEquals(setOf("arithmetic"), task.operators.get())
+        assertEquals(setOf("junit-jupiter", "junit-vintage"), task.engines.get())
+        assertEquals(setOf("fast"), task.includeTags.get())
+        assertEquals(setOf("slow"), task.excludeTags.get())
 
-            assertEquals("$name is not supported yet", failure.message)
-        }
+        val settings = task.forkSettings(Path.of("main"), Path.of("test"), emptyList(), 1)
+
+        assertEquals(listOf("junit-jupiter", "junit-vintage"), settings.engines)
+        assertEquals(listOf("fast"), settings.includeTags)
+        assertEquals(listOf("slow"), settings.excludeTags)
     }
 
     @Test

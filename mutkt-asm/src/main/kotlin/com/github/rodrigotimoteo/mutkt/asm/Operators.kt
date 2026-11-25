@@ -18,4 +18,14 @@ internal object Operators {
             ReturnValsOperator,
             EmptyReturnsOperator,
         )
+
+    /** The operators named by [ids], in application order; no ids means all. */
+    fun byId(ids: Set<String>): List<Operator> {
+        val valid = all.map { it.id.value }
+        val unknown = ids.filterNot(valid::contains)
+        require(unknown.isEmpty()) {
+            "Unknown operator ${unknown.joinToString { "'$it'" }}; valid operators: ${valid.joinToString { "'$it'" }}"
+        }
+        return if (ids.isEmpty()) all else all.filter { it.id.value in ids }
+    }
 }

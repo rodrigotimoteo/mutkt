@@ -43,7 +43,8 @@ class ForkMainProcessTest {
         val projectDir = writeClasses(dir.resolve("main"), project)
         val testDir = writeClasses(dir.resolve("test"), tests)
         return startup(
-            listOf("projectClassDir=$projectDir", "testClassDir=$testDir") + runtimeJars().map { "classpath=$it" },
+            listOf("projectClassDir=$projectDir", "testClassDir=$testDir", "engine=junit-jupiter") +
+                runtimeJars().map { "classpath=$it" },
         )
     }
 

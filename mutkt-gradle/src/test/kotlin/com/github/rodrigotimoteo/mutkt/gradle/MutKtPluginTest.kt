@@ -27,7 +27,7 @@ class MutKtPluginTest {
 
         assertFalse(mutkt.threads.isPresent)
         assertEquals(10_000L, mutkt.timeoutMs.get())
-        assertEquals(setOf("jupiter"), mutkt.engines.get())
+        assertEquals(setOf("junit-jupiter"), mutkt.engines.get())
         assertTrue(mutkt.targetClasses.get().isEmpty())
         assertTrue(mutkt.operators.get().isEmpty())
         assertFalse(mutkt.maxMutantsPerClass.isPresent)

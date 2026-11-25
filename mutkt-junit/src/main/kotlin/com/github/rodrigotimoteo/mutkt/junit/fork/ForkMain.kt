@@ -46,6 +46,9 @@ private fun serve(
         readClassFiles(startup.projectClassDir),
         readClassFiles(startup.testClassDir),
         startup.classpath,
+        startup.engines,
+        startup.includeTags,
+        startup.excludeTags,
     ).use { runForkLoop(input, output, it) }
 }
 

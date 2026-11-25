@@ -9,6 +9,8 @@ import java.nio.file.Paths
  * [classpath] is the project's test runtime classpath without class directories.
  * [engineClasspath] is the child's own classpath (null derives it from code sources, which Gradle wiring must not
  * rely on: they can resolve to Gradle's bundled jars, so pass it explicitly).
+ * [engines] are JUnit Platform engine ids (`junit-jupiter`, `junit-vintage`); [includeTags] and [excludeTags] are
+ * JUnit tag expressions, applied to every run (no include tags means all tests).
  * A reply is awaited for the mutant's deadline plus [graceMillis], which also covers JVM-side class loading.
  */
 public data class ForkSettings(
@@ -22,9 +24,15 @@ public data class ForkSettings(
     val parallelism: Int,
     val graceMillis: Long = DEFAULT_GRACE_MILLIS,
     val engineClasspath: List<Path>? = null,
+    val engines: List<String> = listOf(JUPITER_ENGINE),
+    val includeTags: List<String> = emptyList(),
+    val excludeTags: List<String> = emptyList(),
 ) {
     init {
         require(parallelism >= 1) { "parallelism must be at least 1: $parallelism" }
+        require(engines.isNotEmpty()) { "The 'engines' setting must not be empty" }
+        require(includeTags.none(::hasLineBreak)) { "includeTags must not contain line breaks: $includeTags" }
+        require(excludeTags.none(::hasLineBreak)) { "excludeTags must not contain line breaks: $excludeTags" }
         require(graceMillis >= 0) { "graceMillis must not be negative: $graceMillis" }
     }
 
@@ -32,6 +40,9 @@ public data class ForkSettings(
         const val DEFAULT_GRACE_MILLIS: Long = 5000
     }
 }
+
+// The startup file holds one entry per line.
+private fun hasLineBreak(value: String) = '\n' in value || '\r' in value
 
 // The child needs the fork entry point, the domain types, the Launcher API with its engine, commons and
 // opentest4j (shared with the project's engines, see LauncherApiLoader) and the Kotlin stdlib. Located through
