@@ -30,19 +30,7 @@ class ForkedProjectPlatformTest {
         classpath: List<Path>,
         test: String,
     ): Outcome {
-        val (project, tests) = splitClasses("$IMPORTS$CALC\n$test")
-        val settings =
-            ForkSettings(
-                Path.of(System.getProperty("java.home"), "bin", "java"),
-                emptyList(),
-                emptyMap(),
-                null,
-                writeClasses(dir.resolve("main"), project),
-                writeClasses(dir.resolve("test"), tests),
-                classpath,
-                1,
-            )
-        val pool = ForkedTestExecutor(settings).also { executor = it }
+        val pool = ForkedTestExecutor(forkSettingsFor(dir, test, classpath)).also { executor = it }
         return pool.run(mutantOf(), mutantBytes(CALC), 60.seconds)
     }
 
