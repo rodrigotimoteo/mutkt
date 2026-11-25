@@ -60,7 +60,7 @@ class EndToEndTest {
         JUnitTestExecutor(production, tests, runtimeJars()).use { executor ->
             RunMutationAnalysis(
                 FakeClassSource(production),
-                AsmMutantGenerator(::systemClass),
+                AsmMutantGenerator(MVP_OPERATORS, ::systemClass),
                 executor,
                 ConsoleReportWriter(console, FileSourceLookup(listOf(sources))),
                 AnalysisConfig(ClassFilters(), 10.seconds, parallelism = 2),
@@ -100,6 +100,17 @@ class EndToEndTest {
 
     private companion object {
         const val GOLDEN = "report.golden.txt"
+
+        // Pinned so that registering further operators does not change the hand-computed expectations below.
+        val MVP_OPERATORS =
+            setOf(
+                "negate-conditionals",
+                "arithmetic",
+                "conditionals-boundary",
+                "null-returns",
+                "return-vals",
+                "empty-returns",
+            )
 
         // Compiler jars (kctfork is the jar named core-<version>) serve compileKotlin only, not the code under test.
         val COMPILER_JARS = Regex("kotlin-compiler-embeddable|^core-\\d")

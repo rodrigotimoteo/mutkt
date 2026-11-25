@@ -4,8 +4,10 @@ import com.github.rodrigotimoteo.mutkt.asm.operators.ArithmeticOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ConditionalsBoundaryOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.EmptyReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NegateConditionalsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.NonVoidMethodCallsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NullReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ReturnValsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.VoidMethodCallsOperator
 
 /** Every operator, in the order they are applied and reported. */
 internal object Operators {
@@ -17,6 +19,8 @@ internal object Operators {
             NullReturnsOperator,
             ReturnValsOperator,
             EmptyReturnsOperator,
+            VoidMethodCallsOperator,
+            NonVoidMethodCallsOperator,
         )
 
     /** The operators named by [ids], in application order; no ids means all. */

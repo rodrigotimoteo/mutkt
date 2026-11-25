@@ -139,6 +139,21 @@ private val SOURCE =
             else -> n
         }
 
+    class CallSink {
+        var hits = 0
+        fun bumpWide(a: Long, b: Double, c: Int) { hits += a.toInt() + b.toInt() + c }
+        fun total(a: Long, b: Double): Long = a + hits + b.toLong()
+        fun codes(): IntArray = intArrayOf(hits)
+    }
+    fun tick() { counter++ }
+    fun callShapes(): Long {
+        val s = CallSink()
+        s.bumpWide(10L, 2.5, 3)
+        s.codes()
+        try { tick() } catch (e: Exception) { return -1 }
+        return s.total(5L, 1.5)
+    }
+
     fun pick(flag: Boolean, a: Int): Int {
         val pet: Animal = if (flag) Dog() else Cat()
         return pet.legs() + a
