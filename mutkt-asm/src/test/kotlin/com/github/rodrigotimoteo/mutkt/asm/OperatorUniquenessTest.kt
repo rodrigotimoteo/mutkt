@@ -39,7 +39,7 @@ internal class OperatorUniquenessTest {
         corpus.values.flatMap { bytes ->
             val node = parse(bytes)
             val cls = node.info()
-            node.methods.filter(::isMutable).flatMap { method ->
+            node.mutableMethods().flatMap { method ->
                 val claims =
                     operators.flatMap { op ->
                         op

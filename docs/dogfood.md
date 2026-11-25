@@ -14,10 +14,10 @@ The CI job `dogfood` (pull requests and `rebuild/**` branches) runs it and write
 
 | Module | Scope | Settings | Measured | `failBelowScore` |
 |---|---|---|---|---|
-| `mutkt-core` | `com.github.rodrigotimoteo.mutkt.**` | defaults | 44.5% (263 mutants, about 20 s) | 40 |
+| `mutkt-core` | `com.github.rodrigotimoteo.mutkt.**` | defaults | 78.6% (103 mutants, about 20 s) | 75 |
 | `mutkt-asm` | `com.github.rodrigotimoteo.mutkt.asm.operators.**` | `timeoutMs = 120000`, `maxMutantsPerClass = 3` | 93.7% (63 evaluated, 185 omitted by the cap; about 5 min) | 90 |
 
-Measured on 2026-11-25, JDK 21, 8 threads, offline. Most `mutkt-core` survivors are in compiler-generated data class members (`hashCode`, `toString`, `componentN`, `copy`).
+Measured on 2026-11-25, JDK 21, 8 threads, offline. Members kotlinc generates for data classes are not mutated (see Noise filters in `docs/operators.md`); before that, `mutkt-core` measured 44.5% over 263 mutants, most survivors in those members.
 
 `mutkt-asm` runs its whole test suite per mutant and the suite compiles Kotlin fixtures, so a run takes seconds: with the default 10 s deadline almost every mutant ends in TIMEOUT. The cap keeps the job within minutes; without it the 248 mutants take about 18 minutes locally.
 

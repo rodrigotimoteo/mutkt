@@ -32,6 +32,15 @@ private val THROWING_METHODS =
 // Methods whose Intrinsics null checks belong to null-safety: java platform types, `!!`, lateinit getters.
 private val NULL_CHECK_METHODS = arrayOf("javaEmptyList", "javaEmptyCollection", "force", "getTitle", "getValue")
 
+// Members kotlinc generates for the parity data classes; legacy rows for them have no line.
+private val Row.inGeneratedDataMember get() =
+    inClass("Point", "Pair2") &&
+        line == -1 &&
+        inMethod("equals", "hashCode", "toString", "component1", "component2", "copy")
+
+private const val GENERATED_DATA_MEMBER_REASON =
+    "legacy mutates the members kotlinc generates for a data class; the rebuild skips them"
+
 private val LATEINIT_CLASSES = arrayOf("ParityIdioms", "Holder")
 
 private val COLLECTIONS = setOf("Ljava/util/List;", "Ljava/util/Set;", "Ljava/util/Map;", "Ljava/util/Collection;")
@@ -303,6 +312,48 @@ internal object Deviations {
                     "and changes all its copies together",
             ) {
                 it.inMethod("guarded") && it.opcode == "INVOKEVIRTUAL" && it.line == 53
+            },
+            legacyOnly(
+                "D16a",
+                "arithmetic",
+                GENERATED_DATA_MEMBER_REASON,
+            ) {
+                it.inGeneratedDataMember
+            },
+            legacyOnly(
+                "D16b",
+                "negate-conditionals",
+                GENERATED_DATA_MEMBER_REASON,
+            ) {
+                it.inGeneratedDataMember
+            },
+            legacyOnly(
+                "D16c",
+                "non-void-method-calls",
+                GENERATED_DATA_MEMBER_REASON,
+            ) {
+                it.inGeneratedDataMember
+            },
+            legacyOnly(
+                "D16d",
+                "null-returns",
+                GENERATED_DATA_MEMBER_REASON,
+            ) {
+                it.inGeneratedDataMember
+            },
+            legacyOnly(
+                "D16e",
+                "null-safety",
+                GENERATED_DATA_MEMBER_REASON,
+            ) {
+                it.inGeneratedDataMember
+            },
+            legacyOnly(
+                "D16f",
+                "return-vals",
+                GENERATED_DATA_MEMBER_REASON,
+            ) {
+                it.inGeneratedDataMember
             },
         )
 }

@@ -15,11 +15,7 @@ internal fun mutate(
     check(target.className == node.name) { "Site is for ${target.className} but the class is ${node.name}" }
     val method =
         checkNotNull(
-            node.methods.singleOrNull {
-                isMutable(it) &&
-                    it.name == target.methodName &&
-                    it.desc == target.descriptor
-            },
+            node.mutableMethods().singleOrNull { it.name == target.methodName && it.desc == target.descriptor },
         ) {
             "No mutable method ${node.name}.${target.methodName}${target.descriptor}"
         }

@@ -5,5 +5,5 @@ plugins {
 
 mutkt {
     targetClasses.add("com.github.rodrigotimoteo.mutkt.**")
-    failBelowScore = 40
+    failBelowScore = 75
 }
