@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.gradle
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.tasks.Classpath
+import org.gradle.api.tasks.CompileClasspath
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -61,6 +62,7 @@ class MutKtTaskTest {
     @Test
     fun `declares class, source and classpath file inputs`() {
         assertEquals(setOf("classesDirs", "testClassesDirs", "testRuntimeClasspath"), annotated(Classpath::class.java))
+        assertEquals(setOf("compileClasspath"), annotated(CompileClasspath::class.java))
         assertEquals(setOf("sourceDirs"), annotated(InputFiles::class.java))
         assertEquals(
             PathSensitivity.RELATIVE,
@@ -238,6 +240,7 @@ class MutKtTaskTest {
 
         assertEquals(model.mainClasses.files, task.classesDirs.files)
         assertEquals(model.testClasses.files, task.testClassesDirs.files)
+        assertEquals(model.mainCompileClasspath.files, task.compileClasspath.files)
         assertTrue(task.classesDirs.files.isNotEmpty())
     }
 }

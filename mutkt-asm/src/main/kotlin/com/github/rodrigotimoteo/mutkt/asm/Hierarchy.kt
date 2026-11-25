@@ -7,7 +7,8 @@ private const val MAX_DEPTH = 1000
 
 /**
  * Class bytes by internal name for every non-JDK type the class under mutation can reference: project, test
- * and dependency classes (Kotlin stdlib included), i.e. the whole test runtime classpath. Null for unknown types.
+ * and dependency classes (Kotlin stdlib included), i.e. the test runtime classpath, then the main compile classpath
+ * for `compileOnly` types. Null for unknown types.
  */
 internal typealias Hierarchy = (String) -> ByteArray?
 
@@ -33,9 +34,13 @@ internal class HierarchyClassWriter(
 
     private fun superOf(type: String): String? = ClassReader(bytesOf(type)).superName
 
-    private fun bytesOf(type: String): ByteArray =
-        hierarchy.bytesOrNull(type) ?: error("Cannot resolve $type to compute stack frames")
+    private fun bytesOf(type: String): ByteArray = hierarchy.bytesOrNull(type) ?: throw UnresolvedTypeException(type)
 }
+
+/** A type that frame computation needs but neither the hierarchy nor the JDK knows. */
+internal class UnresolvedTypeException(
+    type: String,
+) : IllegalStateException("cannot resolve ${type.replace('/', '.')} to compute stack frames")
 
 /** A hierarchy that knows no class, so only JDK types resolve. */
 internal val NoClasses: Hierarchy = { null }

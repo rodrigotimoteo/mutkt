@@ -19,7 +19,7 @@ class OperatorSelectionTest {
         ).map { (name, bytes) -> ClassFile(name, bytes) }
 
     private fun operatorsFor(ids: Set<String>) =
-        AsmMutantGenerator(ids) { null }
+        AsmMutantGenerator(ids, ::error) { null }
             .discover(files, files)
             .map { it.operator.value }
             .toSet()
@@ -52,7 +52,8 @@ class OperatorSelectionTest {
 
     @Test
     fun `an unknown id fails with the valid ids`() {
-        val error = assertThrows<IllegalArgumentException> { AsmMutantGenerator(setOf("arithmetic", "nope")) { null } }
+        val error =
+            assertThrows<IllegalArgumentException> { AsmMutantGenerator(setOf("arithmetic", "nope"), ::error) { null } }
 
         val message = error.message.orEmpty()
         assertTrue(message.startsWith("Unknown operator 'nope';"), message)
