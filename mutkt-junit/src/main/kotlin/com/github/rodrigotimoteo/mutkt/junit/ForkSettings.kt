@@ -12,7 +12,8 @@ import java.nio.file.Paths
  * replaced by the project's own when [classpath] has the launcher.
  * [engines] are JUnit Platform engine ids (`junit-jupiter`, `junit-vintage`); [includeTags] and [excludeTags] are
  * JUnit tag expressions, applied to every run (no include tags means all tests).
- * A child gets [prepareMillis] to load and link classes and create the launcher; silence for longer fails the run
+ * A child gets [prepareMillis] to load and link classes and discover all test classes (their plans are held
+ * until the run ends); silence for longer fails the run
  * (not a timeout, so it earns no detection credit). Once it reports the start, a reply is awaited for the
  * mutant's deadline plus [graceMillis].
  */

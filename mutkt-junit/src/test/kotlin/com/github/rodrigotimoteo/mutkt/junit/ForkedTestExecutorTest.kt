@@ -88,6 +88,19 @@ class ForkedTestExecutorTest {
     }
 
     @Test
+    fun `a stall in test discovery fails with the preparation diagnostic, not a timeout`() {
+        // Jupiter instantiates the display name generator while it discovers CalcTest.
+        val test =
+            "class Stall : DisplayNameGenerator.Standard() { init { Thread.sleep(Long.MAX_VALUE) } }\n" +
+                "@DisplayNameGeneration(Stall::class) $CALC_TEST"
+        val pool = executor(testSource = test) { it.copy(prepareMillis = PREPARE) }
+
+        val error = assertThrows<IllegalStateException> { pool.run(mutantBytes(), 1.seconds) }
+        assertTrue("no Started within $PREPARE ms" in error.message.orEmpty(), error.message)
+        assertTrue(pool.liveProcesses.isEmpty())
+    }
+
+    @Test
     fun `a hang once execution started is a timeout, and the preparation limit does not cut execution short`() {
         val pool = executor { it.copy(prepareMillis = PREPARE, graceMillis = 500) }
         assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
