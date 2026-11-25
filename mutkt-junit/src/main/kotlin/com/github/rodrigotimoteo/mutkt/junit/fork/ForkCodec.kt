@@ -14,6 +14,7 @@ private const val REQUEST_RUN: Int = 1
 private const val REQUEST_SHUTDOWN: Int = 2
 private const val REPLY_READY: Int = 1
 private const val REPLY_RESULT: Int = 2
+private const val REPLY_STARTED: Int = 3
 
 internal fun writeRequest(
     out: DataOutputStream,
@@ -49,6 +50,7 @@ internal fun writeReply(
             writeByte(REPLY_READY)
             writeInt(reply.protocolVersion)
         }
+        ForkReply.Started -> writeByte(REPLY_STARTED)
         is ForkReply.Result -> {
             writeByte(REPLY_RESULT)
             writeOutcome(reply.outcome)
@@ -62,6 +64,7 @@ internal fun readReply(input: DataInputStream): ForkReply? =
         when (val tag = readUnsignedByte()) {
             REPLY_READY -> ForkReply.Ready(readInt())
             REPLY_RESULT -> ForkReply.Result(readOutcome())
+            REPLY_STARTED -> ForkReply.Started
             else -> throw ForkProtocolException("Unknown reply tag $tag")
         }
     }

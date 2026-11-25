@@ -71,9 +71,10 @@ class ForkCodecTest {
     }
 
     @Test
-    fun `shutdown request and ready reply round-trip`() {
+    fun `shutdown request, ready and started replies round-trip`() {
         assertEquals(ForkRequest.Shutdown, roundTrip(ForkRequest.Shutdown))
         assertEquals(ForkReply.Ready(), roundTrip(ForkReply.Ready()))
+        assertEquals(ForkReply.Started, roundTrip(ForkReply.Started))
     }
 
     @Test

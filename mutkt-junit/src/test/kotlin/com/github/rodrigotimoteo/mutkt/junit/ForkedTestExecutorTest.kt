@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Timeout(value = 120, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
@@ -78,6 +79,34 @@ class ForkedTestExecutorTest {
         assertTrue(pool.liveProcesses.isEmpty())
 
         assertEquals(Outcome.Killed("CalcTest.adds"), pool.run(mutantBytes()))
+        assertEquals(2, pool.startedChildren)
+    }
+
+    @Test
+    fun `a stall before execution fails with a diagnostic, frees the slot and lets the next mutant complete`() {
+        val arm = dir.resolve("arm")
+        val agent = stallAgentJar(dir.resolve("agent.jar"))
+        val pool = executor { it.copy(jvmArgs = listOf("-javaagent:$agent=$arm"), prepareMillis = PREPARE) }
+        assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
+        Files.createFile(arm)
+
+        val error = assertThrows<IllegalStateException> { pool.run(mutantBytes(), 1.seconds) }
+        assertTrue("no Started within $PREPARE ms" in error.message.orEmpty(), error.message)
+        assertTrue(pool.liveProcesses.isEmpty())
+
+        assertEquals(KILLED, pool.run(mutantBytes()))
+        assertEquals(2, pool.startedChildren)
+    }
+
+    @Test
+    fun `a hang once execution started is a timeout, and the preparation limit does not cut execution short`() {
+        val pool = executor { it.copy(prepareMillis = PREPARE, graceMillis = 500) }
+        assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
+        // Deadline plus grace is longer than the preparation limit: a Timeout proves the wait outlived it.
+        assertEquals(Outcome.Timeout, pool.run(SPIN, (PREPARE + 1000).milliseconds))
+        assertTrue(pool.liveProcesses.isEmpty())
+
+        assertEquals(KILLED, pool.run(mutantBytes()))
         assertEquals(2, pool.startedChildren)
     }
 
@@ -198,6 +227,8 @@ class ForkedTestExecutorTest {
     }
 
     private companion object {
+        const val PREPARE = 3_000L
+
         // Sleeps so that the children of a parallel run overlap.
         fun slowCalc(body: String) =
             mutantBytes("class Calc { fun add(a: Int, b: Int): Int { Thread.sleep(500); return $body } }")

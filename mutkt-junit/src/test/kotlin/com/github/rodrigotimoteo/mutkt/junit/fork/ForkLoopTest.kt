@@ -48,7 +48,7 @@ class ForkLoopTest {
     @Test
     fun `announces readiness, then answers a killed mutant`() {
         assertEquals(
-            listOf(ForkReply.Ready(), ForkReply.Result(Outcome.Killed("CalcTest.adds"))),
+            listOf(ForkReply.Ready(), ForkReply.Started, ForkReply.Result(Outcome.Killed("CalcTest.adds"))),
             replies(run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )
     }
@@ -58,7 +58,9 @@ class ForkLoopTest {
         assertEquals(
             listOf(
                 ForkReply.Ready(),
+                ForkReply.Started,
                 ForkReply.Result(Outcome.Survived),
+                ForkReply.Started,
                 ForkReply.Result(Outcome.Killed("CalcTest.adds")),
             ),
             replies(run(mutantBytes(CALC)), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),

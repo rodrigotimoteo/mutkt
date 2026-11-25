@@ -2,7 +2,6 @@
 
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
-import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
 import com.github.rodrigotimoteo.mutkt.junit.JUnitTestExecutor
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -60,13 +59,15 @@ private fun report(e: Throwable) = e.printStackTrace()
 internal fun runForkLoop(
     input: DataInputStream,
     output: DataOutputStream,
-    executor: TestExecutor,
+    executor: JUnitTestExecutor,
 ) {
     writeReply(output, ForkReply.Ready())
     while (true) {
         when (val request = readRequest(input)) {
             is ForkRequest.Run -> {
-                val outcome = executor.run(request.mutant, request.bytes, request.timeoutMillis.milliseconds)
+                val deadline = request.timeoutMillis.milliseconds
+                val started = { writeReply(output, ForkReply.Started) }
+                val outcome = executor.run(request.mutant, request.bytes, deadline, started)
                 writeReply(output, ForkReply.Result(outcome))
             }
             ForkRequest.Shutdown, null -> return
