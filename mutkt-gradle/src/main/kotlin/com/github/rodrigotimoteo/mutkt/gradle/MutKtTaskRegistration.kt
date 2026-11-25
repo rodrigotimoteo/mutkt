@@ -19,6 +19,7 @@ internal fun Project.registerMutktTask(extension: MutKtExtension) {
         task.description = "Runs mutation testing against the compiled classes"
         task.classesDirs.from(model.mainClasses)
         task.testClassesDirs.from(model.testClasses)
+        task.projectSupportClassesDirs.from(model.supportClasses)
         task.testRuntimeClasspath.from(model.testRuntimeClasspath)
         task.compileClasspath.from(model.mainCompileClasspath)
         task.sourceDirs.from(model.mainSources)

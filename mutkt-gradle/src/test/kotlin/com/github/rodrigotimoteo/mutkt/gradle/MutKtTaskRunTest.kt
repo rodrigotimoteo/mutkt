@@ -152,6 +152,19 @@ class MutKtTaskRunTest {
         )
     }
 
+    @Test
+    fun `a class of another source set with the name of a main class fails the run`() {
+        val task = fixtureTask()
+        val support = dir.resolve("support")
+        dir.resolve("main").copyRecursively(support)
+        task.projectSupportClassesDirs.setFrom(support)
+
+        val failure = assertThrows<GradleException> { task.runAnalysis() }
+
+        assertTrue("both in main and in another source set" in failure.message.orEmpty(), failure.message)
+        assertTrue("demo/Calc.class" in failure.message.orEmpty(), failure.message)
+    }
+
     private fun fixtureTask(source: String = FIXTURE): MutKtTask {
         val compiled = compileKotlin(source, inheritClassPath = true)
         val main = dir.resolve("main").also { write(it, compiled.filterKeys { name -> !name.endsWith("Test") }) }

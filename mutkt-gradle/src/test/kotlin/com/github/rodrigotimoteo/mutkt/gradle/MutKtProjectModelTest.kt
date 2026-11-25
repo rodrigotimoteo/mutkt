@@ -54,6 +54,37 @@ class MutKtProjectModelTest {
     }
 
     @Test
+    fun `support classes are the other source sets on the test classpath, as a jar or as directories`() {
+        val project = javaProject()
+        val model = requireNotNull(project.mutktModel())
+        val sourceSets = project.extensions.getByType(JavaPluginExtension::class.java).sourceSets
+
+        project.pluginManager.apply("java-test-fixtures")
+        val shared = sourceSets.create("testCommon")
+        sourceSets.create("unrelated")
+        project.sourceSet("test").runtimeClasspath += shared.output
+
+        val fixtures = project.sourceSet("testFixtures").output
+        assertEquals(fixtures.classesDirs.files + shared.output.classesDirs.files, model.supportClasses.files)
+        assertTrue(requireNotNull(javaProject(name = "plain").mutktModel()).supportClasses.isEmpty)
+    }
+
+    @Test
+    fun `external jars and other projects' fixtures are left out of the support classes`() {
+        val root = ProjectBuilder.builder().build()
+        val other = javaProject(root, "other").also { it.pluginManager.apply("java-test-fixtures") }
+        val project = javaProject(root, "app").also { it.pluginManager.apply("java-test-fixtures") }
+        project.dependencies.add("testImplementation", project.dependencies.testFixtures(other))
+        project.dependencies.add("testRuntimeOnly", project.files("libs/external.jar"))
+        val model = requireNotNull(project.mutktModel())
+
+        val names = model.testRuntimeClasspath.files.map { it.name }
+        assertTrue("external.jar" in names && names.any { it.startsWith("other-test-fixtures") }, names.toString())
+        val fixtures = project.sourceSet("testFixtures").output
+        assertEquals(fixtures.classesDirs.files, model.supportClasses.files)
+    }
+
+    @Test
     fun `is lazy about source set changes made after apply`() {
         val project = javaProject()
         val model = requireNotNull(project.mutktModel())
