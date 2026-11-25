@@ -139,6 +139,15 @@ private val SOURCE =
             else -> n
         }
 
+    fun flags(a: Int, s: String): Boolean {
+        val r = a > 1
+        if (s.isEmpty()) return false
+        if (a == 0) return true
+        return r
+    }
+    fun isBig(a: Int) = a > 10
+    fun wideFlag(a: Long, d: Double) = a > d
+    class Switch(val on: Boolean) { fun isOn(): Boolean = on }
     class CallSink {
         var hits = 0
         fun bumpWide(a: Long, b: Double, c: Int) { hits += a.toInt() + b.toInt() + c }

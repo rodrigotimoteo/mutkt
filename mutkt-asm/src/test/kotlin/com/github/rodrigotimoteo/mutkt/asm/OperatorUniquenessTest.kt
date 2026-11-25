@@ -4,8 +4,13 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.nio.ByteBuffer
 
-// Both mutate the same conditional jump but to different opcodes (negation vs boundary), so the mutants differ.
-private val SHARING_PAIR = setOf("negate-conditionals", "conditionals-boundary")
+// Each pair mutates the same instruction to different opcodes (negation vs boundary, constant 1 vs 0),
+// so the mutants differ.
+private val SHARING_PAIRS =
+    setOf(
+        setOf("negate-conditionals", "conditionals-boundary"),
+        setOf("true-returns", "false-returns"),
+    )
 
 internal class OperatorUniquenessTest {
     private val hierarchy: Hierarchy = { type ->
@@ -40,7 +45,7 @@ internal class OperatorUniquenessTest {
                     }
                 claims
                     .groupBy({ it.first }, { it.second })
-                    .filterValues { it.size > 1 && it.map { op -> op.id.value }.toSet() != SHARING_PAIR }
+                    .filterValues { it.size > 1 && it.map { op -> op.id.value }.toSet() !in SHARING_PAIRS }
                     .map { (index, ops) ->
                         "${ops.joinToString {
                             it.id.toString()

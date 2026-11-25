@@ -22,6 +22,9 @@ internal class TestKitProject(
         sources: Map<String, String> = mapOf("demo/Calc.java" to calc("a + b")),
         tests: Map<String, String> = mapOf("demo/CalcTest.java" to CALC_TEST),
     ) {
+        // Default pin to the original six operators so operators added later do not change scenario counts;
+        // a scenario that selects operators itself replaces it.
+        val pin = if ("operators" in dsl) "" else "mutkt { operators.addAll(*$PINNED) }"
         write("settings.gradle", "rootProject.name = 'sample'\n")
         write("gradle.properties", "org.gradle.jvmargs=-Xmx512m -XX:MaxMetaspaceSize=512m\n")
         write(
@@ -35,6 +38,7 @@ internal class TestKitProject(
                 compileOnly files(${jars(ANNOTATIONS_JAR)})
                 testImplementation files(${jars(TEST_JARS)})
             }
+            $pin
             $dsl
             """.trimIndent(),
         )
@@ -69,6 +73,10 @@ internal class TestKitProject(
 
     companion object {
         const val CURRENT_GRADLE = "current"
+
+        private const val PINNED =
+            "['arithmetic', 'conditionals-boundary', 'negate-conditionals', " +
+                "'return-vals', 'null-returns', 'empty-returns']"
 
         private val ANNOTATIONS_JAR = Regex("^mutkt-annotations")
         private val TEST_JARS =
