@@ -26,7 +26,6 @@ Repository secrets only; no value ever goes in a file. All are read by the `publ
 | `GPG_SIGNING_PASSWORD` | Passphrase of that key; empty if the key has none. |
 | `SONATYPE_USERNAME`, `SONATYPE_PASSWORD` | A Central Portal user token (central.sonatype.com, Account, Generate User Token): the two halves of the token, not the login. The token is used both for the Gradle upload and for the finalize call. The namespace `io.github.rodrigotimoteo` must be verified in the Portal first. |
 | `GRADLE_PUBLISH_KEY`, `GRADLE_PUBLISH_SECRET` | Still to add. API key and secret from plugins.gradle.org (Profile, API Keys). The first publication of a new plugin id may need manual approval by Gradle. |
-| `CODECOV_TOKEN`, `GH_PACKAGES_TOKEN` | Unused: no workflow references them. Do not configure them. |
 
 Also create the `release` environment (Settings, Environments) and add required reviewers: that is the approval gate. Restrict who can push `v*` tags (tag protection rule).
 
