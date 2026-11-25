@@ -18,12 +18,13 @@ class MutKtTestKitTest {
 
     @Test
     fun `runs once, is skipped when nothing changed and reruns after a class change`() {
-        setUp()
+        setUp("mutkt { failBelowScore = 100 }")
 
         val first = build()
         assertEquals(TaskOutcome.SUCCESS, first.task(":mutkt")?.outcome, first.output)
         assertEquals(null, first.task(":test"), "mutkt must not run the test task\n${first.output}")
         assertTrue("Mutation report" in first.output && "Score: 100.0%" in first.output, first.output)
+        assertTrue("Score: 100.0%" in report().readText(), "mutkt.txt")
 
         val second = build()
         assertEquals(TaskOutcome.UP_TO_DATE, second.task(":mutkt")?.outcome, second.output)
@@ -34,15 +35,35 @@ class MutKtTestKitTest {
         assertEquals(TaskOutcome.SUCCESS, third.task(":mutkt")?.outcome, third.output)
     }
 
-    private fun build(): BuildResult =
+    @Test
+    fun `fails below the threshold and keeps failing on the next run`() {
+        setUp("mutkt { failBelowScore = 90 }")
+        file("src/main/java/demo/Calc.java").writeText(
+            "package demo;\npublic class Calc {\n    public int add(int a, int b) { return a + b; }\n" +
+                "    public int sub(int a, int b) { return a - b; }\n}\n",
+        )
+
+        repeat(2) {
+            val result = runner().buildAndFail()
+            assertEquals(TaskOutcome.FAILED, result.task(":mutkt")?.outcome, result.output)
+            val expected = "Mutation score 50.00% is below the threshold of 90.00% (report: "
+            assertTrue(expected in result.output && "mutkt.txt)" in result.output, result.output)
+        }
+        assertTrue(report().isFile)
+    }
+
+    private fun report() = project.resolve("build/reports/mutkt/mutkt.txt")
+
+    private fun runner() =
         GradleRunner
             .create()
             .withProjectDir(project)
             .withPluginClasspath()
             .withArguments("mutkt", "--configuration-cache", "--console=plain", "--offline", "--stacktrace")
-            .build()
 
-    private fun setUp() {
+    private fun build(): BuildResult = runner().build()
+
+    private fun setUp(extra: String = "") {
         file("settings.gradle").writeText("rootProject.name = 'sample'\n")
         file("build.gradle").writeText(
             """
@@ -53,6 +74,7 @@ class MutKtTestKitTest {
             dependencies {
                 testImplementation files(${jars().joinToString { "'$it'" }})
             }
+            $extra
             """.trimIndent(),
         )
         file("src/main/java/demo/Calc.java").writeText(calc("a + b"))

@@ -15,9 +15,9 @@ import java.net.URLClassLoader
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.milliseconds
 
-/** Runs the analysis from the task's inputs only and returns the console summary. */
-internal fun MutKtTask.runAnalysis(): String {
+internal fun MutKtTask.runAnalysis(): AnalysisResult {
     unsupportedSetting()?.let { throw GradleException("$it is not supported yet") }
+    checkThresholdRange(failBelowScore.orNull)
     val production = stage(classesDirs.files, File(temporaryDir, "classes"))
     val tests = stage(testClassesDirs.files, File(temporaryDir, "test-classes"))
     val classDirs = classesDirs.files + testClassesDirs.files
@@ -27,18 +27,15 @@ internal fun MutKtTask.runAnalysis(): String {
     val summary = StringBuilder()
     val writer = ConsoleReportWriter(summary, FileSourceLookup(sourceDirs.files.map(File::toPath)))
     // The generator resolves supertypes of the analysed classes, including the ones the filters left out.
-    URLClassLoader((listOf(production) + dependencies).map { it.toUri().toURL() }.toTypedArray(), null).use { loader ->
-        ForkedTestExecutor(forkSettings(production, tests, dependencies, config.parallelism)).use { executor ->
-            RunMutationAnalysis(
-                DirectoryClassSource(production),
-                AsmMutantGenerator { loader.getResourceAsStream("$it.class")?.use { stream -> stream.readBytes() } },
-                executor,
-                writer,
-                config,
-            ).run()
+    val urls = (listOf(production) + dependencies).map { it.toUri().toURL() }.toTypedArray()
+    val report =
+        URLClassLoader(urls, null).use { loader ->
+            ForkedTestExecutor(forkSettings(production, tests, dependencies, config.parallelism)).use { executor ->
+                val generator = AsmMutantGenerator { name -> loader.classBytes(name) }
+                RunMutationAnalysis(DirectoryClassSource(production), generator, executor, writer, config).run()
+            }
         }
-    }
-    return summary.toString()
+    return AnalysisResult(summary.toString(), report.score)
 }
 
 // The adapters cannot honour these yet; ignoring them silently would report a misleading score.
@@ -48,9 +45,11 @@ private fun MutKtTask.unsupportedSetting(): String? =
         engines.get() != DEFAULT_ENGINES -> "engines"
         includeTags.get().isNotEmpty() -> "includeTags"
         excludeTags.get().isNotEmpty() -> "excludeTags"
-        failBelowScore.isPresent -> "failBelowScore (ROD-107)"
         else -> null
     }
+
+private fun ClassLoader.classBytes(name: String): ByteArray? =
+    getResourceAsStream("$name.class")?.use { it.readBytes() }
 
 private fun MutKtTask.analysisConfig() =
     AnalysisConfig(

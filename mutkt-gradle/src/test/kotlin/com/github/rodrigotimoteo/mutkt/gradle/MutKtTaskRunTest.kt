@@ -3,6 +3,8 @@ package com.github.rodrigotimoteo.mutkt.gradle
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -24,7 +26,10 @@ class MutKtTaskRunTest {
         sources.resolve("demo/Calc.kt").writeText(FIXTURE)
         val task = task(main, tests, sources)
 
-        val summary = task.runAnalysis()
+        val result = task.runAnalysis()
+        val summary = result.summary
+
+        assertEquals(1.0, result.score)
 
         assertTrue("Mutants: 2" in summary, summary)
         assertTrue("KILLED       2" in summary, summary)
@@ -39,7 +44,10 @@ class MutKtTaskRunTest {
         val task = task(main, tests, dir.resolve("none"))
         task.excludedClasses.add("demo.Calc")
 
-        assertTrue("Mutants: 0" in task.runAnalysis())
+        val result = task.runAnalysis()
+
+        assertTrue("Mutants: 0" in result.summary)
+        assertNull(result.score)
     }
 
     private fun task(

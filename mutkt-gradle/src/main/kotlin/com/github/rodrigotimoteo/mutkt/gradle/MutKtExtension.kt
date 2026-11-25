@@ -31,7 +31,7 @@ public abstract class MutKtExtension {
     /** Cap on mutants per class; unset means unlimited. */
     public abstract val maxMutantsPerClass: Property<Int>
 
-    /** Minimum mutation score in percent; unset means no gate. */
+    /** Minimum mutation score in percent (0..100); the build fails below it. Unset means no gate. */
     public abstract val failBelowScore: Property<Int>
 
     /** JUnit Platform engines to run. */
