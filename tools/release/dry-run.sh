@@ -9,6 +9,15 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# Without a key every module publishes unsigned, the plugin marker included.
+env -u ORG_GRADLE_PROJECT_signingInMemoryKey "$root/gradlew" -p "$root" publishToMavenLocal "-Pmutkt.version=$version" \
+  "-Dmaven.repo.local=$work/m2-unsigned" "$@"
+marker_id=io.github.rodrigotimoteo.mutkt.gradle.plugin
+[[ -f "$work/m2-unsigned/io/github/rodrigotimoteo/mutkt/$marker_id/$version/$marker_id-$version.pom" ]] ||
+  { echo "unsigned publication: no plugin marker" >&2; exit 1; }
+if find "$work/m2-unsigned" -name '*.asc' | grep -q .; then echo "unsigned publication: found signatures" >&2; exit 1; fi
+echo "unsigned publication verified"
+
 export GNUPGHOME="$work/gnupg"
 mkdir -m 700 "$GNUPGHOME"
 gpg --batch --quiet --pinentry-mode loopback --passphrase '' \

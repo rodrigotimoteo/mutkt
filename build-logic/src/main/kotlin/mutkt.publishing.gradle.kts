@@ -69,8 +69,10 @@ publishing {
 }
 
 // Signing needs keys only when they are supplied, so local builds stay unsigned.
+// plugin-publish signs its own publications (the plugin marker too) whenever signing is applied, so required must follow the key.
 signing {
     val key = providers.gradleProperty("signingInMemoryKey")
+    isRequired = key.isPresent
     if (key.isPresent) {
         useInMemoryPgpKeys(key.get(), providers.gradleProperty("signingInMemoryKeyPassword").getOrElse(""))
         sign(publishing.publications)
