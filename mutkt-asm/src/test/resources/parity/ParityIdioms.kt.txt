@@ -1,0 +1,104 @@
+@file:JvmName("ParityIdioms")
+
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
+
+data class Pair2(val a: Int, val b: String) {
+    fun withA(n: Int) = copy(a = n)
+
+    fun both(n: Int, s: String) = copy(n, s)
+
+    fun twice() = copy(a = a * 2, b = b + b)
+}
+
+// Legacy DATA_CLASS_COPY fires after a componentN method was seen in the calling class, data class or not.
+class Wrapper(val p: Pair2) {
+    operator fun component1() = p
+
+    fun bumped() = p.copy(a = p.a + 1)
+
+    fun renamed(s: String) = p.copy(b = s)
+
+    fun full(n: Int, s: String) = p.copy(n, s)
+}
+
+fun bump(p: Pair2): Pair2 = p.copy(a = p.a + 1)
+
+fun rename(p: Pair2, s: String): Pair2 = p.copy(b = s)
+
+fun swap(p: Pair2, n: Int, s: String): Pair2 = p.copy(n, s)
+
+sealed class Expr
+
+class Num(val v: Int) : Expr()
+
+class Neg(val e: Expr) : Expr()
+
+object Zero : Expr()
+
+fun eval(e: Expr): Int =
+    when (e) {
+        is Num -> e.v
+        is Neg -> -eval(e.e)
+        Zero -> 0
+    }
+
+fun evalInline(e: Expr): Int = when (e) { is Num -> e.v; is Neg -> -1; Zero -> 0 }
+
+enum class Dir { NORTH, SOUTH, EAST }
+
+fun turn(d: Dir): Int =
+    when (d) {
+        Dir.NORTH -> 1
+        Dir.SOUTH -> 2
+        Dir.EAST -> 3
+    }
+
+fun turnInline(d: Dir): Int = when (d) { Dir.NORTH -> 1; Dir.SOUTH -> 2; Dir.EAST -> 3 }
+
+fun kind(d: Dir): String =
+    when (d) {
+        Dir.NORTH, Dir.SOUTH -> "vertical"
+        else -> "horizontal"
+    }
+
+suspend fun fetch(n: Int): Int = n * 2
+
+suspend fun fetchTwice(n: Int): Int = fetch(n) + fetch(n + 1)
+
+fun runIt(n: Int): Int {
+    var out = 0
+    val done =
+        object : Continuation<Unit> {
+            override val context = EmptyCoroutineContext
+
+            override fun resumeWith(result: Result<Unit>) = Unit
+        }
+    suspend { out = fetchTwice(n) }.startCoroutine(done)
+    return out
+}
+
+fun generate(n: Int): List<Int> =
+    sequence {
+        yield(n)
+        yield(n + 1)
+    }.toList()
+
+fun length(s: String?): Int = s?.length ?: 0
+
+fun force(s: String?): Int = s!!.length
+
+fun firstOf(a: String?, b: String?): String = a ?: b ?: "none"
+
+fun safeChain(s: String?): Int? = s?.trim()?.length
+
+lateinit var title: String
+
+class Holder {
+    lateinit var value: String
+
+    fun read(): String = value
+}
+
+fun readTitle(): String = title

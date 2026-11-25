@@ -9,7 +9,7 @@ import java.security.MessageDigest
 
 /** Parity fixtures compiled the way tools/parity-legacy did: fixture name to class bytes by binary name. */
 internal val parityClasses: Map<String, Map<String, ByteArray>> by lazy {
-    val names = listOf("Arithmetic", "Classes", "Conditionals", "Empties", "Nulls", "Returns")
+    val names = listOf("Arithmetic", "Classes", "Conditionals", "Empties", "Idioms", "Nulls", "Returns")
     names.associate { name ->
         val text = checkNotNull(LegacyTable::class.java.getResourceAsStream("/parity/Parity$name.kt.txt")) { name }
         "Parity$name" to compileKotlin(text.bufferedReader().use { it.readText() })

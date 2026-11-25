@@ -17,11 +17,22 @@ private val Row.isSuspend get() =
     method.contains("Lkotlin/coroutines/Continuation;)") ||
         method.startsWith("invokeSuspend(")
 
+private fun Row.inClass(vararg names: String) = className in names
+
 private fun Row.inMethod(vararg names: String) = names.any { method.startsWith("$it(") }
 
 // ParityClasses.lambdas: user code is on lines 56 to 59, the inlined stdlib bodies get lines of their own
 // after it; the boxing of the lambda result on line 58 is part of the inlined map body.
 private val Row.inInlinedBody get() = inMethod("lambdas") && (line >= 60 || opcode == "INVOKESTATIC")
+
+// Methods whose only construction is a directly thrown one (exhaustive when, coroutine resume check).
+private val THROWING_METHODS =
+    arrayOf("area", "hex", "chain", "eval", "evalInline", "turn", "turnInline", "fetchTwice", "invokeSuspend")
+
+// Methods whose Intrinsics null checks belong to null-safety: java platform types, `!!`, lateinit getters.
+private val NULL_CHECK_METHODS = arrayOf("javaEmptyList", "javaEmptyCollection", "force", "getTitle", "getValue")
+
+private val LATEINIT_CLASSES = arrayOf("ParityIdioms", "Holder")
 
 private val COLLECTIONS = setOf("Ljava/util/List;", "Ljava/util/Set;", "Ljava/util/Map;", "Ljava/util/Collection;")
 
@@ -39,8 +50,6 @@ private fun newOnly(
     matches: (Row) -> Boolean,
 ) = Deviation(id, operator, Side.NEW_ONLY, reason, matches)
 
-// Legacy operators without a new counterpart (DATA_CLASS_COPY) are not
-// deviations: they are listed as not implemented by the legacy table.
 internal object Deviations {
     val all: List<Deviation> =
         listOf(
@@ -89,9 +98,13 @@ internal object Deviations {
             legacyOnly(
                 "D2d",
                 "null-returns",
-                "legacy fires on a literal null return (null to null); the rebuild skips it as equivalent",
+                "legacy fires on a literal null return (null to null), including the unreachable one after the " +
+                    "throw of a lateinit getter; the rebuild skips it as equivalent",
             ) {
-                it.inMethod("literalNull") || (it.inMethod("orNull") && it.line == 11)
+                it.inMethod("literalNull") ||
+                    (it.inMethod("orNull") && it.line == 11) ||
+                    // Same line and opcode as the reachable ARETURN: only the surplus legacy row is left to match.
+                    (it.opcode == "ARETURN" && it.inClass(*LATEINIT_CLASSES) && it.inMethod("getTitle", "getValue"))
             },
             newOnly(
                 "D3a",
@@ -131,9 +144,10 @@ internal object Deviations {
             legacyOnly(
                 "D6b",
                 "constructor-calls",
-                "legacy mutates a directly thrown construction (throw X()); the rebuild skips it as noise",
+                "legacy mutates a directly thrown construction (throw X(), also the compiler's exhaustive-when " +
+                    "and coroutine resume exceptions); the rebuild skips it as noise",
             ) {
-                it.inMethod("area", "hex", "chain")
+                it.inMethod(*THROWING_METHODS) && (it.line != -1 || it.inMethod("area", "hex", "chain"))
             },
             legacyOnly(
                 "D7",
@@ -142,7 +156,7 @@ internal object Deviations {
             ) {
                 // Parameter checks run before the first line number; the other rows are plumbing in named methods.
                 it.opcode == "INVOKESTATIC" &&
-                    (it.line == -1 || it.isSuspend || it.inMethod("javaEmptyList", "javaEmptyCollection"))
+                    (it.line == -1 || it.isSuspend || it.inMethod(*NULL_CHECK_METHODS))
             },
             legacyOnly(
                 "D8a",
@@ -154,16 +168,21 @@ internal object Deviations {
             legacyOnly(
                 "D8b",
                 "non-void-method-calls",
-                "legacy mutates coroutine plumbing (suspend calls, COROUTINE_SUSPENDED, Boxing); the rebuild skips it",
+                "legacy mutates coroutine plumbing (suspend calls, COROUTINE_SUSPENDED, Boxing, the create call of a " +
+                    "suspend lambda's invoke); the rebuild skips it",
             ) {
-                it.opcode == "INVOKESTATIC" && it.isSuspend
+                it.isSuspend &&
+                    (
+                        it.opcode == "INVOKESTATIC" ||
+                            (it.opcode == "INVOKEVIRTUAL" && it.inMethod("invoke", "invokeSuspend"))
+                    )
             },
             legacyOnly(
                 "D8c",
                 "non-void-method-calls",
                 "legacy mutates the ordinal() call that feeds the `\$WhenMappings` table of an enum when; skipped here",
             ) {
-                it.inMethod("hex")
+                it.inMethod("hex", "turn", "turnInline", "kind")
             },
             legacyOnly(
                 "D9a",
@@ -196,7 +215,7 @@ internal object Deviations {
             newOnly(
                 "D10",
                 "sealed-when",
-                "legacy finds no site (needs two INSTANCEOF on one line); the rebuild has a site per when branch",
+                "legacy finds only the 2nd+ INSTANCEOF on one line; the rebuild has a site per when branch",
             ) {
                 it.opcode in setOf("INSTANCEOF", "INVOKESTATIC", "TABLESWITCH", "LOOKUPSWITCH")
             },
@@ -206,7 +225,55 @@ internal object Deviations {
                 "legacy never matches suspend calls (its descriptor test cannot hold) and mutates the " +
                     "COROUTINE_SUSPENDED marker, which breaks the state machine; the rebuild mutates the suspend calls",
             ) {
-                it.inMethod("chain")
+                it.isSuspend
+            },
+            legacyOnly(
+                "D11b",
+                "coroutine",
+                "legacy mutates the COROUTINE_SUSPENDED marker call and the create(Continuation) call of a suspend " +
+                    "lambda (its descriptor ends in Continuation); both are compiler plumbing the rebuild skips",
+            ) {
+                it.isSuspend &&
+                    (
+                        (it.opcode == "INVOKEVIRTUAL" && it.inMethod("invoke")) ||
+                            (it.opcode == "INVOKESTATIC" && it.inMethod("invokeSuspend"))
+                    )
+            },
+            legacyOnly(
+                "D14a",
+                "non-void-method-calls",
+                "legacy mutates data class copy and copy\$default calls; the rebuild leaves them to data-class-copy",
+            ) {
+                it.inClass("Pair2", "ParityIdioms", "Wrapper") &&
+                    (
+                        (it.opcode == "INVOKESTATIC" && it.inMethod("withA", "bump", "rename", "bumped", "renamed")) ||
+                            (it.opcode == "INVOKEVIRTUAL" && it.inMethod("both", "twice", "swap", "full"))
+                    )
+            },
+            legacyOnly(
+                "D14b",
+                "non-void-method-calls",
+                "legacy mutates Intrinsics.areEqual (object branch of a when, generated equals); the rebuild skips it",
+            ) {
+                it.opcode == "INVOKESTATIC" &&
+                    (
+                        (it.inClass("Pair2") && it.inMethod("equals")) ||
+                            (it.inClass("ParityIdioms") && it.inMethod("evalInline")) ||
+                            (it.inClass("ParityIdioms") && it.inMethod("eval") && it.line == 44)
+                    )
+            },
+            newOnly(
+                "D15",
+                "data-class-copy",
+                "legacy fires only after a componentN method was seen in the calling class, so it misses copy calls " +
+                    "in a data class (its componentN follow the user methods) and in top-level functions; " +
+                    "the rebuild fires on all",
+            ) {
+                it.inClass("Pair2", "ParityIdioms") &&
+                    (
+                        (it.opcode == "INVOKESTATIC" && it.inMethod("withA", "bump", "rename")) ||
+                            (it.opcode == "INVOKEVIRTUAL" && it.inMethod("both", "twice", "swap"))
+                    )
             },
             legacyOnly(
                 "D12a",
