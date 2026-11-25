@@ -68,6 +68,11 @@ class AsmMutantGeneratorTest {
     private fun Mutant.pick() = Triple(className, methodName + methodDescriptor, id.ordinal)
 
     @Test
+    fun `mutants carry the compiled source file name`() {
+        assertEquals(setOf("Source.kt"), generator().discover(files).map { it.sourceFile }.toSet())
+    }
+
+    @Test
     fun `overloads get distinct ids`() {
         val mutants = generator().discover(files).filter { it.className == sourceKt && it.methodName == "add" }
 

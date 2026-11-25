@@ -62,12 +62,13 @@ class FakeReportWriter : ReportWriter {
     }
 }
 
-/** Looks up lines by the key (className, line). */
+/** Looks up lines by the key (className, line), whatever the source file. */
 class FakeSourceLookup(
     private val lines: Map<Pair<String, Int>, String> = emptyMap(),
 ) : SourceLookup {
     override fun lineText(
         className: String,
+        sourceFile: String?,
         line: Int,
     ): String? = lines[className to line]
 }

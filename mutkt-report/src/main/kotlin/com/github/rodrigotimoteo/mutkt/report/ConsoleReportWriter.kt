@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.report
 
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
+import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import java.util.Locale
@@ -57,16 +58,16 @@ public class ConsoleReportWriter(
             val location = mutant.line?.let { "${mutant.className}:$it" } ?: mutant.className
             val method = "${mutant.className}.${mutant.methodName}${mutant.methodDescriptor}"
             out.appendLine("$method ($location)  ${mutant.operator}  ${mutant.description}")
-            mutant.line?.let { snippet(mutant.className, it) }
+            mutant.line?.let { snippet(mutant, it) }
         }
     }
 
     private fun snippet(
-        className: String,
+        mutant: Mutant,
         line: Int,
     ) {
         for (n in line - 1..line + 1) {
-            val text = sources.lineText(className, n) ?: continue
+            val text = sources.lineText(mutant.className, mutant.sourceFile, n) ?: continue
             val marker = if (n == line) ">" else " "
             out.appendLine("  $marker ${n.toString().padStart(LINE_WIDTH)} | $text")
         }

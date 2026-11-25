@@ -22,7 +22,17 @@ class ForkCodecTest {
         line: Int? = 7,
         description: String = "a + b to a - b",
         className: String = "a.Calc",
-    ) = Mutant(MutantId(operator, className, "add", "(II)I", 3), operator, className, "add", "(II)I", line, description)
+        sourceFile: String? = "Calc.kt",
+    ) = Mutant(
+        MutantId(operator, className, "add", "(II)I", 3),
+        operator,
+        className,
+        "add",
+        "(II)I",
+        line,
+        description,
+        sourceFile,
+    )
 
     private fun frame(block: DataOutputStream.() -> Unit): DataInputStream {
         val payload = ByteArrayOutputStream()
@@ -52,7 +62,7 @@ class ForkCodecTest {
 
     @Test
     fun `run request round-trips with null line empty strings and unicode`() {
-        val plain = ForkRequest.Run(mutant(line = null, description = ""), ByteArray(0), 1L)
+        val plain = ForkRequest.Run(mutant(line = null, description = "", sourceFile = null), ByteArray(0), 1L)
         val unicode =
             ForkRequest.Run(
                 mutant(description = "é中😀", className = "a.Çalc"),
