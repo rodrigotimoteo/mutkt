@@ -18,16 +18,30 @@ public class FileSourceLookup(
         sourceFile: String?,
         line: Int,
     ): String? {
-        if (sourceFile == null || line < 1) return null
+        if (line < 1) return null
+        return locate(className, sourceFile)?.let { readLine(it, line) }
+    }
+
+    override fun sourceText(
+        className: String,
+        sourceFile: String?,
+    ): String? =
+        locate(className, sourceFile)?.let { file ->
+            Files.newInputStream(file).reader(StandardCharsets.UTF_8).use { it.readLines().joinToString("\n") }
+        }
+
+    private fun locate(
+        className: String,
+        sourceFile: String?,
+    ): Path? {
+        if (sourceFile == null) return null
         val directory = className.substringBeforeLast('.', "").replace('.', '/')
-        val file =
-            roots
-                .map { it.toAbsolutePath().normalize() }
-                .map { root -> root to root.resolve(directory).resolve(sourceFile).normalize() }
-                // Neither the class name nor the file name may escape its root.
-                .firstOrNull { (root, path) -> path.startsWith(root) && Files.isRegularFile(path) }
-                ?.second ?: byName[sourceFile]?.singleOrNull()
-        return file?.let { readLine(it, line) }
+        return roots
+            .map { it.toAbsolutePath().normalize() }
+            .map { root -> root to root.resolve(directory).resolve(sourceFile).normalize() }
+            // Neither the class name nor the file name may escape its root.
+            .firstOrNull { (root, path) -> path.startsWith(root) && Files.isRegularFile(path) }
+            ?.second ?: byName[sourceFile]?.singleOrNull()
     }
 
     private val byName: Map<String, List<Path>> by lazy {

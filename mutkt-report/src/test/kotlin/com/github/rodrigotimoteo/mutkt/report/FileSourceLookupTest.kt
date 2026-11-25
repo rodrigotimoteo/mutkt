@@ -128,6 +128,21 @@ class FileSourceLookupTest {
     }
 
     @Test
+    fun `source text joins the lines with newlines whatever the file used`() {
+        source(dir, "com/acme/Foo.kt", "one\r\ntwo\n\nfour\n")
+        val lookup = FileSourceLookup(listOf(dir))
+        assertEquals("one\ntwo\n\nfour", lookup.sourceText("com.acme.Foo", "Foo.kt"))
+    }
+
+    @Test
+    fun `source text is null without a file name or file`() {
+        source(dir, "com/acme/Foo.kt", "one")
+        val lookup = FileSourceLookup(listOf(dir))
+        assertNull(lookup.sourceText("com.acme.Foo", null))
+        assertNull(lookup.sourceText("com.acme.Foo", "Other.kt"))
+    }
+
+    @Test
     fun `class in the default package resolves`() {
         source(dir, "Foo.kt", "x")
         assertEquals("x", FileSourceLookup(listOf(dir)).lineText("Foo", "Foo.kt", 1))

@@ -1,0 +1,141 @@
+{
+  "schemaVersion": "2",
+  "thresholds": {
+    "high": 80,
+    "low": 60
+  },
+  "config": {
+    "omittedByCap": 2
+  },
+  "files": {
+    "demo/Calc.kt": {
+      "language": "kotlin",
+      "source": "package demo\n\nclass Calc {\n    fun add(a: Int, b: Int): Int = a + b\n\n    fun max(a: Int, b: Int): Int {\n        return if (a > b) a else b\n    }\n}",
+      "mutants": [
+        {
+          "id": "arithmetic:demo.Calc#add(II)I:0",
+          "mutatorName": "arithmetic",
+          "description": "Replaced + with -",
+          "location": {
+            "start": {
+              "line": 4,
+              "column": 5
+            },
+            "end": {
+              "line": 4,
+              "column": 41
+            }
+          },
+          "status": "Killed",
+          "statusReason": "Killed by demo.CalcTest.adds()",
+          "killedBy": [
+            "demo.CalcTest.adds()"
+          ]
+        },
+        {
+          "id": "arithmetic:demo.Calc#add(II)I:1",
+          "mutatorName": "arithmetic",
+          "description": "Replaced + with *",
+          "location": {
+            "start": {
+              "line": 4,
+              "column": 5
+            },
+            "end": {
+              "line": 4,
+              "column": 41
+            }
+          },
+          "status": "Timeout"
+        },
+        {
+          "id": "arithmetic:demo.Calc#add(II)I:2",
+          "mutatorName": "arithmetic",
+          "description": "Replaced + with /",
+          "location": {
+            "start": {
+              "line": 4,
+              "column": 5
+            },
+            "end": {
+              "line": 4,
+              "column": 41
+            }
+          },
+          "status": "RuntimeError",
+          "statusReason": "VerifyError: bad"
+        },
+        {
+          "id": "negate-conditionals:demo.Calc#max(II)I:0",
+          "mutatorName": "negate-conditionals",
+          "description": "Negated conditional",
+          "location": {
+            "start": {
+              "line": 7,
+              "column": 9
+            },
+            "end": {
+              "line": 7,
+              "column": 35
+            }
+          },
+          "status": "Survived"
+        },
+        {
+          "id": "return-values:demo.Calc#max(II)I:1",
+          "mutatorName": "return-values",
+          "description": "Replaced return value",
+          "location": {
+            "start": {
+              "line": 7,
+              "column": 9
+            },
+            "end": {
+              "line": 7,
+              "column": 35
+            }
+          },
+          "status": "NoCoverage"
+        },
+        {
+          "id": "arithmetic:demo.Calc#gone(II)I:0",
+          "mutatorName": "arithmetic",
+          "description": "Line past the end of the source",
+          "location": {
+            "start": {
+              "line": 9,
+              "column": 1
+            },
+            "end": {
+              "line": 9,
+              "column": 2
+            }
+          },
+          "status": "Survived"
+        }
+      ]
+    },
+    "demo/Other": {
+      "language": "kotlin",
+      "source": "",
+      "mutants": [
+        {
+          "id": "arithmetic:demo.Other#run(II)I:0",
+          "mutatorName": "arithmetic",
+          "description": "No debug info",
+          "location": {
+            "start": {
+              "line": 1,
+              "column": 1
+            },
+            "end": {
+              "line": 1,
+              "column": 2
+            }
+          },
+          "status": "Survived"
+        }
+      ]
+    }
+  }
+}

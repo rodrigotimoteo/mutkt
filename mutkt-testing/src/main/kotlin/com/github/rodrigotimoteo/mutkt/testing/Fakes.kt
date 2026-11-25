@@ -65,7 +65,7 @@ class FakeReportWriter : ReportWriter {
     }
 }
 
-/** Looks up lines by the key (className, line), whatever the source file. */
+/** Looks up lines by (className, line), whatever the source file; the source text has empty lines in the gaps. */
 class FakeSourceLookup(
     private val lines: Map<Pair<String, Int>, String> = emptyMap(),
 ) : SourceLookup {
@@ -74,4 +74,13 @@ class FakeSourceLookup(
         sourceFile: String?,
         line: Int,
     ): String? = lines[className to line]
+
+    override fun sourceText(
+        className: String,
+        sourceFile: String?,
+    ): String? =
+        lines.keys
+            .filter { it.first == className }
+            .maxOfOrNull { it.second }
+            ?.let { last -> (1..last).joinToString("\n") { lines[className to it].orEmpty() } }
 }

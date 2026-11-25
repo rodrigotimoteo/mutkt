@@ -8,4 +8,5 @@ dependencies {
     implementation(project(":mutkt-core"))
 
     testImplementation(project(":mutkt-testing"))
+    testImplementation(libs.jackson.databind)
 }

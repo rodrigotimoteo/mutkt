@@ -104,7 +104,7 @@ public abstract class MutKtTask : DefaultTask() {
     @get:Input
     public abstract val testJavaExecutable: Property<String>
 
-    /** Receives `mutkt.txt`, the console summary. */
+    /** Receives `mutkt.txt` (the console summary), `mutation-report.json` and `mutation-report.html`. */
     @get:OutputDirectory
     public abstract val reportsDir: DirectoryProperty
 
@@ -116,6 +116,8 @@ public abstract class MutKtTask : DefaultTask() {
         val dir = reportsDir.get().asFile.also(File::mkdirs)
         val file = File(dir, "mutkt.txt")
         file.writeText(summary)
+        File(dir, "mutation-report.json").writeText(result.json)
+        File(dir, "mutation-report.html").writeText(result.html)
         if (consoleReport.get()) logger.lifecycle(summary.trimEnd())
         // Every error is a mutant the tests never ran against: not a clean build.
         if (result.mutants > 0 && result.errors == result.mutants) {

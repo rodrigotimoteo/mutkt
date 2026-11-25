@@ -44,7 +44,7 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 | `excludePackages` | `excludedClasses` | Use `com.example.generated.**` |
 | `targetTestPatterns` | removed | All `test` classes run; narrow with `includeTags` |
 | `excludeTestPatterns` | removed | Narrow with `excludeTags` |
-| `reportFormats` | removed | Only the console summary and `mutkt.txt` exist so far; HTML and Stryker JSON are planned (ADR 0003) |
+| `reportFormats` | removed | Always written: console summary, `mutkt.txt`, `mutation-report.json` (Stryker schema) and `mutation-report.html` in `build/reports/mutkt/` (ADR 0003) |
 | `showClassScores` | removed | Part of the HTML report, not shipped yet |
 | `generateGraph` | removed | The graph report is not planned for 1.0 |
 | `ciMode` | removed | `reports.console` and `failBelowScore` cover it |

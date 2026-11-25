@@ -81,4 +81,12 @@ class FakesTest {
         assertEquals("if (x) y()", lookup.lineText("a.Foo", "Foo.kt", 3))
         assertNull(lookup.lineText("a.Foo", "Foo.kt", 4))
     }
+
+    @Test
+    fun `source lookup joins the lines of a class and leaves gaps empty`() {
+        val lookup = FakeSourceLookup(mapOf(("a.Foo" to 1) to "a", ("a.Foo" to 3) to "c", ("b.Bar" to 1) to "x"))
+
+        assertEquals("a\n\nc", lookup.sourceText("a.Foo", "Foo.kt"))
+        assertNull(lookup.sourceText("a.Baz", "Baz.kt"))
+    }
 }

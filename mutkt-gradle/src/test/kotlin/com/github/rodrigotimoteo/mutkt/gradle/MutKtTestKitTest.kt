@@ -27,6 +27,9 @@ class MutKtTestKitTest {
         assertEquals(null, first.task(":test"), "mutkt must not run the test task\n${first.output}")
         assertTrue("Mutation report" in first.output && "Score: 100.0%" in first.output, first.output)
         assertTrue("Score: 100.0%" in project.report.readText(), "mutkt.txt")
+        val json = project.report.resolveSibling("mutation-report.json").readText()
+        assertTrue("\"schemaVersion\": \"2\"" in json && "\"status\": \"Killed\"" in json, json)
+        assertTrue("<mutation-test-report-app>" in project.report.resolveSibling("mutation-report.html").readText())
 
         val second = project.build()
         assertEquals(TaskOutcome.UP_TO_DATE, second.task(":mutkt")?.outcome, second.output)

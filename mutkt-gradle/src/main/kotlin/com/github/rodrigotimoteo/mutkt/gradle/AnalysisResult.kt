@@ -5,4 +5,6 @@ internal data class AnalysisResult(
     val score: Double?,
     val mutants: Int,
     val errors: Int,
+    val json: String,
+    val html: String,
 )
