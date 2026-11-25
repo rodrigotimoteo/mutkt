@@ -20,6 +20,7 @@ public class ConsoleReportWriter(
             out.appendLine("  ${status.name.padEnd(STATUS_WIDTH)}$count")
         }
         out.appendLine("Score: ${percent(report.score)}${omission(report)}")
+        report.deadlineCap?.let { out.appendLine(deadlineWarning(it)) }
         classTable(report)
         survivors(report)
         errors(report)

@@ -1,9 +1,13 @@
 package com.github.rodrigotimoteo.mutkt.domain
 
-/** All results of a run; [omitted] counts eligible mutants the per-class cap left unevaluated. */
+/**
+ * All results of a run; [omitted] counts eligible mutants the per-class cap left unevaluated, [deadlineCap] is set
+ * when timeoutMs cut the deadline the baseline asked for.
+ */
 public data class MutationReport(
     val results: List<MutantResult>,
     val omitted: Int = 0,
+    val deadlineCap: DeadlineCap? = null,
 ) {
     /** (KILLED + TIMEOUT) / (total - ERROR) as a fraction; null when nothing is scorable (empty or only ERROR). */
     val score: Double? =

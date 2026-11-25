@@ -63,7 +63,7 @@ class EndToEndTest {
                 AsmMutantGenerator(MVP_OPERATORS, ::systemClass),
                 executor,
                 ConsoleReportWriter(console, FileSourceLookup(listOf(sources))),
-                AnalysisConfig(ClassFilters(), 10.seconds, parallelism = 2),
+                AnalysisConfig(ClassFilters(), 60.seconds, parallelism = 2),
             ).run()
         }
 

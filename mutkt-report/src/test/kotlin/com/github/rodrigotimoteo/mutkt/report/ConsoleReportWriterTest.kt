@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.report
 
+import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
@@ -15,6 +16,8 @@ import com.github.rodrigotimoteo.mutkt.testing.FakeSourceLookup
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class ConsoleReportWriterTest {
     private fun result(
@@ -57,6 +60,17 @@ class ConsoleReportWriterTest {
         val text = render(MutationReport(listOf(result(KILLED)), omitted = 2))
         assertTrue("Score: 100.0% (1 evaluated, 2 omitted by the cap)\n" in text, text)
         assertTrue("omitted" !in render(MutationReport(listOf(result(KILLED)))))
+    }
+
+    @Test
+    fun `a capped deadline adds a warning naming the timeoutMs to set`() {
+        val cap = DeadlineCap(10.seconds, 12_345.milliseconds, 53_380.milliseconds)
+        val text = render(MutationReport(listOf(result(KILLED)), deadlineCap = cap))
+        val warning =
+            "Per-mutant deadline capped at timeoutMs (10.0s); the tests took 12.3s, " +
+                "so slow mutants may end in TIMEOUT: set timeoutMs to at least 54000"
+        assertTrue("Score: 100.0%\n$warning\n" in text, text)
+        assertTrue("deadline" !in render(MutationReport(listOf(result(KILLED)))))
     }
 
     @Test

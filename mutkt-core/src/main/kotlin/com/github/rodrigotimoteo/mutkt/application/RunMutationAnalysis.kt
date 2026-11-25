@@ -5,6 +5,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
+import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
@@ -27,8 +28,14 @@ public class RunMutationAnalysis(
     private val writer: ReportWriter,
     private val config: AnalysisConfig,
 ) {
-    /** Runs the analysis; [progress] is called on the calling thread once per finished mutant, in completion order. */
-    public fun run(progress: (MutantResult) -> Unit = {}): MutationReport {
+    /**
+     * Runs the analysis; [onDeadlineCap] is called once before any mutant when timeoutMs cuts the derived deadline,
+     * [progress] on the calling thread once per finished mutant, in completion order.
+     */
+    public fun run(
+        onDeadlineCap: (DeadlineCap) -> Unit = {},
+        progress: (MutantResult) -> Unit = {},
+    ): MutationReport {
         val filters = config.filters
         val classes = classSource.classes()
         val targets = classes.filter { filters.acceptsClass(it.name) }
@@ -36,14 +43,15 @@ public class RunMutationAnalysis(
             filters.limit(
                 generator.discover(classes, targets).filter { filters.acceptsMethod(it.className, it.methodName) },
             )
+        if (mutants.isEmpty()) return MutationReport(emptyList(), omitted).also(writer::write)
         // Without a green suite every failing test would count as a kill, so nothing is scored.
-        val results = if (mutants.isEmpty()) emptyList() else analyse(mutants, mutantDeadline(baseline()), progress)
-        return MutationReport(results, omitted).also(writer::write)
+        val baseline = baseline()
+        // An endless loop is cut soon after the suite's own time instead of at timeoutMs, which stays the upper bound.
+        val needed = baseline * MUTANT_DEADLINE_FACTOR + MUTANT_DEADLINE_CONSTANT
+        val cap = DeadlineCap(config.timeout, baseline, needed).takeIf { needed > config.timeout }?.also(onDeadlineCap)
+        val results = analyse(mutants, minOf(config.timeout, needed), progress)
+        return MutationReport(results, omitted, cap).also(writer::write)
     }
-
-    // An endless loop is cut soon after the suite's own time instead of at timeoutMs, which stays the upper bound.
-    private fun mutantDeadline(baseline: Duration): Duration =
-        minOf(config.timeout, baseline * MUTANT_DEADLINE_FACTOR + MUTANT_DEADLINE_CONSTANT)
 
     // Returns how long the green suite ran.
     private fun baseline(): Duration {

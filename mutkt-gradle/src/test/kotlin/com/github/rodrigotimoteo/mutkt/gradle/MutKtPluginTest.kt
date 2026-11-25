@@ -26,7 +26,7 @@ class MutKtPluginTest {
         val mutkt = project.mutkt()
 
         assertFalse(mutkt.threads.isPresent)
-        assertEquals(10_000L, mutkt.timeoutMs.get())
+        assertEquals(60_000L, mutkt.timeoutMs.get())
         assertEquals(setOf("junit-jupiter"), mutkt.engines.get())
         assertTrue(mutkt.targetClasses.get().isEmpty())
         assertTrue(mutkt.operators.get().isEmpty())

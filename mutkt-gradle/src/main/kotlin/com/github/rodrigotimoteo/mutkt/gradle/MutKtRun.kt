@@ -14,6 +14,7 @@ import com.github.rodrigotimoteo.mutkt.junit.derivedEngineClasspath
 import com.github.rodrigotimoteo.mutkt.report.ConsoleReportWriter
 import com.github.rodrigotimoteo.mutkt.report.FileSourceLookup
 import com.github.rodrigotimoteo.mutkt.report.StrykerReportWriter
+import com.github.rodrigotimoteo.mutkt.report.deadlineWarning
 import org.gradle.api.GradleException
 import java.io.File
 import java.net.URLClassLoader
@@ -44,7 +45,9 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
             // Built first so an unknown operator id fails before any child JVM could start.
             val generator = generator(loader)
             ForkedTestExecutor(forkSettings(production, tests, dependencies, config.parallelism)).use { executor ->
-                RunMutationAnalysis(DirectoryClassSource(production), generator, executor, writer, config).run()
+                RunMutationAnalysis(DirectoryClassSource(production), generator, executor, writer, config)
+                    // Logged as soon as the baseline ends so a long run shows the hint before its mutants.
+                    .run(onDeadlineCap = { logger.warn(deadlineWarning(it)) })
             }
         }
     return AnalysisResult(

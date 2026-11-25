@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.report
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
+import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.time.Duration.Companion.seconds
 
 class StrykerReportWriterTest {
     @TempDir
@@ -39,6 +41,23 @@ class StrykerReportWriterTest {
 
         assertEquals(emptyList<String>(), SchemaValidator(schemaText()).validate(json))
         assertEquals(0, ObjectMapper().readTree(json).get("files").size())
+    }
+
+    @Test
+    fun `a capped deadline is named in the config next to the cap omission and still validates`() {
+        val cap = DeadlineCap(60.seconds, 20.seconds, 84.seconds)
+        val json = render(fixtureReport(dir).copy(deadlineCap = cap))
+
+        assertEquals(emptyList<String>(), SchemaValidator(schemaText()).validate(json))
+        assertEquals(
+            mapOf(
+                "omittedByCap" to 2,
+                "deadlineCappedAtMs" to 60_000,
+                "baselineMs" to 20_000,
+                "suggestedTimeoutMs" to 84_000,
+            ),
+            ObjectMapper().readValue(json, Map::class.java)["config"],
+        )
     }
 
     @Test

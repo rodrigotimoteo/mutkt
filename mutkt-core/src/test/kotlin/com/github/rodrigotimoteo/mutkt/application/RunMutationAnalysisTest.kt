@@ -1,11 +1,13 @@
 package com.github.rodrigotimoteo.mutkt.application
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -248,7 +250,7 @@ class RunMutationAnalysisTest {
     fun `writes the returned report once and reports progress per mutant`() {
         val mutants = (0 until 5).map { mutant(ordinal = it) }
         val progress = ConcurrentLinkedQueue<MutantResult>()
-        val report = analysis(mutants).run(progress::add)
+        val report = analysis(mutants).run(progress = progress::add)
         assertEquals(listOf(report), writer.written.toList())
         assertEquals(report.results.toSet(), progress.toSet())
         assertEquals(mutants.size, progress.size)
@@ -280,6 +282,33 @@ class RunMutationAnalysisTest {
         val executor = FakeExecutor(baselineElapsed = 3.seconds)
         analysis(listOf(mutant()), executor).run()
         assertEquals(listOf(7.seconds), executor.received.map { it.third })
+    }
+
+    @Test
+    fun `a capped deadline is reported with the baseline time and the deadline it needed`() {
+        val report = analysis(listOf(mutant()), FakeExecutor(baselineElapsed = 3.seconds)).run()
+        assertEquals(DeadlineCap(7.seconds, 3.seconds, 16.seconds), report.deadlineCap)
+    }
+
+    @Test
+    fun `a capped deadline is announced once, before any mutant runs`() {
+        val events = ConcurrentLinkedQueue<String>()
+        val executor =
+            FakeExecutor(baselineElapsed = 3.seconds) {
+                events += "mutant"
+                Outcome.Survived
+            }
+        analysis((0 until 2).map { mutant(ordinal = it) }, executor).run(onDeadlineCap = { events += "cap $it" })
+        assertEquals(
+            listOf("cap ${DeadlineCap(7.seconds, 3.seconds, 16.seconds)}", "mutant", "mutant"),
+            events.toList(),
+        )
+    }
+
+    @Test
+    fun `no cap is reported when the derived deadline fits within the timeout`() {
+        assertNull(analysis(listOf(mutant()), FakeExecutor(baselineElapsed = 750.milliseconds)).run().deadlineCap)
+        assertNull(analysis(emptyList()).run().deadlineCap)
     }
 
     @Test

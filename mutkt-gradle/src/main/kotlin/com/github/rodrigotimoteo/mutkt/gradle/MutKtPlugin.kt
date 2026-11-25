@@ -28,6 +28,6 @@ public class MutKtPlugin : Plugin<Project> {
     }
 
     private companion object {
-        const val DEFAULT_TIMEOUT_MS = 10_000L
+        const val DEFAULT_TIMEOUT_MS = 60_000L
     }
 }
