@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.asm
 import com.github.rodrigotimoteo.mutkt.asm.operators.ArithmeticOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ConditionalsBoundaryOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ConstructorCallsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.DataClassCopyOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.EmptyReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.FalseReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.IncrementsOperator
@@ -29,6 +30,7 @@ internal object Operators {
             FalseReturnsOperator,
             VoidMethodCallsOperator,
             NonVoidMethodCallsOperator,
+            DataClassCopyOperator,
         )
 
     /** The operators named by [ids], in application order; no ids means all. */

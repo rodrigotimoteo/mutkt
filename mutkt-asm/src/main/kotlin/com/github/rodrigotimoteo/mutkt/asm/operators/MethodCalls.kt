@@ -40,6 +40,31 @@ internal fun removableCalls(method: MethodNode): List<MethodInsnNode> {
         .filterIsInstance<MethodInsnNode>()
         .filter { it.opcode in CALL_OPCODES || (it.opcode == INVOKESPECIAL && it.name != "<init>" && it.owner == self) }
         .filter { PLUMBING_OWNERS.none(it.owner::startsWith) }
+        // A copy call is the data-class-copy operator's site; removing it here would give a second operator
+        // the same instruction and the same mutant.
+        .filterNot { it.isCopyCall() }
+}
+
+/**
+ * A call of the shape Kotlin emits for a data class copy: `owner.copy(...)` returning `owner`, or the static
+ * `owner.copy$default(owner, ..., int, Object)` returning `owner`. Decided from the call alone, so a plain
+ * method named `copy` that returns its own class has the same shape.
+ */
+internal fun MethodInsnNode.isCopyCall(): Boolean {
+    val own = Type.getObjectType(owner)
+    return Type.getReturnType(desc) == own &&
+        when (opcode) {
+            INVOKEVIRTUAL -> name == "copy" && Type.getArgumentTypes(desc).isNotEmpty()
+            INVOKESTATIC -> name == "copy\$default" && isDefaultBridgeOf(own)
+            else -> false
+        }
+}
+
+// The bridge takes the receiver, the copy arguments, then the default mask and a marker Object.
+private fun MethodInsnNode.isDefaultBridgeOf(own: Type): Boolean {
+    val args = Type.getArgumentTypes(desc).toList()
+    val tail = listOf(Type.INT_TYPE, Type.getObjectType("java/lang/Object"))
+    return args.firstOrNull() == own && args.takeLast(2) == tail && args.drop(1).dropLast(2).isNotEmpty()
 }
 
 internal fun MethodInsnNode.describe(action: String) = "$action ${owner.substringAfterLast('/')}.$name"
