@@ -13,6 +13,7 @@ import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
 import com.github.rodrigotimoteo.mutkt.testing.FakeSourceLookup
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ConsoleReportWriterTest {
@@ -66,6 +67,9 @@ class ConsoleReportWriterTest {
 
             Class         Detected  Score
             com.acme.Foo       0/0    n/a
+
+            Errors (1)
+            negate-conditionals:com.acme.Foo#bar()V:0
 
             """.trimIndent(),
             render(MutationReport(listOf(result(ERROR)))),
@@ -167,9 +171,55 @@ class ConsoleReportWriterTest {
             Survivors (1)
             com.acme.Foo.bar()V (com.acme.Foo)  negate-conditionals  negated if
 
+            Errors (2)
+            negate-conditionals:com.acme.Foo#bar()V:0
+            negate-conditionals:com.acme.Err#bar()V:0
+
             """.trimIndent(),
             render(report),
         )
+    }
+
+    @Test
+    fun `errors list the mutant id with its cause, in discovery order`() {
+        val report =
+            MutationReport(
+                listOf(
+                    result(KILLED),
+                    result(ERROR, method = "two").copy(detail = "java.lang.VerifyError: bad"),
+                    result(ERROR, method = "one"),
+                ),
+            )
+        assertEquals(
+            """
+            Mutation report
+            Mutants: 3
+              KILLED       1
+              SURVIVED     0
+              TIMEOUT      0
+              NO_COVERAGE  0
+              ERROR        2
+            Score: 100.0%
+
+            Class         Detected   Score
+            com.acme.Foo       1/1  100.0%
+
+            Errors (2)
+            negate-conditionals:com.acme.Foo#two()V:0: java.lang.VerifyError: bad
+            negate-conditionals:com.acme.Foo#one()V:0
+
+            """.trimIndent(),
+            render(report),
+        )
+    }
+
+    @Test
+    fun `only the first ten errors are listed`() {
+        val errors = (0 until 12).map { result(ERROR, method = "m$it").copy(detail = "cause $it") }
+        val text = render(MutationReport(errors))
+        assertEquals(10, text.lines().count { it.startsWith("negate-conditionals:") })
+        assertTrue("Errors (12)\n" in text, text)
+        assertTrue(text.endsWith("... and 2 more\n"), text)
     }
 
     @Test

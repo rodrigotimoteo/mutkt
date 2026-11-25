@@ -48,7 +48,7 @@ public class ForkedTestExecutor(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
-    ): Outcome = onChild(deadline, "running ${mutant.id}") { ForkRequest.Run(mutant, bytes, it) }
+    ): Outcome = onChild(deadline, "running a mutant") { ForkRequest.Run(mutant, bytes, it) }
 
     override fun baseline(deadline: Duration): Outcome =
         onChild(deadline, "running the baseline") { ForkRequest.Baseline(it) }

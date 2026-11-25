@@ -145,7 +145,7 @@ internal class ChildProcess private constructor(
         stderrDrain.join(EXIT_WAIT_MILLIS)
         close()
         return IllegalStateException(
-            "Forked test JVM failed while $context ($state). Last stderr: ${stderr.text().ifBlank { "<empty>" }}",
+            "Forked test JVM failed ($state) while $context. Last stderr: ${stderr.text().ifBlank { "<empty>" }}",
             cause,
         )
     }

@@ -17,6 +17,12 @@ import kotlin.time.Duration.Companion.seconds
 
 private const val WAIT_SECONDS = 10L
 
+// What ChildProcess throws for a crashed child; the stderr tail may hold paths and is not part of the cause.
+private const val FORK_CRASH =
+    "Forked test JVM failed (exit code 7) while running a mutant. Last stderr: /home/dev/secret\nmore"
+
+private fun fail(error: Throwable): Nothing = throw error
+
 class RunMutationAnalysisTest {
     private val writer = RecordingWriter()
 
@@ -110,6 +116,35 @@ class RunMutationAnalysisTest {
         val generator = FakeGenerator(mutants, setOf(mutants[1]), NoClassDefFoundError("x"))
         val report = analysis(mutants, executor, generator).run()
         assertEquals(listOf(MutantStatus.ERROR, MutantStatus.ERROR), report.results.map { it.status })
+    }
+
+    @Test
+    fun `an ERROR keeps a bounded one-line cause and other statuses keep none`() {
+        val mutants = (0 until 6).map { mutant("a.".repeat(60) + "Foo", "m".repeat(60), it) }
+        val long = "x".repeat(300)
+        val executor =
+            FakeExecutor {
+                when (it.id.ordinal) {
+                    0 -> Outcome.LoadError("java.lang.VerifyError: bad\n\tat Foo")
+                    1 -> fail(IllegalStateException(FORK_CRASH))
+                    2 -> fail(NoClassDefFoundError(long))
+                    3 -> fail(IllegalStateException())
+                    4 -> fail(IllegalStateException(" "))
+                    else -> Outcome.Killed("t")
+                }
+            }
+        val results = analysis(mutants, executor).run().results
+        assertEquals(
+            listOf(
+                "java.lang.VerifyError: bad",
+                "Forked test JVM failed (exit code 7) while running a mutant",
+                ("java.lang.NoClassDefFoundError: $long").take(200),
+                "java.lang.IllegalStateException",
+                "java.lang.IllegalStateException:",
+                null,
+            ),
+            results.map { it.detail },
+        )
     }
 
     @Test
