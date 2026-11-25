@@ -11,8 +11,12 @@ import org.objectweb.asm.tree.MethodNode
 
 private const val NO_BODY_OR_GENERATED = ACC_SYNTHETIC or ACC_BRIDGE or ACC_ABSTRACT or ACC_NATIVE
 
+// A value class in the signature mangles componentN and copy to "<name>-<hash>" (URL-safe base64).
 private val DATA_MEMBER =
-    Regex("""equals\(Ljava/lang/Object;\)Z|hashCode\(\)I|toString\(\)Ljava/lang/String;|component\d+\(\).*|copy\(.*""")
+    Regex(
+        """equals\(Ljava/lang/Object;\)Z|hashCode\(\)I|toString\(\)Ljava/lang/String;""" +
+            """|component\d+(-[\w-]+)?\(\).*|copy(-[\w-]+)?\(.*""",
+    )
 
 /**
  * False for compiler-generated methods, methods without code, initializers and user-defined inline functions.
