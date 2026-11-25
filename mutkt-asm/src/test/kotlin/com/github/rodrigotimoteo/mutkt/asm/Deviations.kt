@@ -229,5 +229,13 @@ internal object Deviations {
             ) {
                 it.inInlinedBody
             },
+            legacyOnly(
+                "D13",
+                "non-void-method-calls",
+                "legacy mutates every compiler copy of a finally body on its own; the rebuild has one site per body " +
+                    "and changes all its copies together",
+            ) {
+                it.inMethod("guarded") && it.opcode == "INVOKEVIRTUAL" && it.line == 53
+            },
         )
 }

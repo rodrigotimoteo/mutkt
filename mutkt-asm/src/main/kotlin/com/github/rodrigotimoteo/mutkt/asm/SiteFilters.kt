@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.asm
 
 import com.github.rodrigotimoteo.mutkt.asm.filters.InlinedBodyFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.InlinedClassFilter
+import com.github.rodrigotimoteo.mutkt.asm.filters.InlinedFinallyFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.StringWhenFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.WhenMappingsFilter
 
@@ -11,6 +12,7 @@ internal object SiteFilters {
         listOf(
             InlinedBodyFilter,
             InlinedClassFilter,
+            InlinedFinallyFilter,
             StringWhenFilter,
             WhenMappingsFilter,
         )
