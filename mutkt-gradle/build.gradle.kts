@@ -42,6 +42,21 @@ val e2eTest by tasks.registering(Test::class) {
     useJUnitPlatform { includeTags("e2e") }
 }
 
+// Same scenarios as e2eTest on other Gradle versions; needs the network to fetch distributions, so it is not in check.
+// The minimum supported Gradle is 8.10 (Kotlin DSL limit above) and the wrapper is 8.10, so e2eTest already covers it:
+// the default adds only the latest 8.x.
+val matrixTest by tasks.registering(Test::class) {
+    description =
+        "Runs the TestKit scenarios on the Gradle versions of -Pmutkt.gradleVersions (minimum and latest 8.x)."
+    group = "verification"
+    testClassesDirs = tasks.test.get().testClassesDirs
+    classpath = tasks.test.get().classpath
+    useJUnitPlatform { includeTags("matrix") }
+    val versions = providers.gradleProperty("mutkt.gradleVersions").orElse("8.14.3")
+    // Test.systemProperty does not resolve providers, so the value is read when the JVM arguments are built.
+    jvmArgumentProviders.add(CommandLineArgumentProvider { listOf("-Dmutkt.gradleVersions=${versions.get()}") })
+}
+
 tasks.check {
     dependsOn(e2eTest)
 }

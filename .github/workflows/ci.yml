@@ -76,3 +76,25 @@ jobs:
           name: kover-report
           path: build/reports/kover/
           if-no-files-found: ignore
+
+  testkit-matrix:
+    name: TestKit on Gradle 8.14.3
+    needs: [lint]
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/rebuild/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: TestKit matrix
+        run: ./gradlew :mutkt-gradle:matrixTest -Pmutkt.gradleVersions=8.14.3
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-testkit-matrix
+          path: mutkt-gradle/build/reports/tests/matrixTest/
