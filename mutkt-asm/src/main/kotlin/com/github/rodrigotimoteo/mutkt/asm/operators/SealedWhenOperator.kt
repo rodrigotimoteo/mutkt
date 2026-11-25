@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.asm.operators
 import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
+import com.github.rodrigotimoteo.mutkt.asm.filters.finallyTwins
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
 import org.objectweb.asm.Opcodes.ALOAD
 import org.objectweb.asm.Opcodes.GETSTATIC
@@ -23,6 +24,7 @@ import org.objectweb.asm.tree.MethodNode
 import org.objectweb.asm.tree.TableSwitchInsnNode
 import org.objectweb.asm.tree.TypeInsnNode
 import org.objectweb.asm.tree.VarInsnNode
+import java.util.IdentityHashMap
 
 private const val INTRINSICS = "kotlin/jvm/internal/Intrinsics"
 
@@ -59,11 +61,17 @@ internal object SealedWhenOperator : Operator {
         (typeTests(method) + enumSwitches(method)).sortedBy { method.instructions.indexOf(it.site.instruction) }
 }
 
-// The local is the temporary Kotlin stores the `when` subject in. One test of a local is a plain `is` check.
+// The local is the temporary Kotlin stores the `when` subject in. One test of a local is a plain `is` check; the
+// copies of a finally body are the same test, so they count once and share the local of the first copy.
 private fun typeTests(method: MethodNode): List<Branch> {
     val tests = method.instructions.mapNotNull(::typeTest)
-    val perLocal = tests.groupingBy { it.first }.eachCount()
-    return tests.filter { perLocal.getValue(it.first) > 1 }.map { it.second }
+    val first = IdentityHashMap<AbstractInsnNode, AbstractInsnNode>()
+    finallyTwins(method).forEach { (original, copies) -> copies.forEach { first[it] = original } }
+    val localOf = tests.associate { it.second.site.instruction to it.first }
+    val logical = { test: Pair<Int, Branch> -> first[test.second.site.instruction] ?: test.second.site.instruction }
+    val clusterLocal = { test: Pair<Int, Branch> -> localOf[logical(test)] ?: test.first }
+    val perLocal = tests.groupBy(clusterLocal).mapValues { (_, group) -> group.map(logical).distinct().size }
+    return tests.filter { perLocal.getValue(clusterLocal(it)) > 1 }.map { it.second }
 }
 
 private fun typeTest(insn: AbstractInsnNode): Pair<Int, Branch>? =
