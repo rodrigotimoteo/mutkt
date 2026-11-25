@@ -43,6 +43,7 @@ Every documented difference, from `mutkt-asm/src/test/kotlin/com/github/rodrigot
 | D12a | constructor-calls | legacy only | Mutates constructions inside inlined stdlib bodies (the `ArrayList` of `map`/`filter`) | Compiler copy, skipped by the `InlinedBodyFilter` noise filter |
 | D12b | negate-conditionals | legacy only | Negates the loop conditions of inlined stdlib bodies | As D12a |
 | D12c | non-void-method-calls | legacy only | Mutates iterator, boxing and helper calls inside inlined stdlib bodies | As D12a |
+| D13 | non-void-method-calls | legacy only | Mutates each compiler copy of a finally body (return, normal and exception path) as its own site: 3 rows for the `Registry.register(s)` call in `guarded` | One site per finally body; `InlinedFinallyFilter` keeps the first copy and `mutate` changes all copies together |
 
 The legacy COROUTINE row has no line, so it pairs with one of the two suspend calls of `chain` (same site, any line) and D11 explains the other: the marker row itself is not matched by a rebuild site.
 
