@@ -35,6 +35,22 @@ class MutKtRedSuiteTest {
     }
 
     @OnGradleVersions
+    fun `a red suite after a green run leaves none of the previous reports`(version: String) {
+        val project = TestKitProject(dir, version)
+        project.setUp("mutkt { excludeTags.add('flaky') }", sources, tests)
+        project.build()
+        val names = listOf("mutkt.txt", "mutation-report.json", "mutation-report.html")
+        val reports = names.map(project.report::resolveSibling)
+        assertTrue(reports.all(File::isFile), "the green run writes every report")
+
+        project.setUp("", sources, tests)
+        val result = project.buildAndFail()
+
+        assertTrue("no mutant was scored" in result.output, result.output)
+        assertEquals(emptyList<File>(), reports.filter(File::exists))
+    }
+
+    @OnGradleVersions
     fun `the same assertion excluded by tag leaves a green suite with a kill and a survivor`(version: String) {
         val project = TestKitProject(dir, version)
         project.setUp("mutkt { excludeTags.add('flaky') }", sources, tests)

@@ -63,7 +63,7 @@ MutKt recomputes the stack frames of every class it mutates, which needs the sup
 
 ## Where are the reports, and why is there no output?
 
-`build/reports/mutkt/` holds `mutation-report.html`, `mutation-report.json` (Stryker schema) and `mutkt.txt`. An up-to-date run prints nothing: the reports from the last run are still there. `reports.console = false` keeps the summary out of the build log; the files are always written.
+`build/reports/mutkt/` holds `mutation-report.html`, `mutation-report.json` (Stryker schema) and `mutkt.txt`. An up-to-date run prints nothing: the reports from the last run are still there. `reports.console = false` keeps the summary out of the build log; the files are written on every run that gets past the baseline.
 
 ## Why doesn't `check` run it?
 
