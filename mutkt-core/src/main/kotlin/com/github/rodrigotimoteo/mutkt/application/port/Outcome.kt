@@ -2,7 +2,7 @@ package com.github.rodrigotimoteo.mutkt.application.port
 
 /** Result of running the tests against one mutant; mapping it to a `MutantStatus` is the use case's job. */
 public sealed interface Outcome {
-    /** A test failed; [by] names it. */
+    /** A test failed; [by] names the first failure observed: class and method, plus the invocation when known. */
     public data class Killed(
         val by: String,
     ) : Outcome

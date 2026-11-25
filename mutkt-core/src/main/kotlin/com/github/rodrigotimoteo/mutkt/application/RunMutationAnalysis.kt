@@ -132,7 +132,7 @@ private fun cause(text: String): String? =
 
 private fun Outcome.toResult(mutant: Mutant): MutantResult =
     when (this) {
-        is Outcome.Killed -> MutantResult(mutant, MutantStatus.KILLED)
+        is Outcome.Killed -> MutantResult(mutant, MutantStatus.KILLED, killedBy = by)
         Outcome.Survived -> MutantResult(mutant, MutantStatus.SURVIVED)
         Outcome.Timeout -> MutantResult(mutant, MutantStatus.TIMEOUT)
         Outcome.NoTests -> MutantResult(mutant, MutantStatus.NO_COVERAGE)
