@@ -1,0 +1,82 @@
+# Migrating from 0.3.x to 1.0
+
+1.0 is a rebuild, not an upgrade: the plugin id, the extension, the task, the operator ids and several defaults changed. The 0.3.x line is tag `v0.3.3`.
+
+## Setup
+
+| 0.3.x | 1.0 |
+|---|---|
+| plugin id `io.github.rodrigotimoteo.mutation-kotlin` | `io.github.rodrigotimoteo.mutkt` |
+| extension `mutationTest { }` | `mutkt { }` |
+| task `mutationTest` | `mutkt` |
+| reports in `build/reports/mutation` | `build/reports/mutkt` |
+| artifacts `mutation-core`, `mutation-test-runner`, ... | `mutkt-*` modules, same group `io.github.rodrigotimoteo` |
+| package `com.github.rodrigotimoteo.mutation` | `com.github.rodrigotimoteo.mutkt` |
+
+Recommended (owner to confirm): no alias for the old plugin id. A build that still applies it fails with "plugin not found" instead of loading a plugin whose DSL differs in almost every property below.
+
+## DSL properties
+
+"Removed" means 1.0 has no equivalent. Unless a row says otherwise the feature is not planned for 1.0 and is tracked in Linear (project "MutKt Rebuild") if it is planned later. An unknown property fails the build script, so nothing is silently ignored.
+
+| Old property | New | Notes |
+|---|---|---|
+| `targetClasses` | removed | Was a class directory collection. The `main` output is used; the name now means class globs, see Behavior changes |
+| `testClasses` | removed | The `test` task's classes and classpath are used |
+| `classpath` | removed | The `test` task's runtime classpath is used |
+| `coverageExecFile` | removed | No JaCoCo input; the baseline run replaces it (behavior changes) |
+| `autoRunJaCoCo` | removed | Was already a no-op |
+| `enabledOperators` | `operators` | Ids are kebab-case (`arithmetic`), see [operators.md](operators.md); empty runs the default six |
+| `timeoutMs` | `timeoutMs` | Default 30000 ms became 10000 ms |
+| `mutantTimeoutMs` | `timeoutMs` | Deprecated duplicate |
+| `maxParallelMutants` | `threads` | Default 4 became the available processors |
+| `outputDir` | removed | Fixed at `build/reports/mutkt` |
+| `failOnSurvived` | `failBelowScore` | `failBelowScore = 100` is stricter: it also fails on NO_COVERAGE. ERROR mutants are excluded and TIMEOUT counts as detected |
+| `failOnMutationScoreThreshold` | `failBelowScore` | 0 meant off; unset means off |
+| `failOnScoreThreshold` | `failBelowScore` | Deprecated alias |
+| `maxMutationsPerClass` | `maxMutantsPerClass` | Renamed; 0 meant unlimited, unset means unlimited |
+| `excludedClasses` | `excludedClasses` | Globs on dotted class names, default empty, see Behavior changes |
+| `excludedMethods` | `excludedMethods` | `method` or `pkg.Class#method`; default empty (it was `main`, `toString`, `hashCode`, `equals`, `clone`, `finalize`) |
+| `excludeGeneratedClasses` | `excludedClasses` | The Android and generated-code defaults are gone; list what you need |
+| `targetClassPatterns` | `targetClasses` | Regex became glob |
+| `excludeClassPatterns` | `excludedClasses` | Regex became glob |
+| `targetPackages` | `targetClasses` | Use `com.example.service.**` |
+| `excludePackages` | `excludedClasses` | Use `com.example.generated.**` |
+| `targetTestPatterns` | removed | All `test` classes run; narrow with `includeTags` |
+| `excludeTestPatterns` | removed | Narrow with `excludeTags` |
+| `reportFormats` | removed | Only the console summary and `mutkt.txt` exist so far; HTML and Stryker JSON are planned (ADR 0003) |
+| `showClassScores` | removed | Part of the HTML report, not shipped yet |
+| `generateGraph` | removed | The graph report is not planned for 1.0 |
+| `ciMode` | removed | `reports.console` and `failBelowScore` cover it |
+| `verbose` | removed | Was already a no-op |
+| `enableIncrementalAnalysis` | removed | The task is up to date until its inputs change; no git-diff mode |
+| `enableCache` | removed | No result cache |
+| `enableSubsumption` | removed | No subsumption pass |
+| `enableWeakMutation` | removed | No weak-mutation pass |
+| `enableInlinedFinally` | removed | No inlined-finally filter |
+| `enableTestOrdering` | removed | No test ordering |
+| `isAndroid` | removed | Android is not supported in 1.0 (decision D6: Android deferred) |
+| `androidPluginType` | removed | As above |
+| `androidVariant` | removed | As above |
+| `androidContext` | removed | As above |
+
+New in 1.0 with no old counterpart: `engines`, `includeTags`, `excludeTags` (they were constructor arguments of the old engine, not DSL), and `reports.console`. See [dsl.md](dsl.md).
+
+## Removed APIs
+
+ADR 0004: no JUnit extension API and no runner module. Existing tests run unchanged against each mutant.
+
+- `@MutKtTest`, the JUnit `MutKtExtension` and `MutKt.underTest { }`: delete them from tests; the `mutation-test-runner` dependency goes with them.
+- `MutationRegistry` (a JVM-wide singleton) and the programmatic `MutationEngine` / `MutationEngineConfig` entry points: not published.
+- `@SuppressMutations` stays, with the same `operators` and `reason`, but moved to `com.github.rodrigotimoteo.mutkt.annotations` (module `mutkt-annotations`). Operator names in `operators = [...]` use the new ids.
+
+## Behavior changes
+
+- **Score.** 0.3.x: killed / total as a rounded integer. 1.0: (KILLED + TIMEOUT) / (total - ERROR) as a decimal; NO_COVERAGE and SURVIVED count as not detected, ERROR mutants are left out (ADR 0002). Scores move, so re-baseline `failBelowScore`.
+- **Class filters.** Globs only, on dotted names: `*` stays in a segment, `**` crosses dots. 0.3.x slashed patterns such as `**/*Test` become `**Test`. There are no default exclusions any more (0.3.x skipped tests, `BuildConfig`, `R`, Dagger and Hilt output and more): only `main` classes are mutated, but exclude generated code yourself.
+- **Operators.** The default set is the same six as 0.3.x (`arithmetic`, `conditionals-boundary`, `negate-conditionals`, `null-returns`, `return-vals`, `empty-returns`). A non-empty `operators` runs exactly those ids. Site differences per operator are in [parity.md](parity.md).
+- **JUnit engines.** Default `junit-jupiter` only; 0.3.x also ran `junit-vintage` and `junit-platform-suite-engine`. Opt in with `engines` and put the engine on the test runtime classpath (ADR 0005).
+- **Forked JVM pool.** Mutants run in child JVMs that copy the `test` task's JVM setup; a hung mutant is killed and reported as TIMEOUT (ADR 0008).
+- **Baseline run.** The selected tests run once on the original classes first; a red baseline fails the task before any mutant is scored.
+- **Reports.** Console summary and `build/reports/mutkt/mutkt.txt` now. HTML and Stryker-schema JSON are planned (ADR 0003); the CSV, XML and graph formats are not part of it.
+- **Gradle.** The task is up to date when nothing changed and supports the configuration cache. Requires JDK 17 or 21 and Gradle 8.x.
