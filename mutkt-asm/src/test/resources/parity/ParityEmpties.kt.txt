@@ -1,0 +1,22 @@
+@file:JvmName("ParityEmpties")
+
+fun collection(n: Int): Collection<Int> = listOf(n)
+fun list(n: Int): List<Int> = listOf(n)
+fun set(n: Int): Set<Int> = setOf(n)
+fun map(n: Int): Map<String, Int> = mapOf("a" to n)
+fun array(n: Int): IntArray = IntArray(n)
+fun alreadyEmptyList(): List<Int> = emptyList()
+fun alreadyEmptySet(): Set<String> = emptySet()
+fun alreadyEmptyMap(): Map<String, Int> = emptyMap()
+fun javaEmptyList(): List<Int> = java.util.Collections.emptyList()
+fun javaEmptyCollection(): Collection<Int> = java.util.Collections.emptyList()
+fun emptyIntArray(): IntArray = IntArray(0)
+fun emptyStrings(): Array<String> = arrayOf()
+fun branching(n: Int): List<Int> = if (n > 0) listOf(n) else emptyList()
+fun nested(): List<List<Int>> = listOf(emptyList())
+
+fun viaLocal(n: Int): List<Int> {
+    val items = mutableListOf<Int>()
+    if (n > 0) items.add(n)
+    return items
+}

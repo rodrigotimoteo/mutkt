@@ -1,0 +1,40 @@
+@file:JvmName("ParityArithmetic")
+
+fun add(a: Int, b: Int) = a + b
+fun sub(a: Long, b: Long) = a - b
+fun mul(a: Float, b: Float) = a * b
+fun div(a: Double, b: Double) = a / b
+fun rem(a: Int, b: Int) = a % b
+
+fun mixed(a: Int, b: Int): Int {
+    val sum = a + b
+    val diff = a - b
+    return sum * diff / (b % 7)
+}
+
+fun bits(a: Int, b: Int) = (a and b) or (a xor b) shl 1 shr 2 ushr 1
+fun negate(a: Int) = -a
+fun concat(a: String, n: Int) = a + n + "x"
+
+fun countUp(n: Int): Int {
+    var i = 0
+    var total = 0
+    while (i < n) {
+        i++
+        total += i
+    }
+    return total
+}
+
+fun countDown(n: Int): Int {
+    var i = n
+    while (i > 0) i--
+    return i
+}
+
+fun step(n: Int): Int {
+    var i = n
+    i += 5
+    i -= 3
+    return i
+}
