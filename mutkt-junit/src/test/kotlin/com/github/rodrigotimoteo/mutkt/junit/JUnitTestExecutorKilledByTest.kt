@@ -1,0 +1,53 @@
+package com.github.rodrigotimoteo.mutkt.junit
+
+import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+private const val PARAMS_IMPORTS = "import org.junit.jupiter.params.*\nimport org.junit.jupiter.params.provider.*\n"
+
+class JUnitTestExecutorKilledByTest {
+    private val executors = mutableListOf<JUnitTestExecutor>()
+
+    @AfterEach
+    fun closeExecutors() = executors.forEach { it.close() }
+
+    private fun killedBy(tests: String): Outcome {
+        val executor = executorFor("$IMPORTS$PARAMS_IMPORTS$CALC\n$tests")
+        executors += executor
+        return executor.run(mutantOf(), mutantBytes(), deadline)
+    }
+
+    @Test
+    fun `a parameterized invocation is told apart from its siblings`() {
+        val tests =
+            "class CalcTest { @ParameterizedTest @CsvSource(\"1,0,1\", \"2,2,4\") " +
+                "fun adds(a: Int, b: Int, sum: Int) { assertEquals(sum, Calc().add(a, b)) } }"
+        assertEquals(Outcome.Killed("CalcTest.adds[#2] [2] 2, 2, 4"), killedBy(tests))
+    }
+
+    @Test
+    fun `a dynamic test is told apart from the factory`() {
+        val tests =
+            "class CalcTest { @TestFactory fun adds() = listOf(0, 2).mapIndexed { i, b -> " +
+                "DynamicTest.dynamicTest(\"case \$i\") { assertEquals(b + 1, Calc().add(1, b)) } } }"
+        assertEquals(Outcome.Killed("CalcTest.adds[#2] case 1"), killedBy(tests))
+    }
+
+    @Test
+    fun `repeated custom names and line breaks stay distinct and on one line`() {
+        val tests =
+            "class CalcTest { @ParameterizedTest(name = \"same\\nname\") @CsvSource(\"1,0,1\", \"2,2,4\") " +
+                "fun adds(a: Int, b: Int, sum: Int) { assertEquals(sum, Calc().add(a, b)) } }"
+        assertEquals(Outcome.Killed("CalcTest.adds[#2] same name"), killedBy(tests))
+    }
+
+    @Test
+    fun `a failing container is named by its class`() {
+        val tests =
+            "class CalcTest { companion object { " +
+                "@BeforeAll @JvmStatic fun setUp() { check(Calc().add(1, 1) == 2) } } @Test fun adds() {} }"
+        assertEquals(Outcome.Killed("CalcTest"), killedBy(tests))
+    }
+}

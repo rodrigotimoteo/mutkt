@@ -60,6 +60,14 @@ class RunMutationAnalysisTest {
         )
 
     @Test
+    fun `keeps the first failing test only on killed mutants`() {
+        val outcomes = listOf(Outcome.Killed("a.FooTest.adds [2] 2, 2, 4"), Outcome.Survived, Outcome.LoadError("x"))
+        val mutants = outcomes.indices.map { mutant(ordinal = it) }
+        val results = analysis(mutants, FakeExecutor { outcomes[it.id.ordinal] }).run().results
+        assertEquals(listOf("a.FooTest.adds [2] 2, 2, 4", null, null), results.map { it.killedBy })
+    }
+
+    @Test
     fun `passes materialized bytes and the configured timeout to the executor`() {
         val m = mutant()
         val executor = FakeExecutor()
