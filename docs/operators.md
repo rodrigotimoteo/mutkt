@@ -21,3 +21,5 @@
 Class and function suppression are unioned. Nested, inner, companion and anonymous classes inherit from the enclosing class, and anonymous classes also from the enclosing function.
 A function's lambda bodies (`f$lambda$N`) are suppressed with it; they match by name, so every overload named `f` covers them. A function's own annotation matches name and descriptor.
 Limits: inline function bodies are inlined into callers, which stay mutated (deferred). Property accessors are suppressed only through their class.
+
+See also: [Parity with legacy 0.3.3](parity.md)

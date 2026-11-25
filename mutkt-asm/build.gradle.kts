@@ -10,3 +10,9 @@ dependencies {
     testImplementation(project(":mutkt-testing"))
     testImplementation(libs.asm.util)
 }
+
+tasks.test {
+    val parityDoc = rootProject.layout.projectDirectory.file("docs/parity.md")
+    inputs.file(parityDoc)
+    systemProperty("mutkt.parityDoc", parityDoc.asFile.absolutePath)
+}
