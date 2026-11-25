@@ -19,6 +19,10 @@ private val Row.isSuspend get() =
 
 private fun Row.inMethod(vararg names: String) = names.any { method.startsWith("$it(") }
 
+// ParityClasses.lambdas: user code is on lines 56 to 59, the inlined stdlib bodies get lines of their own
+// after it; the boxing of the lambda result on line 58 is part of the inlined map body.
+private val Row.inInlinedBody get() = inMethod("lambdas") && (line >= 60 || opcode == "INVOKESTATIC")
+
 private val COLLECTIONS = setOf("Ljava/util/List;", "Ljava/util/Set;", "Ljava/util/Map;", "Ljava/util/Collection;")
 
 private fun legacyOnly(
@@ -155,6 +159,13 @@ internal object Deviations {
                 it.opcode == "INVOKESTATIC" && it.isSuspend
             },
             legacyOnly(
+                "D8c",
+                "non-void-method-calls",
+                "legacy mutates the ordinal() call that feeds the `\$WhenMappings` table of an enum when; skipped here",
+            ) {
+                it.inMethod("hex")
+            },
+            legacyOnly(
                 "D9a",
                 "true-returns",
                 "legacy fires on a constant true return; the rebuild skips IRETURN right after ICONST_1 (true to true)",
@@ -183,6 +194,13 @@ internal object Deviations {
                 it.isBoolean && it.opcode == "ICONST_1"
             },
             newOnly(
+                "D10",
+                "sealed-when",
+                "legacy finds no site (needs two INSTANCEOF on one line); the rebuild has a site per when branch",
+            ) {
+                it.opcode in setOf("INSTANCEOF", "INVOKESTATIC", "TABLESWITCH", "LOOKUPSWITCH")
+            },
+            newOnly(
                 "D11",
                 "coroutine",
                 "legacy never matches suspend calls (its descriptor test cannot hold) and mutates the " +
@@ -190,12 +208,26 @@ internal object Deviations {
             ) {
                 it.inMethod("chain")
             },
-            newOnly(
-                "D10",
-                "sealed-when",
-                "legacy finds no site (needs two INSTANCEOF on one line); the rebuild has a site per when branch",
+            legacyOnly(
+                "D12a",
+                "constructor-calls",
+                "legacy mutates constructions in inlined stdlib bodies (map, filter); the rebuild skips them",
             ) {
-                it.opcode in setOf("INSTANCEOF", "INVOKESTATIC", "TABLESWITCH", "LOOKUPSWITCH")
+                it.inInlinedBody
+            },
+            legacyOnly(
+                "D12b",
+                "negate-conditionals",
+                "legacy negates loop conditions in inlined stdlib bodies (map, filter, fold); the rebuild skips them",
+            ) {
+                it.inInlinedBody
+            },
+            legacyOnly(
+                "D12c",
+                "non-void-method-calls",
+                "legacy mutates iterator, boxing and helper calls inside inlined stdlib bodies; the rebuild skips them",
+            ) {
+                it.inInlinedBody
             },
         )
 }

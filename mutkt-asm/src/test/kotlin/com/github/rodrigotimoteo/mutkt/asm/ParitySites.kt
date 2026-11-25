@@ -22,7 +22,8 @@ internal fun sha256(bytes: ByteArray): String =
 /** Sites of [operator] in every parity class, as engine discovery reports them. */
 internal fun newRows(operator: Operator): List<Row> =
     parityClasses.values.flatMap { it.values }.flatMap { bytes ->
-        val sites = parse(bytes).methods.filter(::isMutable).flatMap { operator.sites(it) }
+        val node = parse(bytes)
+        val sites = node.methods.filter(::isMutable).flatMap { sitesOf(operator, node.name, it) }
         val found = discover(bytes, operator)
         check(found.size == sites.size) { "discover and sites disagree for ${operator.id.value}" }
         found.zip(sites) { found, site ->

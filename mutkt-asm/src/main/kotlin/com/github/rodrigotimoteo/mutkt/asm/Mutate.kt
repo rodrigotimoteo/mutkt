@@ -19,7 +19,7 @@ internal fun mutate(
         ) {
             "No mutable method ${node.name}.${target.methodName}${target.descriptor}"
         }
-    val sites = op.sites(method)
+    val sites = sitesOf(op, node.name, method)
     check(target.ordinal in sites.indices) {
         "No ordinal ${target.ordinal} in ${node.name}.${target.methodName}${target.descriptor} (${sites.size} sites)"
     }
