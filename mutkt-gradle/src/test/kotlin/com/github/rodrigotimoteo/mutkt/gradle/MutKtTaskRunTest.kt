@@ -91,8 +91,43 @@ class MutKtTaskRunTest {
         )
     }
 
-    private fun fixtureTask(): MutKtTask {
-        val compiled = compileKotlin(FIXTURE, inheritClassPath = true)
+    @Test
+    fun `a mutant that kills its JVM is listed with the exit code next to the scored ones`() {
+        val task = fixtureTask(EXITING)
+        task.operators.addAll("arithmetic", "negate-conditionals")
+
+        val summary = task.runAnalysis().summary
+
+        assertTrue("ERROR        1" in summary && "KILLED       1" in summary, summary)
+        assertTrue(
+            Regex(
+                "^Errors \\(1\\)\\nnegate-conditionals:demo\\.Calc#$LONG\\(II\\)I:0: " +
+                    "Forked test JVM failed \\(exit code 7\\)",
+                RegexOption.MULTILINE,
+            ).containsMatchIn(summary),
+            summary,
+        )
+    }
+
+    @Test
+    fun `when every mutant dies the task fails after writing the report with the cause`() {
+        val task = fixtureTask(EXITING)
+        task.operators.add("negate-conditionals")
+
+        val error = assertThrows<GradleException> { task.analyse() }
+
+        assertTrue("All 1 mutants ended in ERROR" in error.message.orEmpty(), error.message)
+        val report =
+            task.reportsDir
+                .get()
+                .asFile
+                .resolve("mutkt.txt")
+                .readText()
+        assertTrue("Errors (1)" in report && "exit code 7" in report, report)
+    }
+
+    private fun fixtureTask(source: String = FIXTURE): MutKtTask {
+        val compiled = compileKotlin(source, inheritClassPath = true)
         val main = dir.resolve("main").also { write(it, compiled.filterKeys { name -> !name.endsWith("Test") }) }
         val tests = dir.resolve("test").also { write(it, compiled.filterKeys { name -> name.endsWith("Test") }) }
         return task(main, tests, dir.resolve("none"))
@@ -132,6 +167,30 @@ class MutKtTaskRunTest {
         // What the fixture's tests need at run time; the Launcher API comes from the plugin side.
         val PROJECT_JARS =
             Regex("^(junit-jupiter|junit-platform-(engine|commons)|opentest4j|apiguardian|kotlin-stdlib)")
+
+        // A long id must not push the exit code out of the capped cause.
+        const val LONG = "addNumbersWithAVeryLongMethodNameToProveTheCapKeepsTheExitCode"
+
+        // Negating the guard makes the mutant call System.exit, which the parent sees as an unexpected child exit.
+        val EXITING =
+            """
+            package demo
+
+            import org.junit.jupiter.api.Assertions.assertEquals
+            import org.junit.jupiter.api.Test
+
+            class Calc {
+                fun $LONG(a: Int, b: Int): Int {
+                    if (a < 0) System.exit(7)
+                    return a + b
+                }
+            }
+
+            class CalcTest {
+                @Test
+                fun adds() = assertEquals(5, Calc().$LONG(2, 3))
+            }
+            """.trimIndent()
 
         val FIXTURE =
             """

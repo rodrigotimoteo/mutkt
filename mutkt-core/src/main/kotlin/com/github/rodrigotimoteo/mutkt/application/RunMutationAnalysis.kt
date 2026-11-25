@@ -82,19 +82,21 @@ public class RunMutationAnalysis(
     // means the run itself is broken and must surface.
     @Suppress("TooGenericExceptionCaught")
     private fun evaluate(mutant: Mutant): MutantResult =
-        MutantResult(
-            mutant,
-            try {
-                executor.run(mutant, generator.materialize(mutant), config.timeout).toStatus()
-            } catch (_: Exception) {
-                MutantStatus.ERROR
-            } catch (_: LinkageError) {
-                MutantStatus.ERROR
-            },
-        )
+        try {
+            executor.run(mutant, generator.materialize(mutant), config.timeout).toResult(mutant)
+        } catch (e: Exception) {
+            MutantResult(mutant, MutantStatus.ERROR, cause(e.message?.takeIf(String::isNotBlank) ?: e.toString()))
+        } catch (e: LinkageError) {
+            // The message of a LinkageError is often just a class name.
+            MutantResult(mutant, MutantStatus.ERROR, cause(e.toString()))
+        }
 }
 
 private const val SHUTDOWN_WAIT_SECONDS = 5L
+
+private const val MAX_CAUSE = 200
+
+private const val STDERR_MARKER = ". Last stderr:"
 
 // The baseline runs the whole suite on a cold JVM (class loading, engine start-up) that mutants then reuse.
 private const val BASELINE_TIMEOUT_FACTOR = 5
@@ -118,11 +120,21 @@ private fun <T> Future<T>.getOrRethrowCause(): T =
         throw e.cause ?: e
     }
 
-private fun Outcome.toStatus(): MutantStatus =
+// Stack traces stay out of the report: the first line names the cause.
+private fun cause(text: String): String? =
+    text
+        .lineSequence()
+        .firstOrNull { it.isNotBlank() }
+        // The stderr tail of a crashed child is long and may hold paths; the exit state before it is the cause.
+        ?.substringBefore(STDERR_MARKER)
+        ?.trim()
+        ?.take(MAX_CAUSE)
+
+private fun Outcome.toResult(mutant: Mutant): MutantResult =
     when (this) {
-        is Outcome.Killed -> MutantStatus.KILLED
-        Outcome.Survived -> MutantStatus.SURVIVED
-        Outcome.Timeout -> MutantStatus.TIMEOUT
-        Outcome.NoTests -> MutantStatus.NO_COVERAGE
-        is Outcome.LoadError -> MutantStatus.ERROR
+        is Outcome.Killed -> MutantResult(mutant, MutantStatus.KILLED)
+        Outcome.Survived -> MutantResult(mutant, MutantStatus.SURVIVED)
+        Outcome.Timeout -> MutantResult(mutant, MutantStatus.TIMEOUT)
+        Outcome.NoTests -> MutantResult(mutant, MutantStatus.NO_COVERAGE)
+        is Outcome.LoadError -> MutantResult(mutant, MutantStatus.ERROR, cause(message))
     }

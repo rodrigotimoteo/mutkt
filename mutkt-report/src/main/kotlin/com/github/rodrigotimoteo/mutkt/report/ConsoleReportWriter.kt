@@ -22,6 +22,7 @@ public class ConsoleReportWriter(
         out.appendLine("Score: ${percent(report.score)}")
         classTable(report)
         survivors(report)
+        errors(report)
     }
 
     private fun classTable(report: MutationReport) {
@@ -62,6 +63,15 @@ public class ConsoleReportWriter(
         }
     }
 
+    private fun errors(report: MutationReport) {
+        val errors = report.results.filter { it.status == MutantStatus.ERROR }
+        if (errors.isEmpty()) return
+        out.appendLine()
+        out.appendLine("Errors (${errors.size})")
+        errors.take(MAX_ERRORS).forEach { out.appendLine(listOfNotNull(it.mutant.id, it.detail).joinToString(": ")) }
+        if (errors.size > MAX_ERRORS) out.appendLine("... and ${errors.size - MAX_ERRORS} more")
+    }
+
     private fun snippet(
         mutant: Mutant,
         line: Int,
@@ -88,6 +98,7 @@ public class ConsoleReportWriter(
     private companion object {
         const val STATUS_WIDTH = 13
         const val LINE_WIDTH = 4
+        const val MAX_ERRORS = 10
         const val PERCENT = 100
     }
 }

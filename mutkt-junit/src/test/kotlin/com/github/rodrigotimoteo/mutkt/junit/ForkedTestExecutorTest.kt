@@ -114,7 +114,12 @@ class ForkedTestExecutorTest {
     fun `a crashing mutant throws with the exit code, then the pool recovers`() {
         val pool = executor()
         val error = assertThrows<IllegalStateException> { pool.run(EXIT) }
-        assertTrue("exit code 7" in error.message.orEmpty(), error.message)
+        assertTrue(
+            error.message.orEmpty().startsWith(
+                "Forked test JVM failed (exit code 7) while running a mutant. Last stderr:",
+            ),
+            error.message,
+        )
         assertTrue(pool.liveProcesses.isEmpty())
 
         assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
