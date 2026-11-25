@@ -4,6 +4,7 @@ plugins {
     id("mutkt.published-library")
     `java-gradle-plugin`
     alias(libs.plugins.pluginPublish)
+    id("mutkt.dokka")
 }
 
 description = "Gradle plugin that runs mutation testing on the compiled bytecode of a Kotlin/JVM build."

@@ -7,7 +7,7 @@ plugins {
 val repoUrl = "https://github.com/rodrigotimoteo/mutkt"
 val centralStagingApi = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
 
-// Central requires both jars; the Kotlin-only javadoc jar is empty on purpose (no Java sources to document).
+// Central requires both jars. Modules without mutkt.dokka ship an empty javadoc jar: Kotlin only, no Java sources to document.
 java {
     withSourcesJar()
     withJavadocJar()
