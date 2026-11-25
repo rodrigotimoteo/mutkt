@@ -6,6 +6,9 @@ import org.objectweb.asm.tree.MethodNode
 internal fun realBefore(insn: AbstractInsnNode): AbstractInsnNode? =
     generateSequence(insn.previous) { it.previous }.firstOrNull { it.opcode >= 0 }
 
+internal fun realAfter(insn: AbstractInsnNode): AbstractInsnNode? =
+    generateSequence(insn.next) { it.next }.firstOrNull { it.opcode >= 0 }
+
 internal const val FUNCTION_MARKER = "\$i\$f\$"
 internal const val LAMBDA_MARKER = "\$i\$a\$"
 

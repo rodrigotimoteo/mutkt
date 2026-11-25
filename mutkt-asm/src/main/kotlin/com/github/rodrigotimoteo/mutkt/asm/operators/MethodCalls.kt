@@ -38,12 +38,9 @@ private val PLUMBING_OWNERS =
 private val COROUTINE_OWNERS = setOf("kotlinx/coroutines/BuildersKt", "kotlinx/coroutines/JobKt")
 
 // A suspend call ends in the Continuation and returns Object; with default arguments the compiler routes it
-// through a static foo$default(..., Continuation, int, Object) bridge that has the same result.
-private val SUSPEND_TAILS =
-    listOf(
-        "Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
-        "Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;",
-    )
+// through a static foo$default(..., Continuation, int..., Object) bridge that has the same result, with one
+// int mask per 32 parameters.
+private val SUSPEND_TAIL = Regex("Lkotlin/coroutines/Continuation;(I+Ljava/lang/Object;)?\\)Ljava/lang/Object;$")
 
 /** Calls that either call-removal operator may drop; the operator then filters on the return type. */
 internal fun removableCalls(
@@ -68,7 +65,7 @@ internal fun candidateCalls(
 
 /** A static call into a kotlinx.coroutines builder or Job helper, or a call of a suspend function. */
 internal fun MethodInsnNode.isCoroutineCall(): Boolean =
-    (opcode == INVOKESTATIC && owner in COROUTINE_OWNERS) || SUSPEND_TAILS.any(desc::endsWith)
+    (opcode == INVOKESTATIC && owner in COROUTINE_OWNERS) || SUSPEND_TAIL.containsMatchIn(desc)
 
 /** The default value instruction of [type]: 0, 0L, 0f, 0.0 or null. */
 internal fun defaultOf(type: Type) =

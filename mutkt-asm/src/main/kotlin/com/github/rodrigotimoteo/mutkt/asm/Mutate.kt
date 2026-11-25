@@ -11,7 +11,7 @@ internal fun mutate(
     hierarchy: Hierarchy,
 ): ByteArray {
     val node = parse(bytes)
-    val cls = node.info()
+    val cls = node.info(hierarchy)
     check(target.className == node.name) { "Site is for ${target.className} but the class is ${node.name}" }
     val method =
         checkNotNull(

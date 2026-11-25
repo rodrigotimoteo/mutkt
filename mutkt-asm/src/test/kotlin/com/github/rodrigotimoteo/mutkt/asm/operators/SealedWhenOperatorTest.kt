@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.asm.operators
 import com.github.rodrigotimoteo.mutkt.asm.Found
 import com.github.rodrigotimoteo.mutkt.asm.Hierarchy
 import com.github.rodrigotimoteo.mutkt.asm.HierarchyClassWriter
+import com.github.rodrigotimoteo.mutkt.asm.NoClasses
 import com.github.rodrigotimoteo.mutkt.asm.discover
 import com.github.rodrigotimoteo.mutkt.asm.mutate
 import com.github.rodrigotimoteo.mutkt.asm.parse
@@ -91,6 +92,9 @@ private val SOURCE =
     fun denseOf(i: Int) = dense(colorOf(i))
     fun sparse(c: Color): Int = when (c.ordinal) { 0 -> 10; 100 -> 20; 1000 -> 30; else -> 0 }
 
+    class Token(val n: Int) { fun ordinal(): Int = n }
+    fun token(t: Token): Int = when (t.ordinal()) { 1 -> 10; 2 -> 20; 3 -> 30; else -> 40 }
+
     fun plain(n: Int): Int = when (n) { 1 -> 10; 2 -> 20; 3 -> 30; else -> 0 }
     fun text(s: String): Int = when (s) { "a" -> 1; "b" -> 2; "c" -> 3; else -> 0 }
     fun none(n: Int): Int = n + 1
@@ -103,8 +107,17 @@ class SealedWhenOperatorTest {
             ?: javaClass.classLoader.getResourceAsStream("$type.class")?.use { it.readBytes() }
     }
 
-    private fun sites(method: String) =
-        classes.values.flatMap { discover(it, SealedWhenOperator) }.filter { it.methodName == method }
+    private fun sites(
+        method: String,
+        lookup: Hierarchy = hierarchy,
+    ) = classes.values
+        .flatMap {
+            discover(
+                it,
+                SealedWhenOperator,
+                hierarchy = lookup,
+            )
+        }.filter { it.methodName == method }
 
     private fun descriptions(method: String) = sites(method).map { it.description }
 
@@ -248,6 +261,17 @@ class SealedWhenOperatorTest {
     }
 
     @Test
+    fun `an ordinal method that is not an enum's is not a switch over a hierarchy`() {
+        assertEquals(emptyList<String>(), descriptions("token"))
+    }
+
+    @Test
+    fun `an ordinal switch needs the enum class, a mapping array needs nothing`() {
+        assertEquals(emptyList<Found>(), sites("dense", NoClasses))
+        assertEquals(3, sites("hex", NoClasses).size)
+    }
+
+    @Test
     fun `whens that are not over a hierarchy have no site`() {
         // A single enum case compiles to a plain comparison, which is a conditional, not a switch.
         assertEquals(
@@ -258,7 +282,7 @@ class SealedWhenOperatorTest {
 
     @Test
     fun `every site changes the class and verifies`() {
-        val all = classes.values.flatMap { discover(it, SealedWhenOperator) }
+        val all = classes.values.flatMap { discover(it, SealedWhenOperator, hierarchy = hierarchy) }
         assertTrue(all.size >= 20, "expected the fixtures to yield many sites, got ${all.size}")
         all.forEach { found ->
             val original = classes.getValue(found.className)

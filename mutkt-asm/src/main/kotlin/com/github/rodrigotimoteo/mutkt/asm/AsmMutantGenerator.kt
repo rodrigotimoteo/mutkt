@@ -69,7 +69,7 @@ public class AsmMutantGenerator internal constructor(
     ): List<Planned> {
         val unchanged by lazy { HierarchyClassWriter(hierarchy).also { parse(bytes).accept(it) }.toByteArray() }
         return operators.flatMap { op ->
-            discover(bytes, op, suppressions)
+            discover(bytes, op, suppressions, hierarchy)
                 .filterNot { mutate(bytes, op, it, hierarchy).contentEquals(unchanged) }
                 .map { Planned(mutantOf(op, it), op, it, bytes) }
         }
