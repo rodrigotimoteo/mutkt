@@ -119,12 +119,13 @@ class EndToEndTest {
         // "ifle" in isPositive and "if_icmplt" in grade are what `n > 0` and `score >= 60` compile to (jump to the else
         // branch). The one SURVIVED boundary per method is the weak test (isPositive) or the untested edge (grade 60).
         // sumTo's second ladd is `i += step`: i then decreases forever, so it is the TIMEOUT mutant.
+        // doubled has no negate-conditionals mutant: its only IFEQ is the hasNext loop test of the inlined `map`,
+        // compiler noise removed by InlinedBodyFilter (ROD-116). So 16 mutants: 13 KILLED, 2 SURVIVED, 1 TIMEOUT,
+        // score (13 + 1) / 16 = 87.5%; Calculator 10/11 = 90.9%, Grader 4/5 = 80.0%.
         val EXPECTED: List<Pair<String, MutantStatus>> =
             listOf(
                 // IsPositive(5) turns false; positiveNumberIsPositive
                 "negate-conditionals Calculator.isPositive #0 ifle -> ifgt" to KILLED,
-                // The loop exits at once, result is empty; doublesEveryValue
-                "negate-conditionals Calculator.doubled #0 ifeq -> ifne" to KILLED,
                 // The loop never runs, result is 0; sumsWithStep
                 "negate-conditionals Calculator.sumTo #0 ifge -> iflt" to KILLED,
                 // 2 - 3 is -1; adds

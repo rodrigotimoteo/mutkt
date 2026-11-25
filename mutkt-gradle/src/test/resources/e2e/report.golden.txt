@@ -1,14 +1,14 @@
 Mutation report
-Mutants: 17
-  KILLED       14
+Mutants: 16
+  KILLED       13
   SURVIVED     2
   TIMEOUT      1
   NO_COVERAGE  0
   ERROR        0
-Score: 88.2%
+Score: 87.5%
 
 Class           Detected  Score
-a.b.Calculator     11/12  91.7%
+a.b.Calculator     10/11  90.9%
 a.b.Grader           4/5  80.0%
 
 Survivors (2)

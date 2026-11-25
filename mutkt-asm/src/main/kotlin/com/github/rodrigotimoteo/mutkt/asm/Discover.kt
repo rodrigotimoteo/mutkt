@@ -19,7 +19,7 @@ internal fun discover(
             .filter(::isMutable)
             .filter { suppressions?.covers(node.name, it.name, it.desc, op.id) != true }
     return methods.flatMap { method ->
-        op.sites(method).mapIndexed { ordinal, site ->
+        sitesOf(op, node.name, method).mapIndexed { ordinal, site ->
             Found(node.name, method.name, method.desc, ordinal, lineOf(site.instruction), site.description)
         }
     }

@@ -39,7 +39,7 @@ internal class OperatorContractTest {
         fresh.loadClass(name).declaredMethods
     }
 
-    private fun sitesOf(op: Operator) = corpus.values.flatMap { bytes -> discover(bytes, op).map { bytes to it } }
+    private fun corpusSites(op: Operator) = corpus.values.flatMap { bytes -> discover(bytes, op).map { bytes to it } }
 
     private fun verifyLog(bytes: ByteArray) =
         StringWriter()
@@ -52,13 +52,13 @@ internal class OperatorContractTest {
     @ParameterizedTest
     @MethodSource("operators")
     fun `finds at least one site in the corpus`(op: Operator) {
-        assertTrue(sitesOf(op).isNotEmpty(), "${op.id} found no site in the corpus")
+        assertTrue(corpusSites(op).isNotEmpty(), "${op.id} found no site in the corpus")
     }
 
     @ParameterizedTest
     @MethodSource("operators")
     fun `every site mutates into a changed, verifiable class`(op: Operator) {
-        sitesOf(op).forEach { (bytes, site) ->
+        corpusSites(op).forEach { (bytes, site) ->
             val mutant = mutate(bytes, op, site, hierarchy)
 
             assertFalse(mutant.contentEquals(plainRewrite(bytes)), "$site left the class unchanged")
@@ -70,7 +70,7 @@ internal class OperatorContractTest {
     @ParameterizedTest
     @MethodSource("operators")
     fun `applying a site twice gives identical bytes`(op: Operator) {
-        sitesOf(op).forEach { (bytes, site) ->
+        corpusSites(op).forEach { (bytes, site) ->
             val first = mutate(bytes, op, site, hierarchy)
 
             assertEquals(discover(bytes, op), discover(bytes, op))

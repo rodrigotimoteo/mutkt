@@ -200,6 +200,14 @@ private val SOURCE =
         return s.total(5L, 1.5)
     }
 
+    // Compiler-generated noise: an inline body copied into callers, a regenerated object, a String when.
+    inline fun inlineTwice(a: Int, f: (Int) -> Int): Int = f(a) + f(a + 1)
+    fun inlined(n: Int): Int = inlineTwice(n + 1) { it + 10 }
+    interface InlineCb { fun call(): Int }
+    inline fun inlineMake(crossinline f: () -> Int) = object : InlineCb { override fun call() = f() + 1 }
+    fun inlinedObject(n: Int): Int = inlineMake { n + 2 }.call()
+    fun inlinedStdlib(l: List<String>): List<String> = l.sortedBy { it.length + 1 }.map { it + "!" }
+    fun byName(s: String): Int = when (s) { "a" -> 1 + 0; "b" -> 2 + 0; "c" -> 3 + 0; else -> 4 }
     // Suspend calls: a state machine, a tail call, wide arguments, an instance receiver.
     suspend fun leaf(a: Int): Int = a + 1
     suspend fun twice(a: Int): Int = leaf(a) + leaf(a + 1)
