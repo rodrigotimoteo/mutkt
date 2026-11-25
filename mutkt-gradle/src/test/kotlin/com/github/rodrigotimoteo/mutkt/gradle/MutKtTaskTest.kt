@@ -156,7 +156,7 @@ class MutKtTaskTest {
     }
 
     @Test
-    fun `captures the test task's jvm arguments, working directory and launcher`() {
+    fun `captures the test task's jvm arguments without coverage agents, working directory and launcher`() {
         val project = project("java")
         val dir =
             project.layout.projectDirectory
@@ -165,14 +165,28 @@ class MutKtTaskTest {
         project.tasks.named("test", org.gradle.api.tasks.testing.Test::class.java).configure {
             it.jvmArgs("-Xmx64m")
             it.systemProperty("mutkt.sample", "yes")
-            it.jvmArgs("-javaagent:/agents/cover.jar=out", "-javaagent:/agents/other.jar")
+            it.jvmArgs(
+                "-javaagent:/tmp/expandedArchives/org.jacoco.agent-0.8.12.jar_1a2b/jacocoagent.jar=destfile=out",
+                "-javaagent:/cache/kover-jvm-agent-0.9.1.jar=file:/build/tmp/kover-agent.args",
+                "-javaagent:/cache/intellij-coverage-agent-1.0.765.jar=/build/tmp/agent.args",
+                "-javaagent:/cache/byte-buddy-agent-1.18.2.jar",
+                "-javaagent:/opt/a=b/jacocoagent.jar=destfile=out",
+                "-javaagent:/home/kover=1/byte-buddy-agent-1.18.2.jar",
+            )
             it.workingDir(dir)
         }
         val task = project.task()
 
         assertTrue("-Xmx64m" in task.testJvmArgs.get())
         assertTrue("-Dmutkt.sample=yes" in task.testJvmArgs.get())
-        assertTrue(task.testJvmArgs.get().none { it.startsWith("-javaagent") }, "agents are not forwarded")
+        assertEquals(
+            listOf(
+                "-javaagent:/cache/byte-buddy-agent-1.18.2.jar",
+                "-javaagent:/home/kover=1/byte-buddy-agent-1.18.2.jar",
+            ),
+            task.testJvmArgs.get().filter { it.startsWith("-javaagent") },
+            "only coverage agents are dropped",
+        )
         assertEquals(dir.absolutePath, task.testWorkingDir.get())
         assertTrue(File(task.testJavaExecutable.get()).isFile)
     }

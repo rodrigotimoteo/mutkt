@@ -33,8 +33,9 @@ internal fun Project.registerMutktTask(extension: MutKtExtension) {
         task.excludeTags.set(extension.excludeTags)
         task.failBelowScore.set(extension.failBelowScore)
         task.consoleReport.set(extension.reports.console)
-        // Agents (coverage, instrumentation) of the test task must not run on mutated classes.
-        task.testJvmArgs.set(fromTest { it.allJvmArgs.filterNot { arg -> arg.startsWith("-javaagent:") } })
+        // Coverage agents would record the mutant runs and rewrite their data files; other agents, such as a
+        // mocking library's, stay because the tests may not run without them.
+        task.testJvmArgs.set(fromTest { it.allJvmArgs.filterNot(::isCoverageAgent) })
         task.testWorkingDir.set(fromTest { it.workingDir.absolutePath })
         task.testJavaExecutable.set(
             fromTest {
@@ -46,6 +47,17 @@ internal fun Project.registerMutktTask(extension: MutKtExtension) {
         )
         task.reportsDir.set(layout.buildDirectory.dir("reports/mutkt"))
     }
+}
+
+// JaCoCo's jacocoagent.jar, Kover's kover-jvm-agent and the IntelliJ coverage agent Kover used.
+private val COVERAGE_AGENT = Regex("jacoco|kover|intellij-coverage", RegexOption.IGNORE_CASE)
+
+// The jar path ends at the ".jar" that the options' '=' or the argument's end follows; a directory may hold '='.
+private val AGENT_JAR = Regex("""^-javaagent:(.*?\.jar)(?:=|$)""", RegexOption.IGNORE_CASE)
+
+private fun isCoverageAgent(arg: String): Boolean {
+    val jar = AGENT_JAR.find(arg)?.groupValues?.get(1) ?: return false
+    return COVERAGE_AGENT.containsMatchIn(jar.substringAfterLast('/').substringAfterLast('\\'))
 }
 
 private fun currentJava(): String = Paths.get(System.getProperty("java.home"), "bin", "java").toString()
