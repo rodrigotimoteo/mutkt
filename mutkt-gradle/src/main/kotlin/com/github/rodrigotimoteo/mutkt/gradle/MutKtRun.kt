@@ -37,8 +37,10 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
         object : ReportWriter {
             override fun write(report: MutationReport) = writers.forEach { it.write(report) }
         }
-    // The generator resolves supertypes of the analysed classes, including the ones the filters left out.
-    val urls = (listOf(production) + dependencies).map { it.toUri().toURL() }.toTypedArray()
+    // The generator resolves supertypes of the analysed classes, including the ones the filters left out. The compile
+    // classpath comes last, so runtime versions win and compileOnly types still resolve for frame computation.
+    val compileOnly = compileClasspath.files.map(File::toPath)
+    val urls = (listOf(production) + dependencies + compileOnly).map { it.toUri().toURL() }.toTypedArray()
     val report =
         URLClassLoader(urls, null).use { loader ->
             // Built first so an unknown operator id fails before any child JVM could start.
@@ -59,7 +61,7 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
 
 private fun MutKtTask.generator(loader: ClassLoader) =
     try {
-        AsmMutantGenerator(operators.get()) { name -> loader.classBytes(name) }
+        AsmMutantGenerator(operators.get(), { logger.warn(it) }) { name -> loader.classBytes(name) }
     } catch (e: IllegalArgumentException) {
         throw GradleException(e.message.orEmpty(), e)
     }

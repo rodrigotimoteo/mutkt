@@ -20,7 +20,7 @@ class SuppressionTest {
     private fun AsmMutantGenerator.discover(files: List<ClassFile>) = discover(files, files)
 
     private fun operatorsByMethod(source: String): Map<String, Set<String>> =
-        AsmMutantGenerator(operators) { null }
+        AsmMutantGenerator(operators, ::error) { null }
             .discover(filesOf(source))
             .groupBy({ "${it.className}.${it.methodName}" }, { it.operator.value })
             .mapValues { it.value.toSet() }
@@ -151,7 +151,7 @@ class SuppressionTest {
     @Test
     fun `annotating one overload leaves its siblings mutated`() {
         val mutants =
-            AsmMutantGenerator(operators) { null }.discover(
+            AsmMutantGenerator(operators, ::error) { null }.discover(
                 filesOf(
                     """
                     class C {
@@ -205,7 +205,7 @@ class SuppressionTest {
         vararg targets: String,
     ): Map<String, Set<String>> {
         val all = filesOf(source)
-        return AsmMutantGenerator(operators) { null }
+        return AsmMutantGenerator(operators, ::error) { null }
             .discover(all, all.filter { it.name in targets })
             .groupBy({ "${it.className}.${it.methodName}" }, { it.operator.value })
             .mapValues { it.value.toSet() }
@@ -280,7 +280,9 @@ class SuppressionTest {
     private fun mutantsOf(
         selection: Set<String>,
         source: String,
-    ) = AsmMutantGenerator(selection) { null }.discover(filesOf(source)).map { it.operator.value to it.methodName }
+    ) = AsmMutantGenerator(selection, ::error) { null }
+        .discover(filesOf(source))
+        .map { it.operator.value to it.methodName }
 
     @Test
     fun `a suppression naming an operator outside the selection is valid`() {

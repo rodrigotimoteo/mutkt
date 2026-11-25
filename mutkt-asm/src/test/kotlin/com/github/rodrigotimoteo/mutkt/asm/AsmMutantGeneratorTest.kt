@@ -65,7 +65,8 @@ class AsmMutantGeneratorTest {
 
     private fun AsmMutantGenerator.discover(files: List<ClassFile>) = discover(files, files)
 
-    private fun generator(vararg ops: Operator = arrayOf(ToyOperator)) = AsmMutantGenerator(ops.toList()) { null }
+    private fun generator(vararg ops: Operator = arrayOf(ToyOperator)) =
+        AsmMutantGenerator(ops.toList(), ::error) { null }
 
     private fun Mutant.pick() = Triple(className, methodName + methodDescriptor, id.ordinal)
 
@@ -242,7 +243,20 @@ class AsmMutantGeneratorTest {
         val mutant = generator.discover(pets).single()
 
         assertTrue(generator.materialize(mutant).isNotEmpty())
-        assertThrows<IllegalStateException> { generator().discover(pets.filter { it.name == sourceKt }) }
+    }
+
+    @Test
+    fun `a class whose frames need an unknown type is skipped and reported while the others are mutated`() {
+        val pick = ClassFile(sourceKt, uncastPick().getValue(sourceKt))
+        val outer = files.single { it.name == "a.b.Outer" }
+        val skipped = mutableListOf<String>()
+
+        val mutants = AsmMutantGenerator(listOf(ToyOperator), skipped::add) { null }.discover(listOf(outer, pick))
+
+        assertEquals(setOf("a.b.Outer"), mutants.map { it.className }.toSet())
+        val message = skipped.single()
+        assertTrue(message.startsWith("Skipped a.b.SourceKt: cannot resolve a.b."), message)
+        assertTrue(message.endsWith(" to compute stack frames"), message)
     }
 
     @Test
@@ -263,6 +277,7 @@ class AsmMutantGeneratorTest {
         val mutants =
             AsmMutantGenerator(
                 setOf("sealed-when"),
+                ::error,
             ) { null }.discover(all, all.filter { it.name == "SourceKt" })
 
         assertEquals(setOf("area", "tint"), mutants.map { it.methodName }.toSet())
@@ -274,6 +289,6 @@ class AsmMutantGeneratorTest {
         val internal = pets.mapKeys { it.key.replace('.', '/') }
         val onlyPick = listOf(ClassFile(sourceKt, pets.getValue(sourceKt)))
 
-        assertEquals(1, AsmMutantGenerator(listOf(ToyOperator)) { internal[it] }.discover(onlyPick).size)
+        assertEquals(1, AsmMutantGenerator(listOf(ToyOperator), ::error) { internal[it] }.discover(onlyPick).size)
     }
 }
