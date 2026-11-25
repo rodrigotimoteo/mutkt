@@ -1,0 +1,136 @@
+package com.github.rodrigotimoteo.mutkt.report
+
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
+import com.github.rodrigotimoteo.mutkt.domain.MutationReport
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
+import java.nio.file.Path
+
+class StrykerReportWriterTest {
+    @TempDir
+    lateinit var dir: Path
+
+    private fun render(report: MutationReport): String =
+        StringBuilder()
+            .also {
+                StrykerReportWriter(it, StringBuilder(), FileSourceLookup(listOf(dir))).write(report)
+            }.toString()
+
+    @Test
+    fun `the fixture report matches the golden file`() {
+        val golden = StrykerReportWriterTest::class.java.getResource("/golden/report.json")!!.readText()
+
+        assertEquals(golden, render(fixtureReport(dir)))
+    }
+
+    @Test
+    fun `the fixture report validates against the published schema`() {
+        assertEquals(emptyList<String>(), SchemaValidator(schemaText()).validate(render(fixtureReport(dir))))
+    }
+
+    @Test
+    fun `an empty report validates and has no files`() {
+        val json = render(MutationReport(emptyList()))
+
+        assertEquals(emptyList<String>(), SchemaValidator(schemaText()).validate(json))
+        assertEquals(0, ObjectMapper().readTree(json).get("files").size())
+    }
+
+    @Test
+    fun `every status maps to its schema name`() {
+        val files = ObjectMapper().readTree(render(fixtureReport(dir))).get("files")
+        val statuses =
+            files.flatMap { it.get("mutants") }.map { it.get("status").asText() }
+
+        assertEquals(setOf("Killed", "Survived", "Timeout", "NoCoverage", "RuntimeError"), statuses.toSet())
+    }
+
+    @Test
+    fun `a missing source and a line past the end are clamped to a one-column span`() {
+        val files = ObjectMapper().readTree(render(fixtureReport(dir))).get("files")
+
+        assertEquals(
+            """{"start":{"line":1,"column":1},"end":{"line":1,"column":2}}""",
+            location(files, "demo/Other", "run"),
+        )
+        assertEquals(
+            """{"start":{"line":9,"column":1},"end":{"line":9,"column":2}}""",
+            location(files, "demo/Calc.kt", "gone"),
+        )
+    }
+
+    @Test
+    fun `every location lies inside its source and spans at least one column`() {
+        val files = ObjectMapper().readTree(render(fixtureReport(dir))).get("files")
+
+        for (file in files) {
+            val lineCount =
+                file
+                    .get("source")
+                    .asText()
+                    .split('\n')
+                    .size
+            for (mutant in file.get("mutants")) {
+                val (start, end) = mutant.get("location").let { it.get("start") to it.get("end") }
+                assertTrue(start.get("line").asInt() in 1..lineCount, mutant.toString())
+                assertEquals(start.get("line"), end.get("line"), mutant.toString())
+                assertTrue(end.get("column").asInt() > start.get("column").asInt(), mutant.toString())
+            }
+        }
+    }
+
+    @Test
+    fun `the document is built once for both files, reading each source once`() {
+        val reads = mutableListOf<String>()
+        val files = FileSourceLookup(listOf(dir))
+        val counting =
+            object : SourceLookup by files {
+                override fun sourceText(
+                    className: String,
+                    sourceFile: String?,
+                ): String? = files.sourceText(className, sourceFile).also { reads += className }
+            }
+        val json = StringBuilder()
+        val html = StringBuilder()
+
+        StrykerReportWriter(json, html, counting).write(fixtureReport(dir))
+
+        assertEquals(listOf("demo.Calc", "demo.Other"), reads)
+        assertTrue(json.toString().trimEnd().replace("<", "\\" + "u003c") in html.toString())
+    }
+
+    private fun location(
+        files: JsonNode,
+        path: String,
+        method: String,
+    ): String =
+        files
+            .get(path)
+            .get("mutants")
+            .first { "#" + method + "(" in it.get("id").asText() }
+            .get("location")
+            .toString()
+
+    @Test
+    fun `source text with control characters and quotes survives a round trip`() {
+        val report = fixtureReport(dir).let { MutationReport(it.results.take(1)) }
+        val tricky = "val s = \"a\\b\"\t// " + Char(0) + Char(1) + " </script>"
+        Files.writeString(dir.resolve("demo/Calc.kt"), tricky + "\n")
+
+        val json = ObjectMapper().readTree(render(report))
+
+        assertEquals(
+            tricky,
+            json
+                .get("files")
+                .get("demo/Calc.kt")
+                .get("source")
+                .asText(),
+        )
+    }
+}

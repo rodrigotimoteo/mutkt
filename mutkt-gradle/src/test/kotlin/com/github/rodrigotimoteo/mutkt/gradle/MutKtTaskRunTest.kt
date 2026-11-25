@@ -26,7 +26,7 @@ class MutKtTaskRunTest {
         val main = dir.resolve("main").also { write(it, compiled.filterKeys { name -> !name.endsWith("Test") }) }
         val tests = dir.resolve("test").also { write(it, compiled.filterKeys { name -> name.endsWith("Test") }) }
         val sources = dir.resolve("src").also { it.resolve("demo").mkdirs() }
-        sources.resolve("demo/Calc.kt").writeText(FIXTURE)
+        sources.resolve("demo/Source.kt").writeText(FIXTURE)
         val task = task(main, tests, sources)
 
         val result = task.runAnalysis()
@@ -37,6 +37,12 @@ class MutKtTaskRunTest {
         assertTrue("Mutants: 2" in summary, summary)
         assertTrue("KILLED       2" in summary, summary)
         assertTrue("Score: 100.0%" in summary, summary)
+        assertTrue("\"schemaVersion\": \"2\"" in result.json && "\"demo/Source.kt\"" in result.json, result.json)
+        assertTrue("\"status\": \"Killed\"" in result.json && "class Calc" in result.json, result.json)
+        // The bundle fills most of the page; its tail holds the report data.
+        val page = result.html.takeLast(PAGE_TAIL)
+        assertTrue("<mutation-test-report-app>" in result.html, "No viewer element in the HTML report: $page")
+        assertTrue("\"demo/Source.kt\"" in result.html, "No demo/Source.kt entry in the HTML report: $page")
     }
 
     @Test
@@ -164,6 +170,8 @@ class MutKtTaskRunTest {
             .filter { it.isFile && PROJECT_JARS.containsMatchIn(it.name) }
 
     private companion object {
+        const val PAGE_TAIL = 2000
+
         // What the fixture's tests need at run time; the Launcher API comes from the plugin side.
         val PROJECT_JARS =
             Regex("^(junit-jupiter|junit-platform-(engine|commons)|opentest4j|apiguardian|kotlin-stdlib)")

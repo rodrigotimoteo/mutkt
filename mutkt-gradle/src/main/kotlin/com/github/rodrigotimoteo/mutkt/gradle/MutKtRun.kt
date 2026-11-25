@@ -4,13 +4,16 @@ import com.github.rodrigotimoteo.mutkt.application.AnalysisConfig
 import com.github.rodrigotimoteo.mutkt.application.ClassFilters
 import com.github.rodrigotimoteo.mutkt.application.Glob
 import com.github.rodrigotimoteo.mutkt.application.RunMutationAnalysis
+import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.asm.AsmMutantGenerator
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
+import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import com.github.rodrigotimoteo.mutkt.junit.ForkSettings
 import com.github.rodrigotimoteo.mutkt.junit.ForkedTestExecutor
 import com.github.rodrigotimoteo.mutkt.junit.derivedEngineClasspath
 import com.github.rodrigotimoteo.mutkt.report.ConsoleReportWriter
 import com.github.rodrigotimoteo.mutkt.report.FileSourceLookup
+import com.github.rodrigotimoteo.mutkt.report.StrykerReportWriter
 import org.gradle.api.GradleException
 import java.io.File
 import java.net.URLClassLoader
@@ -26,7 +29,14 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
     val dependencies = testRuntimeClasspath.files.filterNot { it in classDirs }.map(File::toPath)
     val config = analysisConfig()
     val summary = StringBuilder()
-    val writer = ConsoleReportWriter(summary, FileSourceLookup(sourceDirs.files.map(File::toPath)))
+    val json = StringBuilder()
+    val html = StringBuilder()
+    val lookup = FileSourceLookup(sourceDirs.files.map(File::toPath))
+    val writers = listOf(ConsoleReportWriter(summary, lookup), StrykerReportWriter(json, html, lookup))
+    val writer =
+        object : ReportWriter {
+            override fun write(report: MutationReport) = writers.forEach { it.write(report) }
+        }
     // The generator resolves supertypes of the analysed classes, including the ones the filters left out.
     val urls = (listOf(production) + dependencies).map { it.toUri().toURL() }.toTypedArray()
     val report =
@@ -42,6 +52,8 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
         report.score,
         report.results.size,
         report.results.count { it.status == MutantStatus.ERROR },
+        json.toString(),
+        html.toString(),
     )
 }
 

@@ -11,4 +11,10 @@ public interface SourceLookup {
         sourceFile: String?,
         line: Int,
     ): String?
+
+    /** The whole file [lineText] reads, lines joined with `\n`, or null when unavailable. */
+    public fun sourceText(
+        className: String,
+        sourceFile: String?,
+    ): String?
 }
