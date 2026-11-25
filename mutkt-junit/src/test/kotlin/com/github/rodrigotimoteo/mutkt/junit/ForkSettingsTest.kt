@@ -33,6 +33,11 @@ class ForkSettingsTest {
     }
 
     @Test
+    fun `a non-positive preparation limit names its setting`() {
+        assertTrue("prepareMillis" in message { settings().copy(prepareMillis = 0) })
+    }
+
+    @Test
     fun `empty engines name the engines setting`() {
         assertTrue("'engines'" in message { settings(engines = emptyList()) })
     }

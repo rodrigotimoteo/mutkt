@@ -12,7 +12,9 @@ import java.nio.file.Paths
  * replaced by the project's own when [classpath] has the launcher.
  * [engines] are JUnit Platform engine ids (`junit-jupiter`, `junit-vintage`); [includeTags] and [excludeTags] are
  * JUnit tag expressions, applied to every run (no include tags means all tests).
- * A reply is awaited for the mutant's deadline plus [graceMillis], which also covers JVM-side class loading.
+ * A child gets [prepareMillis] to load and link classes and create the launcher; silence for longer fails the run
+ * (not a timeout, so it earns no detection credit). Once it reports the start, a reply is awaited for the
+ * mutant's deadline plus [graceMillis].
  */
 public data class ForkSettings(
     val javaExecutable: Path,
@@ -24,6 +26,7 @@ public data class ForkSettings(
     val classpath: List<Path>,
     val parallelism: Int,
     val graceMillis: Long = DEFAULT_GRACE_MILLIS,
+    val prepareMillis: Long = DEFAULT_PREPARE_MILLIS,
     val engineClasspath: List<Path>? = null,
     val engines: List<String> = listOf(JUPITER_ENGINE),
     val includeTags: List<String> = emptyList(),
@@ -35,10 +38,12 @@ public data class ForkSettings(
         require(includeTags.none(::hasLineBreak)) { "includeTags must not contain line breaks: $includeTags" }
         require(excludeTags.none(::hasLineBreak)) { "excludeTags must not contain line breaks: $excludeTags" }
         require(graceMillis >= 0) { "graceMillis must not be negative: $graceMillis" }
+        require(prepareMillis > 0) { "prepareMillis must be positive: $prepareMillis" }
     }
 
     private companion object {
         const val DEFAULT_GRACE_MILLIS: Long = 5000
+        const val DEFAULT_PREPARE_MILLIS: Long = 60_000
     }
 }
 

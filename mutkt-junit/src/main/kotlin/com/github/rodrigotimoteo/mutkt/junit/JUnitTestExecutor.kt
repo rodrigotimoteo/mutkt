@@ -62,6 +62,15 @@ public class JUnitTestExecutor(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
+    ): Outcome = run(mutant, bytes, deadline) {}
+
+    // [onExecuting] runs once on the worker when the launcher exists and the deadline is about to start; it is
+    // skipped when the mutant or a test class fails to link. The fork protocol reports it as Started.
+    internal fun run(
+        mutant: Mutant,
+        bytes: ByteArray,
+        deadline: Duration,
+        onExecuting: () -> Unit,
     ): Outcome {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { "JUnitTestExecutor is closed, cannot run ${mutant.id}" }
@@ -72,7 +81,10 @@ public class JUnitTestExecutor(
                     // Launcher and engines discover and load through the context loader.
                     Thread.currentThread().contextClassLoader = loader
                     try {
-                        execute(mutant, loader, started)
+                        execute(mutant, loader) {
+                            onExecuting()
+                            started.countDown()
+                        }
                     } finally {
                         started.countDown()
                     }
@@ -103,7 +115,7 @@ public class JUnitTestExecutor(
     private fun execute(
         mutant: Mutant,
         loader: ClassLoader,
-        started: CountDownLatch,
+        executing: () -> Unit,
     ): Outcome {
         // A mutant or test class that cannot link is a broken input, not a kill.
         // declaredMethods links the mutant, which is what surfaces VerifyError before any test touches it.
@@ -114,7 +126,7 @@ public class JUnitTestExecutor(
             } catch (e: LinkageError) {
                 return Outcome.LoadError(e.toString())
             }
-        return runTests(types, started)
+        return runTests(types, executing)
     }
 
     // @Nested classes run through their enclosing class; selecting them too would run them twice.
@@ -125,11 +137,11 @@ public class JUnitTestExecutor(
 
     private fun runTests(
         types: List<Class<*>>,
-        started: CountDownLatch,
+        executing: () -> Unit,
     ): Outcome {
         // A new launcher per run: nothing is cached between runs, and engines must be found via this loader.
         val launcher = LauncherFactory.create(LauncherConfig.builder().enableTestEngineAutoRegistration(true).build())
-        started.countDown()
+        executing()
         var testsStarted = 0
         // An abandoned (interrupted) worker must not run the remaining classes against a closed loader.
         for (type in types.asSequence().takeWhile { !Thread.currentThread().isInterrupted }) {

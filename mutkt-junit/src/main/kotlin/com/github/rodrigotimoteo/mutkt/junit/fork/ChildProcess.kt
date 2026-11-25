@@ -35,16 +35,28 @@ internal class ChildProcess private constructor(
 
     val isAlive: Boolean get() = process.isAlive
 
-    /** Runs one mutant; a hard wait of [timeoutMillis] + [graceMillis] without a reply is a [Outcome.Timeout]. */
+    /**
+     * Runs one mutant. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
+     * detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout].
+     */
     fun run(
         mutant: Mutant,
         bytes: ByteArray,
         timeoutMillis: Long,
         graceMillis: Long,
+        prepareMillis: Long,
     ): Outcome =
         try {
             writeRequest(output, ForkRequest.Run(mutant, bytes, timeoutMillis))
-            when (val reply = awaitReply(timeoutMillis + graceMillis)) {
+            // A mutant or test class that cannot link answers Result without a Started.
+            val first =
+                awaitReply(prepareMillis)
+                    ?: throw failure(
+                        "preparing ${mutant.id}, no Started within $prepareMillis ms",
+                        IOException("Silent while preparing"),
+                    )
+            val reply = if (first is ForkReply.Started) awaitReply(timeoutMillis + graceMillis) else first
+            when (reply) {
                 null -> Outcome.Timeout
                 is ForkReply.Result -> reply.outcome
                 else -> throw ForkProtocolException("Unexpected reply $reply")

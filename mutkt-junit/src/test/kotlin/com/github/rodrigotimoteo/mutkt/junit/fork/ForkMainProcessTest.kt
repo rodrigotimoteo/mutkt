@@ -74,8 +74,10 @@ class ForkMainProcessTest {
         assertEquals(ForkReply.Ready(), readReply(input))
 
         writeRequest(out, ForkRequest.Run(mutantOf(), mutantBytes(CALC_MUTANT), 20_000))
+        assertEquals(ForkReply.Started, readReply(input))
         assertEquals(ForkReply.Result(Outcome.Killed("CalcTest.adds")), readReply(input))
         writeRequest(out, ForkRequest.Run(mutantOf(), mutantBytes(CALC), 20_000))
+        assertEquals(ForkReply.Started, readReply(input))
         assertEquals(ForkReply.Result(Outcome.Survived), readReply(input))
 
         writeRequest(out, ForkRequest.Shutdown)

@@ -71,7 +71,8 @@ public class ForkedTestExecutor(
     ): Outcome {
         var reusable = false
         try {
-            val outcome = child.run(mutant, bytes, deadline.inWholeMilliseconds.coerceAtLeast(1), settings.graceMillis)
+            val millis = deadline.inWholeMilliseconds.coerceAtLeast(1)
+            val outcome = child.run(mutant, bytes, millis, settings.graceMillis, settings.prepareMillis)
             // A child that timed out may still be running the abandoned mutant thread.
             reusable = outcome != Outcome.Timeout
             return outcome
