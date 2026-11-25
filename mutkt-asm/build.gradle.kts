@@ -2,6 +2,8 @@ plugins {
     id("mutkt.published-library")
 }
 
+description = "Bytecode mutation operators and mutant generator of MutKt, built on ASM."
+
 dependencies {
     implementation(project(":mutkt-core"))
     implementation(project(":mutkt-annotations"))

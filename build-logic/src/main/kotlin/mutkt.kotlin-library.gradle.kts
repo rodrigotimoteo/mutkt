@@ -6,7 +6,8 @@ plugins {
 }
 
 group = "io.github.rodrigotimoteo"
-version = "0.0.0-SNAPSHOT"
+// The release workflow passes the tag as -Pmutkt.version; local builds stay on the snapshot.
+version = providers.gradleProperty("mutkt.version").getOrElse("0.0.0-SNAPSHOT")
 
 val libs = the<VersionCatalogsExtension>().named("libs")
 

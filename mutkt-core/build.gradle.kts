@@ -2,6 +2,8 @@ plugins {
     id("mutkt.published-library")
 }
 
+description = "Domain model and use cases of MutKt, mutation testing for Kotlin/JVM."
+
 dependencies {
     testImplementation(libs.konsist)
 }

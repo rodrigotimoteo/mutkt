@@ -12,3 +12,4 @@ One file per decision: `NNNN-title.md` with Context, Decision, Consequences. Sou
 | 0006 | Android design | ROD-125 | later |
 | 0007 | KMP scope | ROD-136 | later |
 | 0008 | Forked JVM pool instead of WorkerExecutor | ROD-104 | accepted (autopilot, owner to confirm) |
+| 0009 | Single release pipeline | ROD-121 | accepted (autopilot, owner to confirm) |

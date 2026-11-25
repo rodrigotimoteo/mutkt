@@ -3,13 +3,21 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 plugins {
     id("mutkt.published-library")
     `java-gradle-plugin`
+    alias(libs.plugins.pluginPublish)
 }
 
+description = "Gradle plugin that runs mutation testing on the compiled bytecode of a Kotlin/JVM build."
+
 gradlePlugin {
+    website = "https://github.com/rodrigotimoteo/mutkt"
+    vcsUrl = "https://github.com/rodrigotimoteo/mutkt.git"
     plugins {
         create("mutkt") {
             id = "io.github.rodrigotimoteo.mutkt"
             implementationClass = "com.github.rodrigotimoteo.mutkt.gradle.MutKtPlugin"
+            displayName = "MutKt mutation testing"
+            description = "Mutates compiled Kotlin bytecode and runs your existing JUnit tests against each mutant."
+            tags = listOf("mutation-testing", "kotlin", "testing", "junit")
         }
     }
 }
