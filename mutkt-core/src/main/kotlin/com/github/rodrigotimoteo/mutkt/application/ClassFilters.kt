@@ -28,17 +28,25 @@ public data class ClassFilters(
         methodName: String,
     ): Boolean = methodName !in excludedMethods && "$className#$methodName" !in excludedMethods
 
-    /** Keeps the first [maxMutantsPerClass] mutants of each class, in the given order. */
-    public fun limit(mutants: List<Mutant>): List<Mutant> {
-        val max = maxMutantsPerClass ?: return mutants
+    /** Keeps the first [maxMutantsPerClass] mutants of each class, in the given order, and counts the rest. */
+    internal fun limit(mutants: List<Mutant>): Limited {
+        val max = maxMutantsPerClass ?: return Limited(mutants, 0)
         val counts = mutableMapOf<String, Int>()
-        return mutants.filter {
-            val seen = (counts[it.className] ?: 0) + 1
-            counts[it.className] = seen
-            seen <= max
-        }
+        val kept =
+            mutants.filter {
+                val seen = (counts[it.className] ?: 0) + 1
+                counts[it.className] = seen
+                seen <= max
+            }
+        return Limited(kept, mutants.size - kept.size)
     }
 }
+
+/** The [kept] mutants of a capped run and how many were [omitted] by the cap. */
+internal data class Limited(
+    val kept: List<Mutant>,
+    val omitted: Int,
+)
 
 private fun validateMethodEntry(entry: String) {
     require(entry.isNotBlank()) { "Excluded method must not be blank" }

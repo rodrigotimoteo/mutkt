@@ -30,13 +30,13 @@ public class RunMutationAnalysis(
         val filters = config.filters
         val classes = classSource.classes()
         val targets = classes.filter { filters.acceptsClass(it.name) }
-        val mutants =
+        val (mutants, omitted) =
             filters.limit(
                 generator.discover(classes, targets).filter { filters.acceptsMethod(it.className, it.methodName) },
             )
         // Without a green suite every failing test would count as a kill, so nothing is scored.
         if (mutants.isNotEmpty()) requireGreenBaseline()
-        return MutationReport(analyse(mutants, progress)).also(writer::write)
+        return MutationReport(analyse(mutants, progress), omitted).also(writer::write)
     }
 
     private fun requireGreenBaseline() {

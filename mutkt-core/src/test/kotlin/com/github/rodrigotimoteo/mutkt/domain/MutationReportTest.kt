@@ -19,6 +19,12 @@ class MutationReportTest {
         MutationReport(statuses.mapIndexed { i, s -> result(s, ordinal = i) })
 
     @Test
+    fun `omitted defaults to zero and does not change the score`() {
+        assertEquals(0, report(MutantStatus.KILLED).omitted)
+        assertEquals(1.0, MutationReport(listOf(result(MutantStatus.KILLED)), omitted = 2).score)
+    }
+
+    @Test
     fun `empty report has no score`() = assertNull(MutationReport(emptyList()).score)
 
     @Test

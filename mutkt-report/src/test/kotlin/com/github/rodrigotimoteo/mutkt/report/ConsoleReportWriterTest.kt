@@ -53,6 +53,13 @@ class ConsoleReportWriterTest {
     }
 
     @Test
+    fun `score line names the mutants the cap omitted`() {
+        val text = render(MutationReport(listOf(result(KILLED)), omitted = 2))
+        assertTrue("Score: 100.0% (1 evaluated, 2 omitted by the cap)\n" in text, text)
+        assertTrue("omitted" !in render(MutationReport(listOf(result(KILLED)))))
+    }
+
+    @Test
     fun `only errors give score n-a and a class row without score`() {
         assertEquals(
             """
