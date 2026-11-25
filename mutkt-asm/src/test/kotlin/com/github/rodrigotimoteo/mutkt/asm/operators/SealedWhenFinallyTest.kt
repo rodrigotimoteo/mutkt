@@ -58,7 +58,7 @@ class SealedWhenFinallyTest {
 
     private fun generated() =
         classes.map { (name, bytes) -> ClassFile(name, bytes) }.let {
-            AsmMutantGenerator(setOf("sealed-when")) { null }.discover(it, it)
+            AsmMutantGenerator(setOf("sealed-when"), ::error) { null }.discover(it, it)
         }
 
     @Test

@@ -47,6 +47,7 @@ class MutKtProjectModelTest {
             model.testClasses.files,
         )
         assertEquals(project.sourceSet("test").runtimeClasspath.files, model.testRuntimeClasspath.files)
+        assertEquals(project.sourceSet("main").compileClasspath.files, model.mainCompileClasspath.files)
         project.testTask().classpath += project.files("extra")
         assertTrue(File(project.projectDir, "extra") in model.testRuntimeClasspath.files)
         assertTrue(model.testRuntimeClasspath.files.containsAll(model.mainClasses.files))
