@@ -1,0 +1,66 @@
+@file:JvmName("ParityClasses")
+
+data class Point(val x: Int, val y: Int) {
+    fun plus(o: Point) = Point(x + o.x, y + o.y)
+
+    fun norm() = x * x + y * y
+}
+
+object Registry {
+    private val names = mutableListOf<String>()
+
+    fun register(n: String): Int {
+        names.add(n)
+        return names.size - 1
+    }
+}
+
+open class Animal {
+    open fun legs() = 4
+}
+
+class Dog : Animal() {
+    override fun legs() = super.legs() - 1
+}
+
+sealed class Shape
+
+class Circle(val r: Int) : Shape()
+
+class Square(val s: Int) : Shape()
+
+fun area(shape: Shape): Int =
+    when (shape) {
+        is Circle -> 3 * shape.r * shape.r
+        is Square -> shape.s * shape.s
+    }
+
+enum class Color { RED, GREEN, BLUE }
+
+fun hex(c: Color): Int =
+    when (c) {
+        Color.RED -> 256
+        Color.GREEN -> 130
+        Color.BLUE -> 67
+    }
+
+fun guarded(s: String): Int =
+    try {
+        s.toInt() + 1
+    } catch (e: NumberFormatException) {
+        -1
+    } finally {
+        Registry.register(s)
+    }
+
+fun lambdas(xs: List<Int>): Int {
+    val offset = xs.size
+    return xs.map { it + 1 }.filter { it > 1 }.fold(offset) { acc, x -> acc + x }
+}
+
+fun sideEffects(items: MutableList<String>, name: String) {
+    items.add(name)
+    items.clear()
+    items.sort()
+    Registry.register(name)
+}

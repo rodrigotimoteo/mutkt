@@ -1,0 +1,47 @@
+@file:JvmName("ParityReturns")
+
+var sink = 0
+fun anInt(a: Int) = a + 1
+fun aByte(a: Byte): Byte = a
+fun aLong(a: Long) = a * 2
+fun aFloat(a: Float) = a
+fun aDouble(a: Double) = a
+fun aBool(a: Int) = a > 0
+fun aTrue() = true
+fun aFalse() = false
+fun flip(a: Boolean) = !a
+fun aString(a: Int) = "v" + a
+fun anObject(a: Any): Any = a
+fun aNullable(a: Any?): Any? = a
+fun ints(n: Int) = IntArray(n)
+fun strings(n: Int) = arrayOf(n.toString())
+fun grid(n: Int) = arrayOf(IntArray(n))
+fun list(n: Int): List<Int> = listOf(n)
+fun mutable(n: Int): MutableList<Int> = mutableListOf(n)
+fun arrayList(n: Int): java.util.ArrayList<Int> = java.util.ArrayList(listOf(n))
+fun set(n: Int): Set<Int> = setOf(n)
+fun map(n: Int): Map<String, Int> = mapOf("a" to n)
+fun iterable(n: Int): Iterable<Int> = listOf(n)
+
+fun touch(n: Int) {
+    sink += n
+}
+
+fun maybeTouch(n: Int) {
+    if (n > 0) touch(n)
+}
+
+fun early(n: Int): Int {
+    if (n < 0) return 0
+    return n
+}
+
+class Box(val value: Int) {
+    fun get() = value
+
+    fun self(): Box = this
+
+    fun positive() = value > 0
+
+    fun copyWith(v: Int) = Box(v)
+}

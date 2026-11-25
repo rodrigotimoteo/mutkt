@@ -1,0 +1,55 @@
+@file:JvmName("ParityConditionals")
+
+fun lt(a: Int, b: Int) = a < b
+fun le(a: Int, b: Int) = a <= b
+fun gt(a: Int, b: Int) = a > b
+fun ge(a: Int, b: Int) = a >= b
+fun eq(a: Int, b: Int) = a == b
+fun ne(a: Int, b: Int) = a != b
+
+fun sign(a: Int): Int =
+    if (a > 0) {
+        1
+    } else if (a < 0) {
+        -1
+    } else {
+        0
+    }
+
+fun longGuard(a: Long) = if (a >= 10L) "big" else "small"
+fun doubleGuard(a: Double) = if (a <= 0.5) "low" else "high"
+fun floatGuard(a: Float, b: Float) = a < b
+fun inRange(a: Int) = a in 6..9
+fun both(a: Int, b: Int) = a > 0 && b > 0
+fun either(a: Int, b: Int) = a == 5 || b < 0
+fun same(a: Any, b: Any) = a === b
+fun differs(a: Any, b: Any) = a !== b
+fun isMissing(s: String?) = s == null
+fun isPresent(s: String?) = s != null
+fun lengthOrZero(s: String?): Int = if (s == null) 0 else s.length
+fun orDefault(s: String?): String = s ?: "none"
+fun safeLength(s: String?): Int = s?.length ?: -1
+
+fun classify(a: Int): String =
+    when {
+        a > 10 -> "big"
+        a == 5 || a < 0 -> "odd"
+        else -> "small"
+    }
+
+fun month(n: Int): Int =
+    when (n) {
+        1 -> 31
+        2 -> 28
+        3 -> 31
+        4 -> 30
+        else -> 0
+    }
+
+fun loop(n: Int): Int {
+    var total = 0
+    for (i in 0 until n) {
+        if (i % 2 == 0) total += i
+    }
+    return total
+}

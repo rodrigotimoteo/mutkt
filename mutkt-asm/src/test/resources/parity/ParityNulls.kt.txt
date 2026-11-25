@@ -1,0 +1,27 @@
+@file:JvmName("ParityNulls")
+
+var sink = 0
+fun literalNull(): String? = null
+fun nullArray(): IntArray? = null
+fun nullList(): List<Int>? = null
+fun maybe(n: Int): String? = if (n > 0) "a" else null
+
+fun orNull(n: Int): String? {
+    if (n > 0) return "a"
+    return null
+}
+
+suspend fun suspended(n: Int): Int = n + 1
+
+suspend fun suspendedUnit(n: Int) {
+    sink = n
+}
+
+suspend fun suspendedText(n: Int): String = "v" + n
+suspend fun chain(n: Int): Int = suspended(n) + suspended(n + 1)
+fun block(f: () -> Unit): () -> Unit = f
+fun unitHolder(): Unit = Unit
+fun callUnit(n: Int): Unit = block { sink = n }.invoke()
+fun array(n: Int): Array<String> = arrayOf("a", n.toString())
+fun collection(n: Int): Collection<Int> = listOf(n)
+fun text(n: Int): String = n.toString()
