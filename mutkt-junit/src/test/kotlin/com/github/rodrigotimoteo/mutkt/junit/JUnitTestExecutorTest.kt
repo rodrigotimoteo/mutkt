@@ -56,7 +56,7 @@ class JUnitTestExecutorTest {
         try {
             val outcome =
                 executor(tests).run(mutantOf(), mutantBytes(), deadline) { seen = System.getProperty(DISCOVERED) }
-            assertEquals(Outcome.Killed("CalcTest.adds"), outcome)
+            assertEquals(Outcome.Killed("CalcTest.adds"), outcome.outcome)
             assertEquals("yes", seen)
         } finally {
             System.clearProperty(DISCOVERED)

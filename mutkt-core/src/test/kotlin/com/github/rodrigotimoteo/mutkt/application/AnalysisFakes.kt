@@ -6,12 +6,14 @@ import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
+import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 private val OPERATOR = OperatorId("op")
 
@@ -52,8 +54,10 @@ internal class FakeGenerator(
     }
 }
 
+// The default baseline time is longer than any configured timeout, so mutants get the timeout unless a test sets it.
 internal class FakeExecutor(
     private val baseline: () -> Outcome = { Outcome.Survived },
+    private val baselineElapsed: Duration = 1.minutes,
     private val behavior: (Mutant) -> Outcome = { Outcome.Survived },
 ) : TestExecutor {
     val baselines = ConcurrentLinkedQueue<Duration>()
@@ -70,9 +74,9 @@ internal class FakeExecutor(
         return behavior(mutant)
     }
 
-    override fun baseline(deadline: Duration): Outcome {
+    override fun baseline(deadline: Duration): TimedOutcome {
         baselines += deadline
-        return baseline()
+        return TimedOutcome(baseline(), baselineElapsed)
     }
 }
 

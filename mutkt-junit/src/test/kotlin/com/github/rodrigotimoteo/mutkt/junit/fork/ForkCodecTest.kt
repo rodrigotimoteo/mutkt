@@ -106,7 +106,7 @@ class ForkCodecTest {
             Outcome.NoTests,
             Outcome.LoadError("bad é class"),
             Outcome.Timeout,
-        ).forEach { assertEquals(ForkReply.Result(it), roundTrip(ForkReply.Result(it))) }
+        ).forEach { assertEquals(ForkReply.Result(it, 1234L), roundTrip(ForkReply.Result(it, 1234L))) }
     }
 
     @Test

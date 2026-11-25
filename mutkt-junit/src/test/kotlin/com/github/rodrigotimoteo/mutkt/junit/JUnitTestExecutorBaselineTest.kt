@@ -3,8 +3,10 @@ package com.github.rodrigotimoteo.mutkt.junit
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class JUnitTestExecutorBaselineTest {
@@ -28,17 +30,17 @@ class JUnitTestExecutorBaselineTest {
     @Test
     fun `a green suite survives the baseline`() {
         val executor = executor("class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }")
-        assertEquals(Outcome.Survived, executor.baseline(deadline))
+        assertEquals(Outcome.Survived, executor.baseline(deadline).outcome)
     }
 
     @Test
     fun `an unrelated failing assertion is reported by name`() {
-        assertEquals(Outcome.Killed("CalcTest.unrelated"), executor(tests).baseline(deadline))
+        assertEquals(Outcome.Killed("CalcTest.unrelated"), executor(tests).baseline(deadline).outcome)
     }
 
     @Test
     fun `the same assertion excluded by tag does not fail the baseline`() {
-        assertEquals(Outcome.Survived, executor(tests, exclude = listOf("flaky")).baseline(deadline))
+        assertEquals(Outcome.Survived, executor(tests, exclude = listOf("flaky")).baseline(deadline).outcome)
     }
 
     @Test
@@ -46,18 +48,25 @@ class JUnitTestExecutorBaselineTest {
         val failing =
             "class CalcTest { companion object { " +
                 "@BeforeAll @JvmStatic fun setUp() { error(\"boom\") } } @Test fun a() {} }"
-        assertEquals(Outcome.Killed("CalcTest"), executor(failing).baseline(deadline))
+        assertEquals(Outcome.Killed("CalcTest"), executor(failing).baseline(deadline).outcome)
     }
 
     @Test
     fun `no tests means no tests`() {
-        assertEquals(Outcome.NoTests, executor("class CalcTest { fun adds() {} }").baseline(deadline))
+        assertEquals(Outcome.NoTests, executor("class CalcTest { fun adds() {} }").baseline(deadline).outcome)
     }
 
     @Test
     fun `a baseline that outlives the deadline times out`() {
         val slow = "class CalcTest { @Test fun slow() { Thread.sleep(30_000) } }"
-        assertEquals(Outcome.Timeout, executor(slow).baseline(1.seconds))
+        assertEquals(Outcome.Timeout, executor(slow).baseline(1.seconds).outcome)
+    }
+
+    @Test
+    fun `measures how long the tests ran, from the start of execution`() {
+        val slow = "class CalcTest { @Test fun slow() { Thread.sleep(500) } }"
+        val elapsed = executor(slow).baseline(deadline).elapsed
+        assertTrue(elapsed >= 500.milliseconds && elapsed < deadline, "elapsed $elapsed")
     }
 
     @Test
