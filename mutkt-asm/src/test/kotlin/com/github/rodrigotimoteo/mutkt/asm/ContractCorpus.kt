@@ -177,6 +177,12 @@ private val SOURCE =
         return s.total(5L, 1.5)
     }
 
+    // Null-handling shapes: lateinit read, not-null assertion, platform-type result, parameter check.
+    class Late { lateinit var name: String }
+    fun lateName(l: Late): String = l.name
+    fun forced(s: String?): Int = s!!.length + 1
+    fun platformValue(): String = System.getProperty("mutkt.absent.property")
+
     fun pick(flag: Boolean, a: Int): Int {
         val pet: Animal = if (flag) Dog() else Cat()
         return pet.legs() + a

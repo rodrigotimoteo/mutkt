@@ -101,6 +101,6 @@ private val LEGACY_TO_NEW =
         "CONSTRUCTOR_CALLS" to "constructor-calls",
         "DATA_CLASS_COPY" to "-",
         "SEALED_WHEN" to "-",
-        "NULL_SAFETY" to "-",
+        "NULL_SAFETY" to "null-safety",
         "COROUTINE" to "-",
     )
