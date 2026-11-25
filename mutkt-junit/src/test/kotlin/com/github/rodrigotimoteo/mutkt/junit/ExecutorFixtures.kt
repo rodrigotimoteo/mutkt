@@ -43,6 +43,26 @@ internal fun splitClasses(
         .map { ClassFile(it.key, it.value) }
         .partition { it.name in production }
 
+/** Settings for a child JVM that runs [test] (Kotlin source after Calc) from class directories under [dir]. */
+internal fun forkSettingsFor(
+    dir: Path,
+    test: String,
+    classpath: List<Path> = runtimeJars(),
+    parallelism: Int = 1,
+): ForkSettings {
+    val (project, tests) = splitClasses("$IMPORTS$CALC\n$test")
+    return ForkSettings(
+        Path.of(System.getProperty("java.home"), "bin", "java"),
+        emptyList(),
+        emptyMap(),
+        null,
+        writeClasses(dir.resolve("main"), project),
+        writeClasses(dir.resolve("test"), tests),
+        classpath,
+        parallelism,
+    )
+}
+
 internal fun executorFor(
     source: String,
     production: Set<String> = setOf("Calc"),

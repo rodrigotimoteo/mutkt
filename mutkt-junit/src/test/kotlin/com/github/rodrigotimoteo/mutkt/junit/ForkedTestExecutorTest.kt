@@ -39,18 +39,7 @@ class ForkedTestExecutorTest {
         testSource: String = CALC_TEST,
         tweak: (ForkSettings) -> ForkSettings = { it },
     ): ForkedTestExecutor {
-        val (project, tests) = splitClasses("$IMPORTS$CALC\n$testSource")
-        val settings =
-            ForkSettings(
-                javaBinary,
-                emptyList(),
-                emptyMap(),
-                null,
-                writeClasses(dir.resolve("main"), project),
-                writeClasses(dir.resolve("test"), tests),
-                runtimeJars(),
-                parallelism,
-            )
+        val settings = forkSettingsFor(dir, testSource, parallelism = parallelism)
         return ForkedTestExecutor(tweak(settings)).also { executor = it }
     }
 
