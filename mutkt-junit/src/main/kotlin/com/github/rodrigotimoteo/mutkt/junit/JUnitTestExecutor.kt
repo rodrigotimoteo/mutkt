@@ -25,7 +25,8 @@ internal const val JUPITER_ENGINE = "junit-jupiter"
  * Runs the project's tests of the selected [engines] (JUnit tag expressions in [includeTags] and [excludeTags]
  * narrow them; no include tags means all) in isolated class loaders, one fresh set per mutant.
  *
- * Each run executes on its own daemon thread and the deadline starts when the launcher starts the tests.
+ * Each run executes on its own daemon thread and the deadline starts once the tests are discovered.
+ * Loading, linking and discovery are unbounded here: only a forked child limits them (ForkSettings.prepareMillis).
  * On timeout the thread is interrupted and abandoned: an uninterruptible loop keeps burning a core and its
  * class loader stays in memory until the JVM exits. Only a forked JVM can kill it for real (ROD-104).
  * A mutant that ignores interrupts is likewise abandoned but keeps running.
@@ -66,7 +67,7 @@ public class JUnitTestExecutor(
 
     override fun baseline(deadline: Duration): Outcome = baseline(deadline) {}
 
-    // [onExecuting] runs once on the worker when the launcher exists and the deadline is about to start; it is
+    // [onExecuting] runs once on the worker when the tests are discovered and the deadline is about to start; it is
     // skipped when the mutant or a test class fails to link. The fork protocol reports it as Started.
     internal fun run(
         mutant: Mutant,
@@ -112,7 +113,7 @@ public class JUnitTestExecutor(
                 .apply { isDaemon = true }
                 .start()
             try {
-                // Class loading and linking happen before the latch, so they are not charged to the deadline.
+                // Loading, linking and discovery happen before the latch, so they are not charged to the deadline.
                 started.await()
                 task.get(deadline.inWholeNanoseconds, TimeUnit.NANOSECONDS)
             } catch (_: TimeoutException) {
@@ -160,12 +161,14 @@ public class JUnitTestExecutor(
     ): Outcome {
         // A new launcher per run: nothing is cached between runs, and engines must be found via this loader.
         val launcher = LauncherFactory.create(LauncherConfig.builder().enableTestEngineAutoRegistration(true).build())
+        // Discovery runs project code (display name generators, orderers): a stall there is not a detection.
+        val plans = types.map { launcher.discover(request(it)) }
         executing()
         var testsStarted = 0
         // An abandoned (interrupted) worker must not run the remaining classes against a closed loader.
-        for (type in types.asSequence().takeWhile { !Thread.currentThread().isInterrupted }) {
+        for (plan in plans.asSequence().takeWhile { !Thread.currentThread().isInterrupted }) {
             val listener = OutcomeListener()
-            launcher.execute(request(type), listener)
+            launcher.execute(plan, listener)
             testsStarted += listener.started
             listener.killedBy?.let { return Outcome.Killed(it) }
         }

@@ -51,7 +51,7 @@ internal sealed interface ForkReply {
         }
     }
 
-    /** Sent once per run when the tests begin: classes are loaded and linked and the launcher exists. */
+    /** Sent once per run when the tests begin: classes are loaded and linked and the tests discovered. */
     data object Started : ForkReply
 
     data class Result(

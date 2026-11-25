@@ -46,6 +46,24 @@ class JUnitTestExecutorTest {
     private val addsTest = "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
 
     @Test
+    fun `tests are discovered before the run reports that execution started`() {
+        // Jupiter instantiates the display name generator while it discovers CalcTest.
+        val tests =
+            "class Named : DisplayNameGenerator.Standard() { " +
+                "init { System.setProperty(\"$DISCOVERED\", \"yes\") } }\n" +
+                "@DisplayNameGeneration(Named::class) $addsTest"
+        var seen: String? = null
+        try {
+            val outcome =
+                executor(tests).run(mutantOf(), mutantBytes(), deadline) { seen = System.getProperty(DISCOVERED) }
+            assertEquals(Outcome.Killed("CalcTest.adds"), outcome)
+            assertEquals("yes", seen)
+        } finally {
+            System.clearProperty(DISCOVERED)
+        }
+    }
+
+    @Test
     fun `failing assertion kills the mutant and names the test`() {
         assertEquals(Outcome.Killed("CalcTest.adds"), executor(addsTest).runMutant())
     }
@@ -242,6 +260,7 @@ class JUnitTestExecutorTest {
 
     private companion object {
         const val MARK = "mutkt.test.second-class-ran"
+        const val DISCOVERED = "mutkt.test.discovered"
         const val COUNT = "mutkt.test.runs"
         const val TICK =
             "System.setProperty(\"$COUNT\", (System.getProperty(\"$COUNT\", \"0\").toInt() + 1).toString())"
