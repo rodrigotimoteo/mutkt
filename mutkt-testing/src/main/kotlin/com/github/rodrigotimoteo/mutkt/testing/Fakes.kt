@@ -22,7 +22,10 @@ class FakeMutantGenerator(
     private val mutants: List<Mutant> = emptyList(),
     private val bytes: Map<Mutant, ByteArray> = emptyMap(),
 ) : MutantGenerator {
-    override fun discover(classes: List<ClassFile>): List<Mutant> = mutants
+    override fun discover(
+        classes: List<ClassFile>,
+        targets: List<ClassFile>,
+    ): List<Mutant> = mutants
 
     override fun materialize(mutant: Mutant): ByteArray = bytes[mutant] ?: error("No bytes registered for $mutant")
 }

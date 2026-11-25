@@ -40,11 +40,19 @@ public class AsmMutantGenerator internal constructor(
     @Volatile
     private var plan: Plan? = null
 
-    override fun discover(classes: List<ClassFile>): List<Mutant> {
+    override fun discover(
+        classes: List<ClassFile>,
+        targets: List<ClassFile>,
+    ): List<Mutant> {
         val byName = classes.associate { it.name to it.bytes }
         val hierarchy: Hierarchy = { type -> byName[type.replace('/', '.')] ?: classpath(type) }
-        val suppressions = Suppressions(classes.map { it.bytes }, Operators.all.map { it.id })
-        val planned = classes.sortedBy { it.name }.flatMap { plannedFor(it.bytes, hierarchy, suppressions) }
+        val suppressions =
+            Suppressions(
+                classes.map { it.bytes },
+                targets.mapTo(mutableSetOf()) { it.name.replace('.', '/') },
+                Operators.all.map { it.id },
+            )
+        val planned = targets.sortedBy { it.name }.flatMap { plannedFor(it.bytes, hierarchy, suppressions) }
         val byId = planned.associateBy { it.mutant.id }
         require(byId.size == planned.size) {
             "Duplicate mutant ids (duplicate class names or operator ids): " +

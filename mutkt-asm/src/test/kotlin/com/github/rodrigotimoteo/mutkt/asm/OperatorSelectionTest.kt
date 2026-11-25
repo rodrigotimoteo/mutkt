@@ -20,7 +20,7 @@ class OperatorSelectionTest {
 
     private fun operatorsFor(ids: Set<String>) =
         AsmMutantGenerator(ids) { null }
-            .discover(files)
+            .discover(files, files)
             .map { it.operator.value }
             .toSet()
 

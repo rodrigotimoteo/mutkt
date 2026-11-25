@@ -38,7 +38,7 @@ class FakesTest {
     fun `generator discovers its mutants and materializes registered bytes`() {
         val generator = FakeMutantGenerator(listOf(first, second), mapOf(first to byteArrayOf(7)))
 
-        assertEquals(listOf(first, second), generator.discover(emptyList()))
+        assertEquals(listOf(first, second), generator.discover(emptyList(), emptyList()))
         assertArrayEquals(byteArrayOf(7), generator.materialize(first))
         assertThrows(IllegalStateException::class.java) { generator.materialize(second) }
     }

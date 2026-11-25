@@ -63,6 +63,8 @@ class AsmMutantGeneratorTest {
         ) = Unit
     }
 
+    private fun AsmMutantGenerator.discover(files: List<ClassFile>) = discover(files, files)
+
     private fun generator(vararg ops: Operator = arrayOf(ToyOperator)) = AsmMutantGenerator(ops.toList()) { null }
 
     private fun Mutant.pick() = Triple(className, methodName + methodDescriptor, id.ordinal)
@@ -241,6 +243,29 @@ class AsmMutantGeneratorTest {
 
         assertTrue(generator.materialize(mutant).isNotEmpty())
         assertThrows<IllegalStateException> { generator().discover(pets.filter { it.name == sourceKt }) }
+    }
+
+    @Test
+    fun `a targeted sealed when still sees its excluded subclasses`() {
+        val all =
+            compileKotlin(
+                """
+                sealed interface Shape
+                class Circle : Shape
+                class Square : Shape
+                class Triangle : Shape
+                fun area(s: Shape): Int = when (s) { is Circle -> 1; is Square -> 2; is Triangle -> 3 }
+                enum class Color { RED, GREEN, BLUE }
+                fun tint(c: Color): Int = when (c) { Color.RED -> 1; Color.GREEN -> 2; Color.BLUE -> 3 }
+                """.trimIndent(),
+            ).map { (name, bytes) -> ClassFile(name, bytes) }
+
+        val mutants =
+            AsmMutantGenerator(
+                setOf("sealed-when"),
+            ) { null }.discover(all, all.filter { it.name == "SourceKt" })
+
+        assertEquals(setOf("area", "tint"), mutants.map { it.methodName }.toSet())
     }
 
     @Test
