@@ -8,6 +8,7 @@ import com.github.rodrigotimoteo.mutkt.asm.AsmMutantGenerator
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.junit.ForkSettings
 import com.github.rodrigotimoteo.mutkt.junit.ForkedTestExecutor
+import com.github.rodrigotimoteo.mutkt.junit.derivedEngineClasspath
 import com.github.rodrigotimoteo.mutkt.report.ConsoleReportWriter
 import com.github.rodrigotimoteo.mutkt.report.FileSourceLookup
 import org.gradle.api.GradleException
@@ -81,7 +82,7 @@ internal fun MutKtTask.forkSettings(
     testClassDir = tests,
     classpath = dependencies,
     parallelism = parallelism,
-    engineClasspath = engineClasspath(),
+    engineClasspath = derivedEngineClasspath(),
     engines = engines.get().toList(),
     includeTags = includeTags.get().toList(),
     excludeTags = excludeTags.get().toList(),
@@ -97,28 +98,3 @@ private fun stage(
     dirs.filter(File::isDirectory).forEach { it.copyRecursively(into, overwrite = true) }
     return into.toPath()
 }
-
-// The child needs the fork entry point, the domain types, the Launcher API with its engine, commons, opentest4j
-// and the Kotlin stdlib. Each marker class is located through its code source, so the list holds the plugin's own
-// jars (or class directories under test) instead of whatever Gradle bundles on the daemon classpath.
-private val engineMarkers =
-    listOf(
-        ForkedTestExecutor::class.java.name,
-        "com.github.rodrigotimoteo.mutkt.domain.Mutant",
-        "kotlin.Unit",
-        "org.junit.platform.launcher.core.LauncherFactory",
-        "org.junit.platform.engine.TestEngine",
-        "org.junit.platform.commons.JUnitException",
-        "org.opentest4j.AssertionFailedError",
-    )
-
-private fun engineClasspath(): List<Path> =
-    engineMarkers
-        .map { name ->
-            val location =
-                Class
-                    .forName(name)
-                    .protectionDomain.codeSource
-                    ?.location
-            Path.of(checkNotNull(location) { "No code source for $name" }.toURI())
-        }.distinct()

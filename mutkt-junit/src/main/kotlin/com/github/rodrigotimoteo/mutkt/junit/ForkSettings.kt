@@ -50,17 +50,11 @@ private fun hasLineBreak(value: String) = '\n' in value || '\r' in value
 // engines, see LauncherApiLoader) and the Kotlin stdlib.
 // Located through code sources so it works from jars (plugin) and from class directories (tests).
 private val engineClassNames =
-    listOf(
-        ForkedTestExecutor::class.java.name,
-        "com.github.rodrigotimoteo.mutkt.domain.Mutant",
-        "kotlin.Unit",
-        "org.junit.platform.launcher.core.LauncherFactory",
-        "org.junit.platform.engine.TestEngine",
-        "org.junit.platform.commons.JUnitException",
-        "org.opentest4j.AssertionFailedError",
-    )
+    listOf(ForkedTestExecutor::class.java.name, "com.github.rodrigotimoteo.mutkt.domain.Mutant", "kotlin.Unit") +
+        platformClassNames
 
-internal fun derivedEngineClasspath(): List<Path> =
+/** The jars or class directories a forked child needs, taken from where this plugin itself was loaded. */
+public fun derivedEngineClasspath(): List<Path> =
     engineClassNames
         .map { name ->
             val source = Class.forName(name).protectionDomain.codeSource

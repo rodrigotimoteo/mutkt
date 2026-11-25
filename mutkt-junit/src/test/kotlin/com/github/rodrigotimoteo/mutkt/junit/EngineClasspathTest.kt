@@ -1,6 +1,8 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -51,6 +53,13 @@ class EngineClasspathTest {
         val bundled = bundled()
         val project = bundled("project").take(3)
         assertEquals(own + project + listOf(bundled[3]), engineClasspathFor(own + bundled, project))
+    }
+
+    @Test
+    fun `an unreadable jar fails naming the file`() {
+        val corrupt = dir.resolve("broken.jar").also { Files.writeString(it, "not a zip") }
+        val error = assertThrows(IllegalStateException::class.java) { engineClasspathFor(own, listOf(corrupt)) }
+        assertTrue(error.message.orEmpty().contains(corrupt.toString()), error.message)
     }
 
     @Test
