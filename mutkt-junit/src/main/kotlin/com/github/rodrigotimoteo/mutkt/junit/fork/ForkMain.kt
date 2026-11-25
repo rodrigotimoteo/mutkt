@@ -15,7 +15,17 @@ import kotlin.time.Duration.Companion.milliseconds
 private const val EXIT_PROTOCOL = 2
 private const val EXIT_UNEXPECTED = 3
 
-/** Child JVM entry point; `args[0]` is the startup file. Exit 0: shutdown or EOF, 2: protocol, 3: failure. */
+/**
+ * The child's exit code when an [OutOfMemoryError] ends it, which the parent reports as the kill's cause. A mutant
+ * calling `System.exit(4)` is reported the same way; `-XX:+ExitOnOutOfMemoryError` exits with 3 before this
+ * catch runs (reported as `JVM exit 3`) and `-XX:+CrashOnOutOfMemoryError` aborts by signal (an ERROR).
+ */
+internal const val EXIT_OUT_OF_MEMORY: Int = 4
+
+/**
+ * Child JVM entry point; `args[0]` is the startup file. Exit 0: shutdown or EOF, 2: protocol, 3: failure,
+ * 4: out of memory.
+ */
 @Suppress("TooGenericExceptionCaught")
 internal fun main(args: Array<String>) {
     // Frames own the real stdout; System.out goes to stderr. FileDescriptor.out writes bypass this (known limit).
@@ -28,6 +38,9 @@ internal fun main(args: Array<String>) {
         } catch (e: ForkProtocolException) {
             report(e)
             EXIT_PROTOCOL
+        } catch (e: OutOfMemoryError) {
+            report(e)
+            EXIT_OUT_OF_MEMORY
         } catch (e: Throwable) {
             report(e)
             EXIT_UNEXPECTED

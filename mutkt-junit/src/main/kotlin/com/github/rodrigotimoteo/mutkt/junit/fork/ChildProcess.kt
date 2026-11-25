@@ -12,11 +12,15 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.nanoseconds
 
 private const val STDERR_TAIL_BYTES = 4096
 private const val READY_WAIT_MILLIS = 60_000L
 private const val EXIT_WAIT_MILLIS = 2_000L
 private const val KILL_WAIT_MILLIS = 5_000L
+
+// A POSIX shell convention the JVM follows: a process ended by signal N exits with 128 + N.
+private const val SIGNAL_EXIT_BASE = 128
 
 /** One forked JVM speaking the frame protocol; used by one thread at a time. */
 internal class ChildProcess private constructor(
@@ -39,6 +43,7 @@ internal class ChildProcess private constructor(
     /**
      * Sends [request]. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
      * detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout] of [timeoutMillis].
+     * A child that dies before Started throws; one that dies after it was killed by the mutant ([Outcome.Killed]).
      */
     fun exchange(
         request: ForkRequest,
@@ -56,17 +61,38 @@ internal class ChildProcess private constructor(
                         "$context, no Started within $prepareMillis ms",
                         IOException("Silent while preparing"),
                     )
-            val reply = if (first is ForkReply.Started) awaitReply(timeoutMillis + graceMillis) else first
-            when (reply) {
-                null -> TimedOutcome(Outcome.Timeout, timeoutMillis.milliseconds)
-                is ForkReply.Result -> TimedOutcome(reply.outcome, reply.elapsedMillis.milliseconds)
-                else -> throw ForkProtocolException("Unexpected reply $reply")
+            if (first !is ForkReply.Started) {
+                first.asResult()
+            } else {
+                val start = System.nanoTime()
+                try {
+                    awaitReply(timeoutMillis + graceMillis)?.asResult()
+                        ?: TimedOutcome(Outcome.Timeout, timeoutMillis.milliseconds)
+                } catch (e: IOException) {
+                    exitedWhileTesting(request, context, e, start)
+                }
             }
         } catch (e: IOException) {
             throw failure(context, e)
         } catch (e: ForkProtocolException) {
             throw failure(context, e)
         }
+
+    // System.exit or an OutOfMemoryError escaping JUnit while the tests run: the mutant did it.
+    // A signal (the OS OOM killer, a user) usually is not the mutant's doing.
+    private fun exitedWhileTesting(
+        request: ForkRequest,
+        context: String,
+        cause: IOException,
+        start: Long,
+    ): TimedOutcome {
+        val code = awaitExit()
+        if (code == null || code > SIGNAL_EXIT_BASE) throw failure(context, cause, code)
+        check(request !is ForkRequest.Baseline) {
+            "the test JVM exited with code $code on the original classes. Last stderr: ${stderr.shown()}"
+        }
+        return TimedOutcome(Outcome.Killed(killedBy(code)), (System.nanoTime() - start).nanoseconds)
+    }
 
     fun requestShutdown() {
         try {
@@ -78,14 +104,8 @@ internal class ChildProcess private constructor(
 
     /** Idempotent: destroys the process tree, waits for it and releases the pipes. */
     fun kill() {
-        destroy()
+        process.destroyTree()
         close()
-    }
-
-    // Descendants first: a mutant or test may have forked helpers that would otherwise outlive the child.
-    private fun destroy() {
-        process.descendants().forEach { it.destroyForcibly() }
-        process.destroyForcibly().waitFor(KILL_WAIT_MILLIS, TimeUnit.MILLISECONDS)
     }
 
     override fun close() {
@@ -136,20 +156,32 @@ internal class ChildProcess private constructor(
         }
     }
 
-    // The child may still be exiting (System.exit in a mutant); give it a moment so the exit code is real.
+    // [exitCode] null: the child was still running and is now killed.
     private fun failure(
         context: String,
         cause: Throwable,
+        exitCode: Int? = awaitExit(),
     ): IllegalStateException {
-        val exited = process.waitFor(EXIT_WAIT_MILLIS, TimeUnit.MILLISECONDS)
-        val state = if (exited) "exit code ${process.exitValue()}" else "still running, killed"
-        if (!exited) destroy()
-        stderrDrain.join(EXIT_WAIT_MILLIS)
-        close()
+        val state =
+            when {
+                exitCode == null -> "still running, killed"
+                exitCode > SIGNAL_EXIT_BASE -> "killed by signal ${exitCode - SIGNAL_EXIT_BASE}"
+                else -> "exit code $exitCode"
+            }
         return IllegalStateException(
-            "Forked test JVM failed ($state) while $context. Last stderr: ${stderr.text().ifBlank { "<empty>" }}",
+            "Forked test JVM failed ($state) while $context. Last stderr: ${stderr.shown()}",
             cause,
         )
+    }
+
+    // The child may still be exiting (System.exit in a mutant); give it a moment so the exit code is real.
+    // Returns the exit code, or null when it did not exit and was killed; either way the pipes are released.
+    private fun awaitExit(): Int? {
+        val exited = process.waitFor(EXIT_WAIT_MILLIS, TimeUnit.MILLISECONDS)
+        if (!exited) process.destroyTree()
+        stderrDrain.join(EXIT_WAIT_MILLIS)
+        close()
+        return if (exited) process.exitValue() else null
     }
 
     private sealed interface Event {
@@ -160,12 +192,6 @@ internal class ChildProcess private constructor(
         data class Closed(
             val cause: Exception?,
         ) : Event
-    }
-
-    private fun handshake() {
-        val ready = awaitReply(READY_WAIT_MILLIS) ?: throw IOException("No Ready within $READY_WAIT_MILLIS ms")
-        if (ready !is ForkReply.Ready) throw ForkProtocolException("Expected Ready, got $ready")
-        ready.requireCompatible()
     }
 
     companion object {
@@ -186,6 +212,12 @@ internal class ChildProcess private constructor(
             return child
         }
 
+        private fun ChildProcess.handshake() {
+            val ready = awaitReply(READY_WAIT_MILLIS) ?: throw IOException("No Ready within $READY_WAIT_MILLIS ms")
+            if (ready !is ForkReply.Ready) throw ForkProtocolException("Expected Ready, got $ready")
+            ready.requireCompatible()
+        }
+
         private fun spawn(
             command: List<String>,
             environment: Map<String, String>,
@@ -202,6 +234,23 @@ internal class ChildProcess private constructor(
         }
     }
 }
+
+private fun ForkReply.asResult(): TimedOutcome =
+    when (this) {
+        is ForkReply.Result -> TimedOutcome(outcome, elapsedMillis.milliseconds)
+        else -> throw ForkProtocolException("Unexpected reply $this")
+    }
+
+private fun killedBy(exitCode: Int): String =
+    if (exitCode == EXIT_OUT_OF_MEMORY) "OutOfMemoryError" else "JVM exit $exitCode"
+
+// Descendants first: a mutant or test may have forked helpers that would otherwise outlive the child.
+private fun Process.destroyTree() {
+    descendants().forEach { it.destroyForcibly() }
+    destroyForcibly().waitFor(KILL_WAIT_MILLIS, TimeUnit.MILLISECONDS)
+}
+
+private fun StderrTail.shown(): String = text().ifBlank { "<empty>" }
 
 // Keeps the last [limit] bytes; the buffer is trimmed at twice that to avoid copying on every append.
 private class StderrTail(

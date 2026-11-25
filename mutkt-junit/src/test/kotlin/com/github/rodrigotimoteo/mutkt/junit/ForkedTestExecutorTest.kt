@@ -113,18 +113,64 @@ class ForkedTestExecutorTest {
     }
 
     @Test
-    fun `a crashing mutant throws with the exit code, then the pool recovers`() {
+    fun `a mutant that exits its JVM once the tests started is killed, and the pool replaces the child`() {
         val pool = executor()
-        val error = assertThrows<IllegalStateException> { pool.run(EXIT) }
+        assertEquals(Outcome.Killed("JVM exit 7"), pool.run(EXIT))
+        assertTrue(pool.liveProcesses.isEmpty())
+
+        assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
+        assertEquals(2, pool.startedChildren)
+    }
+
+    @Test
+    fun `a JVM killed by a signal while the tests run is an error, not a kill`() {
+        val pool = executor()
+        val error = assertThrows<IllegalStateException> { pool.run(SIGKILL) }
+        assertTrue(
+            error.message.orEmpty().startsWith("Forked test JVM failed (killed by signal 9) while running a mutant."),
+            error.message,
+        )
+        assertTrue(pool.liveProcesses.isEmpty())
+        assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
+    }
+
+    @Test
+    fun `a baseline that exits its JVM fails with the exit code`() {
+        val pool = executor(testSource = "class CalcTest { @Test fun exits() { System.exit(7) } }")
+        val error = assertThrows<IllegalStateException> { pool.baseline(LONG) }
+        assertTrue(
+            error.message.orEmpty().startsWith("the test JVM exited with code 7 on the original classes"),
+            error.message,
+        )
+    }
+
+    @Test
+    fun `a JVM exit before the tests started is an error with the exit code`() {
+        // Jupiter instantiates the display name generator while it discovers CalcTest, before Started.
+        val test =
+            "class Exit : DisplayNameGenerator.Standard() { init { System.exit(9) } }\n" +
+                "@DisplayNameGeneration(Exit::class) $CALC_TEST"
+        val pool = executor(testSource = test)
+
+        val error = assertThrows<IllegalStateException> { pool.run(mutantBytes()) }
         assertTrue(
             error.message.orEmpty().startsWith(
-                "Forked test JVM failed (exit code 7) while running a mutant. Last stderr:",
+                "Forked test JVM failed (exit code 9) while running a mutant.",
             ),
             error.message,
         )
         assertTrue(pool.liveProcesses.isEmpty())
+    }
 
-        assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
+    @Test
+    fun `an OutOfMemoryError escaping JUnit kills the mutant, a StackOverflowError is a test failure`() {
+        val pool = executor()
+        val huge = mutantBytes("class Calc { fun add(a: Int, b: Int): Int = LongArray(Int.MAX_VALUE - 8).size }")
+        assertEquals(Outcome.Killed("OutOfMemoryError"), pool.run(huge))
+        assertTrue(pool.liveProcesses.isEmpty())
+
+        val deep = mutantBytes("class Calc { fun add(a: Int, b: Int): Int = add(a, b) }")
+        assertEquals(KILLED, pool.run(deep))
         assertEquals(2, pool.startedChildren)
     }
 
@@ -288,5 +334,11 @@ class ForkedTestExecutorTest {
         val SLOW_SURVIVES = slowCalc("a + b")
         val SLOW_KILLED = slowCalc("a - b")
         val EXIT = mutantBytes("class Calc { fun add(a: Int, b: Int): Int { System.exit(7); return 0 } }")
+        val SIGKILL =
+            mutantBytes(
+                "class Calc { fun add(a: Int, b: Int): Int { " +
+                    "ProcessBuilder(\"kill\", \"-9\", ProcessHandle.current().pid().toString()).start().waitFor(); " +
+                    "Thread.sleep(60_000); return 0 } }",
+            )
     }
 }

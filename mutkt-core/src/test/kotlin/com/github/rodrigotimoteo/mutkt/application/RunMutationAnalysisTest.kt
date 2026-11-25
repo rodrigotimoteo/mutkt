@@ -18,7 +18,8 @@ import kotlin.time.Duration.Companion.seconds
 
 private const val WAIT_SECONDS = 10L
 
-// What ChildProcess throws for a crashed child; the stderr tail may hold paths and is not part of the cause.
+// What ChildProcess throws for a child that died before the tests started; the stderr tail may hold paths and is not
+// part of the cause.
 private const val FORK_CRASH =
     "Forked test JVM failed (exit code 7) while running a mutant. Last stderr: /home/dev/secret\nmore"
 
