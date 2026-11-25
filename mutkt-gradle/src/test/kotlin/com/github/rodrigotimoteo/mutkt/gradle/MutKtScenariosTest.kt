@@ -29,6 +29,24 @@ class MutKtScenariosTest {
     }
 
     @OnGradleVersions
+    fun `without selected operators only the six defaults run`(version: String) {
+        // The word "operators" in the DSL turns off the fixture's default pin; no operator is selected.
+        val summary =
+            run(
+                version,
+                "// operators: none selected",
+                mapOf("demo/Calc.java" to CALC),
+                mapOf(
+                    "demo/CalcTest.java" to WEAK_TEST,
+                ),
+            )
+
+        // Two sites of add and two of isPositive; true-returns and false-returns would add two more on isPositive.
+        assertLine(summary, "Mutants: 4")
+        assertTrue("true-returns" !in summary && "false-returns" !in summary, summary)
+    }
+
+    @OnGradleVersions
     fun `excluded classes and methods are not mutated`(version: String) {
         val sources = mapOf("demo/Calc.java" to CALC, "demo/Other.java" to OTHER)
         val dsl = "mutkt { excludedClasses.add('demo.Other'); excludedMethods.add('isPositive') }"

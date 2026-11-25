@@ -12,7 +12,7 @@ Requires the Java or Kotlin JVM plugin. A test fails when this table drifts from
 | `targetClasses` | List<String> | empty (all) | Class globs to mutate |
 | `excludedClasses` | List<String> | empty | Class globs never mutated |
 | `excludedMethods` | List<String> | empty | `method` or `pkg.Class#method` entries to skip |
-| `operators` | Set<String> | empty (all) | Operator ids to enable, from [operators.md](operators.md); an unknown id fails the run and lists the valid ones |
+| `operators` | Set<String> | empty (default operators) | Operator ids to enable, from [operators.md](operators.md); empty runs the six default-on operators, a non-empty set runs exactly those ids (list every id to run all); an unknown id fails the run and lists the valid ones |
 | `threads` | Int | unset (available processors, resolved at run time) | Parallel test runs |
 | `timeoutMs` | Long | 10000 | Per-mutant deadline in milliseconds |
 | `maxMutantsPerClass` | Int | unset (unlimited) | Cap on mutants per class |
