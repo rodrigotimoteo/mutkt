@@ -12,5 +12,8 @@ indent_size = 4
 ktlint_code_style = ktlint_official
 max_line_length = 120
 
+[*.golden.txt]
+trim_trailing_whitespace = false
+
 [*.{yml,yaml,toml,md}]
 indent_size = 2

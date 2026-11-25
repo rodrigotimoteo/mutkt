@@ -1,0 +1,72 @@
+package a.b
+
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+class Calculator {
+    fun add(a: Int, b: Int): Int = a + b
+
+    fun isPositive(n: Int): Boolean = n > 0
+
+    fun doubled(values: List<Int>): List<Int> = values.map { it * 2 }
+
+    fun sumTo(n: Long, step: Long): Long {
+        var total = 0L
+        var i = 0L
+        while (i < n) {
+            total += i
+            i += step
+        }
+        return total
+    }
+}
+
+class Grader {
+    fun grade(score: Int): String =
+        if (score >= 90) {
+            "A"
+        } else if (score >= 60) {
+            "B"
+        } else {
+            "F"
+        }
+}
+
+class CalculatorTest {
+    private val calculator = Calculator()
+
+    @Test
+    fun adds() {
+        assertEquals(5, calculator.add(2, 3))
+    }
+
+    // Weak on purpose: never probes the boundary at zero or a non-positive value.
+    @Test
+    fun positiveNumberIsPositive() {
+        assertTrue(calculator.isPositive(5))
+    }
+
+    @Test
+    fun doublesEveryValue() {
+        assertEquals(listOf(2, 4, 6), calculator.doubled(listOf(1, 2, 3)))
+    }
+
+    @Test
+    fun sumsWithStep() {
+        assertEquals(6L, calculator.sumTo(4L, 1L))
+    }
+}
+
+class GraderTest {
+    private val grader = Grader()
+
+    // 60 is deliberately never tested, so its boundary mutant survives.
+    @Test
+    fun gradesBands() {
+        assertEquals("A", grader.grade(90))
+        assertEquals("B", grader.grade(89))
+        assertEquals("B", grader.grade(75))
+        assertEquals("F", grader.grade(10))
+    }
+}
