@@ -65,7 +65,7 @@ Score = (KILLED + TIMEOUT) / (all mutants − ERROR). A survivor is a change to 
 
 ## Reports
 
-All in `build/reports/mutkt/`, written on every run:
+All in `build/reports/mutkt/`, rewritten on every run (a run that fails before scoring, such as on a red test suite, leaves none):
 
 | File | Content |
 |---|---|

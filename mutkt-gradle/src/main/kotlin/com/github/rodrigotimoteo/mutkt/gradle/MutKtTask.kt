@@ -120,13 +120,16 @@ public abstract class MutKtTask : DefaultTask() {
     /** Runs the analysis, writes and logs the summary, then applies the score threshold. */
     @TaskAction
     public fun analyse() {
+        val dir = reportsDir.get().asFile.also(File::mkdirs)
+        val reports = listOf("mutkt.txt", "mutation-report.json", "mutation-report.html").map { File(dir, it) }
+        // A run that fails before writing (a red baseline) must not leave the last run's reports looking current.
+        reports.forEach(File::delete)
+        val (file, json, html) = reports
         val result = runAnalysis()
         val (summary, score) = result
-        val dir = reportsDir.get().asFile.also(File::mkdirs)
-        val file = File(dir, "mutkt.txt")
         file.writeText(summary)
-        File(dir, "mutation-report.json").writeText(result.json)
-        File(dir, "mutation-report.html").writeText(result.html)
+        json.writeText(result.json)
+        html.writeText(result.html)
         if (consoleReport.get()) logger.lifecycle(summary.trimEnd())
         // Every error is a mutant the tests never ran against: not a clean build.
         if (result.mutants > 0 && result.errors == result.mutants) {

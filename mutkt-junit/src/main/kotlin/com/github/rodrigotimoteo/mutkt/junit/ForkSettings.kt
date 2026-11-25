@@ -7,8 +7,7 @@ import java.nio.file.Paths
  * How [ForkedTestExecutor] launches its child JVMs.
  * [environment] is added to the parent's; [jvmArgs] carry heap, `-D` properties and the like;
  * [classpath] is the project's test runtime classpath without class directories.
- * [engineClasspath] is the child's own classpath (null derives it from code sources, which Gradle wiring must not
- * rely on: they can resolve to Gradle's bundled jars, so pass it explicitly). Either way its Platform jars are
+ * [engineClasspath] is the child's own classpath (null means [derivedEngineClasspath]); its Platform jars are
  * replaced by the project's own when [classpath] has the launcher.
  * [engines] are JUnit Platform engine ids (`junit-jupiter`, `junit-vintage`); [includeTags] and [excludeTags] are
  * JUnit tag expressions, applied to every run (no include tags means all tests).
