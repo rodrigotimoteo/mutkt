@@ -60,8 +60,16 @@ internal class TestKitProject(
             .create()
             .withProjectDir(dir)
             .withPluginClasspath()
-            .withArguments(task, "--configuration-cache", "--console=plain", "--offline", "--stacktrace")
-            .also { runner -> version?.let(runner::withGradleVersion) }
+            // File system watching lets a loaded daemon start the next build before the event for a just-rewritten
+            // build.gradle arrives, so the configuration cache is reused stale; without it every build rehashes.
+            .withArguments(
+                task,
+                "--configuration-cache",
+                "--no-watch-fs",
+                "--console=plain",
+                "--offline",
+                "--stacktrace",
+            ).also { runner -> version?.let(runner::withGradleVersion) }
 
     private fun jars(pattern: Regex): String =
         System
