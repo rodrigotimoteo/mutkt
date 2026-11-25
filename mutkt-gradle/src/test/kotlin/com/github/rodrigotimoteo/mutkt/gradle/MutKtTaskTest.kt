@@ -61,7 +61,10 @@ class MutKtTaskTest {
 
     @Test
     fun `declares class, source and classpath file inputs`() {
-        assertEquals(setOf("classesDirs", "testClassesDirs", "testRuntimeClasspath"), annotated(Classpath::class.java))
+        assertEquals(
+            setOf("classesDirs", "testClassesDirs", "projectSupportClassesDirs", "testRuntimeClasspath"),
+            annotated(Classpath::class.java),
+        )
         assertEquals(setOf("compileClasspath"), annotated(CompileClasspath::class.java))
         assertEquals(setOf("sourceDirs"), annotated(InputFiles::class.java))
         assertEquals(
@@ -240,6 +243,7 @@ class MutKtTaskTest {
 
         assertEquals(model.mainClasses.files, task.classesDirs.files)
         assertEquals(model.testClasses.files, task.testClassesDirs.files)
+        assertEquals(model.supportClasses.files, task.projectSupportClassesDirs.files)
         assertEquals(model.mainCompileClasspath.files, task.compileClasspath.files)
         assertTrue(task.classesDirs.files.isNotEmpty())
     }

@@ -33,7 +33,11 @@ public abstract class MutKtTask : DefaultTask() {
     @get:Classpath
     public abstract val testClassesDirs: ConfigurableFileCollection
 
-    /** The `test` task's classpath; its class directories are replaced by the two collections above. */
+    /** Compiled classes of the other source sets on the `test` task's classpath (test fixtures, shared test code). */
+    @get:Classpath
+    public abstract val projectSupportClassesDirs: ConfigurableFileCollection
+
+    /** The `test` task's classpath; its class directories are replaced by the collections above. */
     @get:Classpath
     public abstract val testRuntimeClasspath: ConfigurableFileCollection
 
