@@ -194,6 +194,38 @@ class RunMutationAnalysisTest {
     }
 
     @Test
+    fun `reports how many eligible mutants the cap omitted`() {
+        val mutants = (0 until 3).map { mutant("a.Foo", ordinal = it) }
+        val executor = FakeExecutor { Outcome.Killed("t") }
+        val report = analysis(mutants, executor, filters = ClassFilters(maxMutantsPerClass = 1)).run()
+        assertEquals(1.0, report.score)
+        assertEquals(1, report.results.size)
+        assertEquals(2, report.omitted)
+        assertEquals(report, writer.written.single())
+    }
+
+    @Test
+    fun `counts omitted mutants over several classes but not excluded ones`() {
+        val mutants =
+            (0 until 3).map { mutant("a.Foo", ordinal = it) } +
+                (0 until 2).map { mutant("b.Bar", ordinal = it) } +
+                mutant("c.Baz", "skip") +
+                mutant("d.Gone")
+        val filters =
+            ClassFilters(excludes = listOf(Glob("d.*")), excludedMethods = setOf("skip"), maxMutantsPerClass = 2)
+        val report = analysis(mutants, filters = filters).run()
+        assertEquals(4, report.results.size)
+        assertEquals(1, report.omitted)
+    }
+
+    @Test
+    fun `omits nothing when the cap is not reached`() {
+        val mutants = (0 until 2).map { mutant("a.Foo", ordinal = it) }
+        assertEquals(0, analysis(mutants, filters = ClassFilters(maxMutantsPerClass = 2)).run().omitted)
+        assertEquals(0, analysis(mutants).run().omitted)
+    }
+
+    @Test
     fun `can run repeatedly and leaves no threads behind`() {
         val mutants = (0 until 6).map { mutant(ordinal = it) }
         val executor = FakeExecutor()

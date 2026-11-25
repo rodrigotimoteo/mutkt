@@ -91,22 +91,23 @@ class ClassFiltersTest {
                 mutant("a.B", 1),
             )
         val limited = ClassFilters(maxMutantsPerClass = 2).limit(mutants)
-        assertEquals(listOf(mutants[0], mutants[1], mutants[2], mutants[4]), limited)
+        assertEquals(listOf(mutants[0], mutants[1], mutants[2], mutants[4]), limited.kept)
+        assertEquals(1, limited.omitted)
     }
 
     @Test
     fun `limit selection depends on the input order`() {
         val mutants = listOf(mutant("a.A", 0), mutant("a.A", 1), mutant("a.A", 2))
         val filters = ClassFilters(maxMutantsPerClass = 1)
-        assertEquals(listOf(mutants[0]), filters.limit(mutants))
-        assertEquals(listOf(mutants[2]), filters.limit(mutants.reversed()))
+        assertEquals(listOf(mutants[0]), filters.limit(mutants).kept)
+        assertEquals(listOf(mutants[2]), filters.limit(mutants.reversed()).kept)
     }
 
     @Test
     fun `limit without a maximum returns all mutants`() {
         val mutants = listOf(mutant("a.A", 0), mutant("a.A", 1))
-        assertEquals(mutants, ClassFilters().limit(mutants))
-        assertEquals(emptyList<Mutant>(), ClassFilters(maxMutantsPerClass = 1).limit(emptyList()))
+        assertEquals(Limited(mutants, 0), ClassFilters().limit(mutants))
+        assertEquals(Limited(emptyList(), 0), ClassFilters(maxMutantsPerClass = 1).limit(emptyList()))
     }
 
     @Test

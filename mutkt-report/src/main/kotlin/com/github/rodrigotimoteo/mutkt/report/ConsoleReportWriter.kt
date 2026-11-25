@@ -19,7 +19,7 @@ public class ConsoleReportWriter(
             val count = report.results.count { it.status == status }
             out.appendLine("  ${status.name.padEnd(STATUS_WIDTH)}$count")
         }
-        out.appendLine("Score: ${percent(report.score)}")
+        out.appendLine("Score: ${percent(report.score)}${omission(report)}")
         classTable(report)
         survivors(report)
         errors(report)
@@ -87,6 +87,9 @@ public class ConsoleReportWriter(
         val found = report.results.count { it.status == MutantStatus.KILLED || it.status == MutantStatus.TIMEOUT }
         return "$found/${report.results.count { it.status != MutantStatus.ERROR }}"
     }
+
+    private fun omission(report: MutationReport): String =
+        if (report.omitted == 0) "" else " (${report.results.size} evaluated, ${report.omitted} omitted by the cap)"
 
     private fun percent(score: Double?): String =
         score?.let { String.format(Locale.ROOT, "%.1f%%", it * PERCENT) } ?: "n/a"

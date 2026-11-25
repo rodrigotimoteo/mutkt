@@ -38,6 +38,29 @@ class MutKtTestKitTest {
     }
 
     @OnGradleVersions
+    fun `the summary names the mutants a per-class cap left unevaluated`(version: String) {
+        val project = TestKitProject(dir, version)
+        val sources =
+            mapOf(
+                "demo/Calc.java" to
+                    "package demo;\npublic class Calc {\n" +
+                    "    public int add(int a, int b) { return a + b; }\n" +
+                    "    public int sub(int a, int b) { return a - b; }\n}\n",
+            )
+        project.setUp("", sources)
+        project.build()
+        val total = Regex("Mutants: (\\d+)").find(project.report.readText())!!.groupValues[1].toInt()
+
+        project.setUp("mutkt { maxMutantsPerClass = 1 }", sources)
+        val result = project.build()
+
+        val omitted = total - 1
+        val line = "Score: 100.0% (1 evaluated, $omitted omitted by the cap)"
+        assertTrue(omitted > 0 && line in project.report.readText(), project.report.readText())
+        assertTrue(line in result.output, result.output)
+    }
+
+    @OnGradleVersions
     fun `fails below the threshold and keeps failing on the next run`(version: String) {
         val project = TestKitProject(dir, version)
         project.setUp(
