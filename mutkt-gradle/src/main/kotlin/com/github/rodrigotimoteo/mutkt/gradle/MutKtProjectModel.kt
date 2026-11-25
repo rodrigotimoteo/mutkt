@@ -3,8 +3,9 @@ package com.github.rodrigotimoteo.mutkt.gradle
 import org.gradle.api.Project
 import org.gradle.api.file.FileCollection
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.tasks.testing.Test
 
-/** Lazy views of the project's main and test source sets; they follow later source set changes. */
+/** Lazy views of the project's source sets and of the `test` task's classpath; they follow later changes. */
 internal class MutKtProjectModel(
     val mainClasses: FileCollection,
     val mainSources: FileCollection,
@@ -22,13 +23,16 @@ internal fun Project.registerMutktModel() {
     val sourceSets = extensions.getByType(JavaPluginExtension::class.java).sourceSets
     val main = sourceSets.named("main")
     val test = sourceSets.named("test")
+    val testTask = tasks.named("test", Test::class.java)
     extensions.extraProperties.set(
         MODEL_KEY,
         MutKtProjectModel(
             mainClasses = files(main.map { it.output.classesDirs }),
             mainSources = files(main.map { it.allSource.sourceDirectories - it.resources.sourceDirectories }),
             testClasses = files(test.map { it.output.classesDirs }),
-            testRuntimeClasspath = files(test.map { it.runtimeClasspath }),
+            // The task's own classpath: builds may append entries to it that the source set never sees. Not
+            // testTask.map { }: a mapped task provider would make mutkt depend on (and run) the test task.
+            testRuntimeClasspath = files(providers.provider { testTask.get().classpath }),
         ),
     )
 }

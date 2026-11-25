@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
+import org.gradle.api.tasks.testing.Test as GradleTest
 
 class MutKtProjectModelTest {
     private fun javaProject(
@@ -21,6 +22,8 @@ class MutKtProjectModelTest {
 
     private fun Project.sourceSet(name: String) =
         extensions.getByType(JavaPluginExtension::class.java).sourceSets.getByName(name)
+
+    private fun Project.testTask() = tasks.getByName("test") as GradleTest
 
     private fun Project.names(files: Iterable<File>) = files.map { it.relativeTo(projectDir).path }.toSet()
 
@@ -44,6 +47,8 @@ class MutKtProjectModelTest {
             model.testClasses.files,
         )
         assertEquals(project.sourceSet("test").runtimeClasspath.files, model.testRuntimeClasspath.files)
+        project.testTask().classpath += project.files("extra")
+        assertTrue(File(project.projectDir, "extra") in model.testRuntimeClasspath.files)
         assertTrue(model.testRuntimeClasspath.files.containsAll(model.mainClasses.files))
     }
 
