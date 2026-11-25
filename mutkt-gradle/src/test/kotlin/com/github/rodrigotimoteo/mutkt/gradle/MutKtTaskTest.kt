@@ -192,7 +192,6 @@ class MutKtTaskTest {
                 "engines" to { it.engines.add("vintage") },
                 "includeTags" to { it.includeTags.add("fast") },
                 "excludeTags" to { it.excludeTags.add("slow") },
-                "failBelowScore (ROD-107)" to { it.failBelowScore.set(80) },
             )
         cases.forEach { (name, configure) ->
             val project = project("java")
@@ -202,6 +201,16 @@ class MutKtTaskTest {
 
             assertEquals("$name is not supported yet", failure.message)
         }
+    }
+
+    @Test
+    fun `rejects a threshold outside 0 to 100 before running`() {
+        val project = project("java")
+        project.mutkt().failBelowScore.set(101)
+
+        val failure = assertThrows<GradleException> { project.task().runAnalysis() }
+
+        assertTrue("between 0 and 100" in failure.message.orEmpty(), failure.message)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.gradle
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
@@ -15,6 +16,7 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
+import java.io.File
 
 /**
  * Runs the mutation analysis in the Gradle daemon; the tests run in child JVMs (ADR 0008, no Worker API).
@@ -81,7 +83,7 @@ public abstract class MutKtTask : DefaultTask() {
     @get:Input
     public abstract val excludeTags: SetProperty<String>
 
-    /** Not supported yet; the task fails when it is set. */
+    /** See [MutKtExtension.failBelowScore]. */
     @get:Input
     @get:Optional
     public abstract val failBelowScore: Property<Int>
@@ -102,14 +104,22 @@ public abstract class MutKtTask : DefaultTask() {
     @get:Input
     public abstract val testJavaExecutable: Property<String>
 
-    /** Report output directory. */
+    /** Receives `mutkt.txt`, the console summary. */
     @get:OutputDirectory
     public abstract val reportsDir: DirectoryProperty
 
-    /** Runs the analysis and logs the summary. */
+    /** Runs the analysis, writes and logs the summary, then applies the score threshold. */
     @TaskAction
     public fun analyse() {
-        val summary = runAnalysis()
+        val (summary, score) = runAnalysis()
+        val dir = reportsDir.get().asFile.also(File::mkdirs)
+        val file = File(dir, "mutkt.txt")
+        file.writeText(summary)
         if (consoleReport.get()) logger.lifecycle(summary.trimEnd())
+        if (score == null) {
+            val note = if (failBelowScore.isPresent) "; failBelowScore is not applied" else ""
+            logger.warn("No mutants were generated or scored, so there is no mutation score$note")
+        }
+        thresholdFailure(score, failBelowScore.orNull, file.path)?.let { throw GradleException(it) }
     }
 }
