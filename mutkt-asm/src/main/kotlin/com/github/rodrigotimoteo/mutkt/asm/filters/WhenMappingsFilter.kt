@@ -1,12 +1,10 @@
 package com.github.rodrigotimoteo.mutkt.asm.filters
 
 import com.github.rodrigotimoteo.mutkt.asm.SiteFilter
-import org.objectweb.asm.Opcodes.GETSTATIC
+import com.github.rodrigotimoteo.mutkt.asm.isMappedOrdinal
 import org.objectweb.asm.Opcodes.IALOAD
 import org.objectweb.asm.Opcodes.INVOKEVIRTUAL
-import org.objectweb.asm.Opcodes.SWAP
 import org.objectweb.asm.tree.AbstractInsnNode
-import org.objectweb.asm.tree.FieldInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
 import org.objectweb.asm.tree.MethodNode
 
@@ -24,15 +22,6 @@ internal object WhenMappingsFilter : SiteFilter {
         method.instructions
             .filterIsInstance<MethodInsnNode>()
             .filter { it.opcode == INVOKEVIRTUAL && it.name == "ordinal" && it.desc == "()I" }
-            .filter { realAfter(it)?.opcode == IALOAD && isMappingLookup(it) }
+            .filter { realAfter(it)?.opcode == IALOAD && isMappedOrdinal(it) }
             .toSet()
-
-    private fun isMappingLookup(ordinal: AbstractInsnNode): Boolean {
-        val swap = realBefore(ordinal)?.takeIf { it.opcode == SWAP }
-        val table = swap?.let(::realBefore) as? FieldInsnNode
-        return table?.opcode == GETSTATIC && table.owner.endsWith("\$WhenMappings")
-    }
-
-    private fun realAfter(insn: AbstractInsnNode): AbstractInsnNode? =
-        generateSequence(insn.next) { it.next }.firstOrNull { it.opcode >= 0 }
 }

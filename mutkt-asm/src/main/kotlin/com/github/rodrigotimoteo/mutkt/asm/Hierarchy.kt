@@ -34,7 +34,12 @@ internal class HierarchyClassWriter(
     private fun superOf(type: String): String? = ClassReader(bytesOf(type)).superName
 
     private fun bytesOf(type: String): ByteArray =
-        hierarchy(type)
-            ?: ClassLoader.getPlatformClassLoader().getResourceAsStream("$type.class")?.use { it.readBytes() }
-            ?: error("Cannot resolve $type to compute stack frames")
+        hierarchy.bytesOrNull(type) ?: error("Cannot resolve $type to compute stack frames")
 }
+
+/** A hierarchy that knows no class, so only JDK types resolve. */
+internal val NoClasses: Hierarchy = { null }
+
+/** Bytes of [type] from the hierarchy, or else from the JDK; null when neither knows it. */
+internal fun Hierarchy.bytesOrNull(type: String): ByteArray? =
+    invoke(type) ?: ClassLoader.getPlatformClassLoader().getResourceAsStream("$type.class")?.use { it.readBytes() }

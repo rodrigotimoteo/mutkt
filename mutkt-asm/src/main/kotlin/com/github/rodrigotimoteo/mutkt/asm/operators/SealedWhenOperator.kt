@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.asm.filters.finallyTwins
+import com.github.rodrigotimoteo.mutkt.asm.isMappedOrdinal
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
 import org.objectweb.asm.Opcodes.ALOAD
 import org.objectweb.asm.Opcodes.GETSTATIC
@@ -49,16 +50,22 @@ internal object SealedWhenOperator : Operator {
     override fun sites(
         method: MethodNode,
         cls: ClassInfo,
-    ): List<Site> = branches(method).map { it.site }
+    ): List<Site> = branches(method) { isEnumOrdinal(it, cls) }.map { it.site }
 
     override fun apply(
         method: MethodNode,
         site: Site,
-    ) = branches(method).single { it.site == site }.rewrite(method)
+    ) = branches(method) { true }.single { it.site == site }.rewrite(method)
 
     // sortedBy is stable: the branches of one switch keep their case order.
-    private fun branches(method: MethodNode): List<Branch> =
-        (typeTests(method) + enumSwitches(method)).sortedBy { method.instructions.indexOf(it.site.instruction) }
+    // [enumOrdinal] decides which `ordinal()` calls are an enum's; [apply] works on a site that already passed it.
+    private fun branches(
+        method: MethodNode,
+        enumOrdinal: (MethodInsnNode) -> Boolean,
+    ): List<Branch> =
+        (typeTests(method) + enumSwitches(method, enumOrdinal)).sortedBy {
+            method.instructions.indexOf(it.site.instruction)
+        }
 }
 
 // The local is the temporary Kotlin stores the `when` subject in. One test of a local is a plain `is` check; the
@@ -115,21 +122,31 @@ private fun falseBranch(
     method.instructions.remove(test)
 }
 
-private fun enumSwitches(method: MethodNode): List<Branch> =
+private fun enumSwitches(
+    method: MethodNode,
+    enumOrdinal: (MethodInsnNode) -> Boolean,
+): List<Branch> =
     method.instructions
         .filter { it is TableSwitchInsnNode || it is LookupSwitchInsnNode }
-        .filter(::selectsOrdinal)
+        .filter { switch -> ordinalOf(switch)?.let(enumOrdinal) == true }
         .flatMap(::switchBranches)
 
 // The selector is `mapping[e.ordinal()]` (the `$WhenMappings` array Kotlin builds) or `e.ordinal()` itself.
 // Plain Int and String switches (a `hashCode()` selector) are not `when` over a hierarchy.
-private fun selectsOrdinal(switch: AbstractInsnNode): Boolean {
+private fun ordinalOf(switch: AbstractInsnNode): MethodInsnNode? {
     val selector = switch.previousReal()?.let { if (it.opcode == IALOAD) it.previousReal() else it }
-    return selector is MethodInsnNode &&
-        selector.opcode == INVOKEVIRTUAL &&
-        selector.name == "ordinal" &&
-        selector.desc == "()I"
+    return (selector as? MethodInsnNode)?.takeIf {
+        it.opcode == INVOKEVIRTUAL && it.name == "ordinal" && it.desc == "()I"
+    }
 }
+
+// A method named `ordinal` is the enum's only if the compiler's mapping lookup says so or the owner is an enum
+// class; an owner the generator cannot read is not assumed to be one, so a direct `when (e.ordinal)` on an
+// enum from an unknown class is skipped.
+private fun isEnumOrdinal(
+    ordinal: MethodInsnNode,
+    cls: ClassInfo,
+) = isMappedOrdinal(ordinal) || cls.isEnum(ordinal.owner)
 
 // The description names the switch key (a $WhenMappings index, not an ordinal): entry names live in another class.
 // One branch per body (cases that share a label, as in `A, B -> ...`, move together); cases that already
