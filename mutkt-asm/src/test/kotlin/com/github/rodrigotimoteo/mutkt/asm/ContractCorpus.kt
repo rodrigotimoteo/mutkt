@@ -139,6 +139,12 @@ private val SOURCE =
             else -> n
         }
 
+    // Constructor shapes: wide args, nested construction, a branch inside the args, default-arg constructor.
+    class Wide(val a: Long, val b: Double, val c: Int)
+    class Wrap(val inner: Wide?, val tag: String = "t")
+    fun wrapped(a: Long, d: Double) = Wrap(Wide(a, d, if (a > 0) 1 else 2))
+    fun tagged(a: Long) = Wrap(null).tag + Wrap(Wide(a, 1.0, 0), "x").tag.length
+
     fun flags(a: Int, s: String): Boolean {
         val r = a > 1
         if (s.isEmpty()) return false
