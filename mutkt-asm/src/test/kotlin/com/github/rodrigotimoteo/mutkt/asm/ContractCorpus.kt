@@ -120,6 +120,29 @@ private val SOURCE =
             Color.BLUE -> 64 + 3
         }
 
+    sealed interface Op
+    class Add(val a: Int) : Op
+    class Neg(val a: Int) : Op
+
+    // Type tests on one subject: a sealed interface, multi-condition branches, an object branch and an else.
+    fun sign(op: Op): Int = when (op) { is Add -> op.a; is Neg -> -op.a }
+    fun kind(shape: Shape): Int =
+        when (shape) {
+            is Circle, is Square -> 1
+            Empty -> 2
+        }
+    fun fallback(shape: Shape): Int = when (shape) { is Circle -> 1; is Square -> 2; else -> 3 }
+
+    // Enum whens: a statement with else, a nullable subject (case -1 is null), shared bodies, a sparse ordinal switch.
+    fun note(c: Color): String {
+        var s = "-"
+        when (c) { Color.RED -> s = "r"; Color.GREEN -> s = "g"; else -> {} }
+        return s
+    }
+    fun nullable(c: Color?): Int = when (c) { Color.RED -> 1; null -> 0; else -> 5 }
+    fun grouped(c: Color): Int = when (c) { Color.RED, Color.GREEN -> 1; Color.BLUE -> 2 }
+    fun sparse(c: Color): Int = when (c.ordinal) { 0 -> 10; 100 -> 20; else -> 0 }
+
     // A when on String compiles to a hashCode lookupswitch.
     fun code(s: String): Int =
         when (s) {
