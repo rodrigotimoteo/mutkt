@@ -33,6 +33,13 @@ kotlin {
 tasks.withType<Test>().configureEach {
     val dslDoc = rootProject.layout.projectDirectory.file("docs/dsl.md")
     systemProperty("mutkt.dslDoc", dslDoc.asFile.absolutePath)
+    val readme = rootProject.layout.projectDirectory.file("README.md")
+    systemProperty("mutkt.readme", readme.asFile.absolutePath)
+    // Absolute paths in system properties are not tracked, so a docs-only change would leave the tests up to date.
+    inputs
+        .files(readme, rootProject.layout.projectDirectory.dir("docs"))
+        .withPropertyName("userDocs")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     // The end-to-end golden file is rewritten with -Dmutkt.updateGolden=true.
     val goldenDir = layout.projectDirectory.dir("src/test/resources/e2e")
     systemProperty("mutkt.goldenDir", goldenDir.asFile.absolutePath)

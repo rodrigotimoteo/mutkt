@@ -17,7 +17,7 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 
 ## DSL properties
 
-"Removed" means 1.0 has no equivalent. Unless a row says otherwise the feature is not planned for 1.0 and is tracked in Linear (project "MutKt Rebuild") if it is planned later. An unknown property fails the build script, so nothing is silently ignored.
+"Removed" means 1.0 has no equivalent. Unless a row says otherwise the feature is not planned for 1.0. An unknown property fails the build script, so nothing is silently ignored.
 
 | Old property | New | Notes |
 |---|---|---|
@@ -45,7 +45,7 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 | `targetTestPatterns` | removed | All `test` classes run; narrow with `includeTags` |
 | `excludeTestPatterns` | removed | Narrow with `excludeTags` |
 | `reportFormats` | removed | Always written: console summary, `mutkt.txt`, `mutation-report.json` (Stryker schema) and `mutation-report.html` in `build/reports/mutkt/` (ADR 0003) |
-| `showClassScores` | removed | Part of the HTML report, not shipped yet |
+| `showClassScores` | removed | Always shown: the console summary has a table per class, the HTML report scores each file |
 | `generateGraph` | removed | The graph report is not planned for 1.0 |
 | `ciMode` | removed | `reports.console` and `failBelowScore` cover it |
 | `verbose` | removed | Was already a no-op |
@@ -78,5 +78,5 @@ ADR 0004: no JUnit extension API and no runner module. Existing tests run unchan
 - **JUnit engines.** Default `junit-jupiter` only; 0.3.x also ran `junit-vintage` and `junit-platform-suite-engine`. Opt in with `engines` and put the engine on the test runtime classpath (ADR 0005).
 - **Forked JVM pool.** Mutants run in child JVMs that copy the `test` task's JVM setup; a hung mutant is killed and reported as TIMEOUT (ADR 0008).
 - **Baseline run.** The selected tests run once on the original classes first; a red baseline fails the task before any mutant is scored.
-- **Reports.** Console summary and `build/reports/mutkt/mutkt.txt` now. HTML and Stryker-schema JSON are planned (ADR 0003); the CSV, XML and graph formats are not part of it.
+- **Reports.** Console summary, `mutkt.txt`, `mutation-report.html` and Stryker-schema `mutation-report.json` in `build/reports/mutkt/` (ADR 0003); the CSV, XML and graph formats are gone.
 - **Gradle.** The task is up to date when nothing changed and supports the configuration cache. Requires JDK 17 or 21 and Gradle 8.x.
