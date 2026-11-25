@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import org.objectweb.asm.Opcodes.ACONST_NULL
 import org.objectweb.asm.Opcodes.DCONST_0
 import org.objectweb.asm.Opcodes.FCONST_0
@@ -45,25 +46,25 @@ private val SUSPEND_TAILS =
     )
 
 /** Calls that either call-removal operator may drop; the operator then filters on the return type. */
-internal fun removableCalls(method: MethodNode): List<MethodInsnNode> =
+internal fun removableCalls(
+    method: MethodNode,
+    cls: ClassInfo,
+): List<MethodInsnNode> =
     // Coroutine calls are the coroutine operator's sites, as copy calls are the data-class-copy operator's:
     // removing them here would give a second operator the same instruction and the same mutant.
-    candidateCalls(method).filterNot { it.isCopyCall() || it.isCoroutineCall() }
+    candidateCalls(method, cls).filterNot { it.isCopyCall() || it.isCoroutineCall() }
 
 /** Every call that may be dropped before the owning operator's own exclusions. */
-internal fun candidateCalls(method: MethodNode): List<MethodInsnNode> {
-    // The operator contract gives no class, so the owner comes from the type of local 0 (`this`) in the debug
-    // info. Without it no INVOKESPECIAL is a site, which is safe.
-    val self =
-        method.localVariables
-            ?.firstOrNull {
-                it.index == 0 && it.name == "this"
-            }?.let { Type.getType(it.desc).internalName }
-    return method.instructions
+internal fun candidateCalls(
+    method: MethodNode,
+    cls: ClassInfo,
+): List<MethodInsnNode> =
+    method.instructions
         .filterIsInstance<MethodInsnNode>()
-        .filter { it.opcode in CALL_OPCODES || (it.opcode == INVOKESPECIAL && it.name != "<init>" && it.owner == self) }
-        .filter { PLUMBING_OWNERS.none(it.owner::startsWith) }
-}
+        .filter {
+            it.opcode in CALL_OPCODES ||
+                (it.opcode == INVOKESPECIAL && it.name != "<init>" && it.owner == cls.internalName)
+        }.filter { PLUMBING_OWNERS.none(it.owner::startsWith) }
 
 /** A static call into a kotlinx.coroutines builder or Job helper, or a call of a suspend function. */
 internal fun MethodInsnNode.isCoroutineCall(): Boolean =

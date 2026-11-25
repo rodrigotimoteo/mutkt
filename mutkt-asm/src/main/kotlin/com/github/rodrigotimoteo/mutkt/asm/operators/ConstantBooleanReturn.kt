@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import org.objectweb.asm.Opcodes.ICONST_1
@@ -18,7 +19,10 @@ internal abstract class ConstantBooleanReturn : Operator {
 
     private val label get() = if (constant == ICONST_1) "true" else "false"
 
-    override fun sites(method: MethodNode): List<Site> =
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
         if (method.desc.endsWith(")Z")) {
             method.instructions
                 .filter { it.opcode == IRETURN }

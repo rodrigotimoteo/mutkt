@@ -13,13 +13,14 @@ internal fun discover(
     suppressions: Suppressions? = null,
 ): List<Found> {
     val node = parse(bytes)
+    val cls = node.info()
     // The operator contract test calls this without suppressions on purpose: it checks operators, not filtering.
     val methods =
         node.methods
             .filter(::isMutable)
             .filter { suppressions?.covers(node.name, it.name, it.desc, op.id) != true }
     return methods.flatMap { method ->
-        sitesOf(op, node.name, method).mapIndexed { ordinal, site ->
+        sitesOf(op, cls, method).mapIndexed { ordinal, site ->
             Found(node.name, method.name, method.desc, ordinal, lineOf(site.instruction), site.description)
         }
     }

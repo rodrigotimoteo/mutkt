@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -43,7 +44,10 @@ private fun AbstractInsnNode.previousReal(): AbstractInsnNode? =
 internal object SealedWhenOperator : Operator {
     override val id = OperatorId("sealed-when")
 
-    override fun sites(method: MethodNode): List<Site> = branches(method).map { it.site }
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> = branches(method).map { it.site }
 
     override fun apply(
         method: MethodNode,

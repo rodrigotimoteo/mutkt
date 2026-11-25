@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.asm.filters
 
 import com.github.rodrigotimoteo.mutkt.asm.ToyOperator
 import com.github.rodrigotimoteo.mutkt.asm.discover
+import com.github.rodrigotimoteo.mutkt.asm.info
 import com.github.rodrigotimoteo.mutkt.asm.mutate
 import com.github.rodrigotimoteo.mutkt.asm.parse
 import com.github.rodrigotimoteo.mutkt.asm.toBytes
@@ -41,7 +42,12 @@ class InlinedBodyFilterTest {
         assertEquals(2, noise.count { it == "IADD" })
         assertEquals(1, noise.count { it == "IF_ICMPLE" })
         assertEquals(4, discover(file, ToyOperator).count { it.methodName == "user" })
-        assertEquals(6, ToyOperator.sites(parse(file).methods.single { it.name == "user" }).size)
+        assertEquals(
+            6,
+            parse(file).let { node ->
+                ToyOperator.sites(node.methods.single { it.name == "user" }, node.info()).size
+            },
+        )
     }
 
     @Test
@@ -66,7 +72,7 @@ class InlinedBodyFilterTest {
         val user = node.methods.single { it.name == "user" }
 
         assertEquals(
-            ToyOperator.sites(user).size,
+            ToyOperator.sites(user, node.info()).size,
             discover(node.toBytes(), ToyOperator).count { it.methodName == "user" },
         )
     }

@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -35,8 +36,10 @@ private class Construction(
 internal object ConstructorCallsOperator : Operator {
     override val id = OperatorId("constructor-calls")
 
-    override fun sites(method: MethodNode): List<Site> =
-        constructions(method).map { Site(it.init, "new ${it.new.desc.replace('/', '.')} -> null") }
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> = constructions(method).map { Site(it.init, "new ${it.new.desc.replace('/', '.')} -> null") }
 
     // The args are already on the stack, so dropping NEW and DUP leaves them to be popped before the null.
     override fun apply(

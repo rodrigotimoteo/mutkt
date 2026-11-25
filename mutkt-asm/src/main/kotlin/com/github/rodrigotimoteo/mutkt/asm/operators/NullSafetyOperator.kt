@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -23,20 +24,29 @@ private val NULL_CHECKS =
     )
 
 /**
- * Kotlin null handling: flips `IFNULL`/`IFNONNULL` (`?.`, `?:`, `== null`) and removes the `Intrinsics` null checks
- * (`!!`, parameter and platform-type checks, `lateinit` reads), leaving their arguments popped.
+ * Kotlin null handling (Kotlin classes only): flips `IFNULL`/`IFNONNULL` (`?.`, `?:`, `== null`) and removes the
+ * `Intrinsics` null checks (`!!`, parameter and platform-type checks, `lateinit` reads), leaving their arguments
+ * popped.
  */
 internal object NullSafetyOperator : Operator {
     override val id = OperatorId("null-safety")
 
-    override fun sites(method: MethodNode): List<Site> =
-        method.instructions.mapNotNull { insn ->
-            when {
-                insn.opcode == IFNULL -> Site(insn, "ifnull -> ifnonnull")
-                insn.opcode == IFNONNULL -> Site(insn, "ifnonnull -> ifnull")
-                insn is MethodInsnNode && insn.owner == INTRINSICS && insn.name in NULL_CHECKS ->
-                    Site(insn, insn.describe("remove"))
-                else -> null
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
+        // A null check in a Java class is the author's, not one the Kotlin compiler inserted.
+        if (!cls.isKotlin) {
+            emptyList()
+        } else {
+            method.instructions.mapNotNull { insn ->
+                when {
+                    insn.opcode == IFNULL -> Site(insn, "ifnull -> ifnonnull")
+                    insn.opcode == IFNONNULL -> Site(insn, "ifnonnull -> ifnull")
+                    insn is MethodInsnNode && insn.owner == INTRINSICS && insn.name in NULL_CHECKS ->
+                        Site(insn, insn.describe("remove"))
+                    else -> null
+                }
             }
         }
 

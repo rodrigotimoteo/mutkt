@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -37,7 +38,10 @@ private val SWAP = (PAIRS + PAIRS.map { (a, b) -> b to a }).toMap()
 internal object ConditionalsBoundaryOperator : Operator {
     override val id = OperatorId("conditionals-boundary")
 
-    override fun sites(method: MethodNode): List<Site> =
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
         method.instructions
             .filterIsInstance<JumpInsnNode>()
             .filter { it.opcode in SWAP }

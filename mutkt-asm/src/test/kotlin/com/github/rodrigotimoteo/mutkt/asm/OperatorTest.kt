@@ -30,9 +30,10 @@ class OperatorTest {
 
     @Test
     fun `sites lists matching instructions in instruction order`() {
-        val method = method(parse(original), "twice")
+        val node = parse(original)
+        val method = method(node, "twice")
 
-        val sites = ToyOperator.sites(method)
+        val sites = ToyOperator.sites(method, node.info())
 
         val positions = sites.map { method.instructions.indexOf(it.instruction) }
         assertEquals(3, sites.size)
@@ -42,25 +43,27 @@ class OperatorTest {
 
     @Test
     fun `sites is empty when nothing matches and does not change the method`() {
-        val subtract = method(parse(original), "subtract")
+        val node = parse(original)
+        val subtract = method(node, "subtract")
         val before = subtract.instructions.map { it.opcode }
 
-        assertTrue(ToyOperator.sites(subtract).isEmpty())
+        assertTrue(ToyOperator.sites(subtract, node.info()).isEmpty())
         assertEquals(before, subtract.instructions.map { it.opcode })
     }
 
     @Test
     fun `sites is stateless across calls`() {
-        val method = method(parse(original), "add")
+        val node = parse(original)
+        val method = method(node, "add")
 
-        assertEquals(ToyOperator.sites(method), ToyOperator.sites(method))
+        assertEquals(ToyOperator.sites(method, node.info()), ToyOperator.sites(method, node.info()))
     }
 
     @Test
     fun `apply changes behavior of the loaded class and keeps it verifiable`() {
         val node = parse(original)
         val add = method(node, "add")
-        ToyOperator.apply(add, ToyOperator.sites(add).single())
+        ToyOperator.apply(add, ToyOperator.sites(add, node.info()).single())
         val mutated = node.toBytes()
 
         assertEquals(8, loadAndInvoke(classes, "SourceKt", "add", 5, 3))

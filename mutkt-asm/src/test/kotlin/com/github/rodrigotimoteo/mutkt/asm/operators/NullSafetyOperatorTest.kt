@@ -11,7 +11,11 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.objectweb.asm.ClassReader
+import org.objectweb.asm.Label
+import org.objectweb.asm.Opcodes.ALOAD
 import org.objectweb.asm.Opcodes.ICONST_0
+import org.objectweb.asm.Opcodes.ICONST_1
+import org.objectweb.asm.Opcodes.IFNULL
 import org.objectweb.asm.Opcodes.INVOKESTATIC
 import org.objectweb.asm.Opcodes.IRETURN
 import org.objectweb.asm.util.CheckClassAdapter
@@ -236,6 +240,32 @@ class NullSafetyOperatorTest {
         assertEquals(emptyList<Any>(), sites("plain"))
         // Intrinsics.areEqual backs ==, and is not a null check.
         assertEquals(emptyList<Any>(), sites("equal"))
+    }
+
+    @Test
+    fun `a class without kotlin Metadata has no site`() {
+        val java =
+            buildClass("Java", "m", "(Ljava/lang/Object;)I") {
+                visitVarInsn(ALOAD, 0)
+                visitLdcInsn("o")
+                visitMethodInsn(
+                    INVOKESTATIC,
+                    "kotlin/jvm/internal/Intrinsics",
+                    "checkNotNullParameter",
+                    "(Ljava/lang/Object;Ljava/lang/String;)V",
+                    false,
+                )
+                val absent = Label()
+                visitVarInsn(ALOAD, 0)
+                visitJumpInsn(IFNULL, absent)
+                visitInsn(ICONST_0)
+                visitInsn(IRETURN)
+                visitLabel(absent)
+                visitInsn(ICONST_1)
+                visitInsn(IRETURN)
+            }
+
+        assertEquals(emptyList<Any>(), discover(java, NullSafetyOperator))
     }
 
     @Test

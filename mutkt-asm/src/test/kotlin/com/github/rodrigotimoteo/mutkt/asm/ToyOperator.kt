@@ -9,7 +9,10 @@ import org.objectweb.asm.tree.MethodNode
 internal object ToyOperator : Operator {
     override val id = OperatorId("toy-add-to-sub")
 
-    override fun sites(method: MethodNode): List<Site> =
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
         method.instructions
             .filter { it.opcode == Opcodes.IADD }
             .map { Site(it, "iadd -> isub") }

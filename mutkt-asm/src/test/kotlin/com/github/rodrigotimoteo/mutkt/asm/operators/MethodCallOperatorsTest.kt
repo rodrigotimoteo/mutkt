@@ -5,6 +5,8 @@ import com.github.rodrigotimoteo.mutkt.asm.Hierarchy
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.discover
 import com.github.rodrigotimoteo.mutkt.asm.mutate
+import com.github.rodrigotimoteo.mutkt.asm.parse
+import com.github.rodrigotimoteo.mutkt.asm.toBytes
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import com.github.rodrigotimoteo.mutkt.testing.loadAndInvoke
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -142,6 +144,21 @@ class MethodCallOperatorsTest {
         assertEquals(16L, loadAndInvoke(classes, "SourceKt", "privCalls"))
         assertEquals(0L, loadAndInvoke(void, "SourceKt", "privCalls"))
         assertEquals(0L, loadAndInvoke(nonVoid, "SourceKt", "privCalls"))
+    }
+
+    @Test
+    fun `a private method call is a site without debug info`() {
+        val stripped =
+            parse(classes.getValue("Priv")).also { n -> n.methods.forEach { it.localVariables = null } }.toBytes()
+
+        assertEquals(
+            listOf("remove call Priv.addWide"),
+            discover(stripped, VoidMethodCallsOperator).filter { it.methodName == "go" }.map { it.description },
+        )
+        assertEquals(
+            listOf("replace call with default: Priv.twice"),
+            discover(stripped, NonVoidMethodCallsOperator).filter { it.methodName == "go" }.map { it.description },
+        )
     }
 
     @Test

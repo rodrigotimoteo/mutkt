@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -34,7 +35,10 @@ private val ZEROING =
 internal object ReturnValsOperator : Operator {
     override val id = OperatorId("return-vals")
 
-    override fun sites(method: MethodNode): List<Site> =
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
         // IRETURN also returns booleans, which are left to the boolean-return operators.
         if (method.desc.endsWith(")Z")) {
             emptyList()

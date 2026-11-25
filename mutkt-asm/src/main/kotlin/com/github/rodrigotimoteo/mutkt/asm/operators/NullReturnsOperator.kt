@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -23,7 +24,10 @@ private val SKIPPED_RETURN_TYPES =
 internal object NullReturnsOperator : Operator {
     override val id = OperatorId("null-returns")
 
-    override fun sites(method: MethodNode): List<Site> =
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
         if (isCandidate(method.desc)) {
             method.instructions
                 .filter { it.opcode == ARETURN }

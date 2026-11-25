@@ -14,8 +14,11 @@ internal data class Site(
 internal interface Operator {
     val id: OperatorId
 
-    /** Sites in instruction-list order; must not modify [method]. */
-    fun sites(method: MethodNode): List<Site>
+    /** Sites in instruction-list order of [method], which belongs to [cls]; must not modify [method]. */
+    fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site>
 
     /** Mutates [method] in place; [site] must come from [sites] on this same method. */
     fun apply(

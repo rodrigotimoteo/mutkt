@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -23,7 +24,10 @@ private val NAMES = mapOf(IADD to "add", ISUB to "sub", IMUL to "mul", IDIV to "
 internal object ArithmeticOperator : Operator {
     override val id = OperatorId("arithmetic")
 
-    override fun sites(method: MethodNode): List<Site> =
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
         method.instructions
             .filter { it.opcode in IADD..DREM }
             .map { Site(it, describe(it.opcode)) }
