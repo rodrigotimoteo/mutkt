@@ -67,19 +67,19 @@ public abstract class MutKtTask : DefaultTask() {
     @get:Optional
     public abstract val maxMutantsPerClass: Property<Int>
 
-    /** Not supported yet; the task fails when it is non-empty. */
+    /** See [MutKtExtension.operators]. */
     @get:Input
     public abstract val operators: SetProperty<String>
 
-    /** Not supported yet; the task fails when it differs from the default. */
+    /** See [MutKtExtension.engines]. */
     @get:Input
     public abstract val engines: SetProperty<String>
 
-    /** Not supported yet; the task fails when it is non-empty. */
+    /** See [MutKtExtension.includeTags]. */
     @get:Input
     public abstract val includeTags: SetProperty<String>
 
-    /** Not supported yet; the task fails when it is non-empty. */
+    /** See [MutKtExtension.excludeTags]. */
     @get:Input
     public abstract val excludeTags: SetProperty<String>
 
@@ -111,11 +111,16 @@ public abstract class MutKtTask : DefaultTask() {
     /** Runs the analysis, writes and logs the summary, then applies the score threshold. */
     @TaskAction
     public fun analyse() {
-        val (summary, score) = runAnalysis()
+        val result = runAnalysis()
+        val (summary, score) = result
         val dir = reportsDir.get().asFile.also(File::mkdirs)
         val file = File(dir, "mutkt.txt")
         file.writeText(summary)
         if (consoleReport.get()) logger.lifecycle(summary.trimEnd())
+        // Every error is a mutant the tests never ran against (wrong engine, broken classpath): not a clean build.
+        if (result.mutants > 0 && result.errors == result.mutants) {
+            throw GradleException("All ${result.mutants} mutants ended in ERROR; check engines/classpath")
+        }
         if (score == null) {
             val note = if (failBelowScore.isPresent) "; failBelowScore is not applied" else ""
             logger.warn("No mutants were generated or scored, so there is no mutation score$note")

@@ -6,6 +6,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
 import org.junit.platform.launcher.EngineFilter.includeEngines
+import org.junit.platform.launcher.TagFilter
 import org.junit.platform.launcher.core.LauncherConfig
 import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder.request
 import org.junit.platform.launcher.core.LauncherFactory
@@ -18,8 +19,11 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import kotlin.time.Duration
 
+internal const val JUPITER_ENGINE = "junit-jupiter"
+
 /**
- * Runs the project's Jupiter tests in isolated class loaders, one fresh set per mutant.
+ * Runs the project's tests of the selected [engines] (JUnit tag expressions in [includeTags] and [excludeTags]
+ * narrow them; no include tags means all) in isolated class loaders, one fresh set per mutant.
  *
  * Each run executes on its own daemon thread and the deadline starts when the launcher starts the tests.
  * On timeout the thread is interrupted and abandoned: an uninterruptible loop keeps burning a core and its
@@ -30,10 +34,23 @@ public class JUnitTestExecutor(
     projectClasses: List<ClassFile>,
     testClasses: List<ClassFile>,
     classpath: List<Path>,
+    engines: List<String> = listOf(JUPITER_ENGINE),
+    includeTags: List<String> = emptyList(),
+    excludeTags: List<String> = emptyList(),
 ) : TestExecutor,
     AutoCloseable {
+    init {
+        require(engines.isNotEmpty()) { "The 'engines' setting must not be empty" }
+    }
+
     private val classes = (projectClasses + testClasses).associate { it.name to it.bytes }
     private val testNames = testClasses.map { it.name }.sorted()
+    private val filters =
+        listOf(includeEngines(engines)) +
+            listOfNotNull(
+                includeTags.takeIf { it.isNotEmpty() }?.let(TagFilter::includeTags),
+                excludeTags.takeIf { it.isNotEmpty() }?.let(TagFilter::excludeTags),
+            )
 
     // Dependency jars are shared by concurrent mutants through this loader (library statics included);
     // mutated and test classes are defined per run.
@@ -124,10 +141,11 @@ public class JUnitTestExecutor(
         return if (testsStarted == 0) Outcome.NoTests else Outcome.Survived
     }
 
+    @Suppress("SpreadOperator")
     private fun request(type: Class<*>) =
         request()
             .selectors(selectClass(type))
-            .filters(includeEngines("junit-jupiter"))
+            .filters(*filters.toTypedArray())
             .configurationParameter("junit.jupiter.execution.parallel.enabled", "false")
             .build()
 }

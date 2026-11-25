@@ -5,6 +5,7 @@ import com.github.rodrigotimoteo.mutkt.application.ClassFilters
 import com.github.rodrigotimoteo.mutkt.application.Glob
 import com.github.rodrigotimoteo.mutkt.application.RunMutationAnalysis
 import com.github.rodrigotimoteo.mutkt.asm.AsmMutantGenerator
+import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.junit.ForkSettings
 import com.github.rodrigotimoteo.mutkt.junit.ForkedTestExecutor
 import com.github.rodrigotimoteo.mutkt.report.ConsoleReportWriter
@@ -16,7 +17,6 @@ import java.nio.file.Path
 import kotlin.time.Duration.Companion.milliseconds
 
 internal fun MutKtTask.runAnalysis(): AnalysisResult {
-    unsupportedSetting()?.let { throw GradleException("$it is not supported yet") }
     checkThresholdRange(failBelowScore.orNull)
     val production = stage(classesDirs.files, File(temporaryDir, "classes"))
     val tests = stage(testClassesDirs.files, File(temporaryDir, "test-classes"))
@@ -30,22 +30,25 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
     val urls = (listOf(production) + dependencies).map { it.toUri().toURL() }.toTypedArray()
     val report =
         URLClassLoader(urls, null).use { loader ->
+            // Built first so an unknown operator id fails before any child JVM could start.
+            val generator = generator(loader)
             ForkedTestExecutor(forkSettings(production, tests, dependencies, config.parallelism)).use { executor ->
-                val generator = AsmMutantGenerator { name -> loader.classBytes(name) }
                 RunMutationAnalysis(DirectoryClassSource(production), generator, executor, writer, config).run()
             }
         }
-    return AnalysisResult(summary.toString(), report.score)
+    return AnalysisResult(
+        summary.toString(),
+        report.score,
+        report.results.size,
+        report.results.count { it.status == MutantStatus.ERROR },
+    )
 }
 
-// The adapters cannot honour these yet; ignoring them silently would report a misleading score.
-private fun MutKtTask.unsupportedSetting(): String? =
-    when {
-        operators.get().isNotEmpty() -> "operators"
-        engines.get() != DEFAULT_ENGINES -> "engines"
-        includeTags.get().isNotEmpty() -> "includeTags"
-        excludeTags.get().isNotEmpty() -> "excludeTags"
-        else -> null
+private fun MutKtTask.generator(loader: ClassLoader) =
+    try {
+        AsmMutantGenerator(operators.get()) { name -> loader.classBytes(name) }
+    } catch (e: IllegalArgumentException) {
+        throw GradleException(e.message.orEmpty(), e)
     }
 
 private fun ClassLoader.classBytes(name: String): ByteArray? =
@@ -63,7 +66,7 @@ private fun MutKtTask.analysisConfig() =
         threads.orNull ?: Runtime.getRuntime().availableProcessors(),
     )
 
-private fun MutKtTask.forkSettings(
+internal fun MutKtTask.forkSettings(
     production: Path,
     tests: Path,
     dependencies: List<Path>,
@@ -79,6 +82,9 @@ private fun MutKtTask.forkSettings(
     classpath = dependencies,
     parallelism = parallelism,
     engineClasspath = engineClasspath(),
+    engines = engines.get().toList(),
+    includeTags = includeTags.get().toList(),
+    excludeTags = excludeTags.get().toList(),
 )
 
 // Several class directories (Kotlin and Java output) become one, because the fork reads a single root per side.

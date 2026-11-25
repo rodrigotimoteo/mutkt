@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.gradle
 
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 
@@ -48,6 +50,51 @@ class MutKtTaskRunTest {
 
         assertTrue("Mutants: 0" in result.summary)
         assertNull(result.score)
+    }
+
+    @Test
+    fun `selected operators restrict the mutants`() {
+        val task = fixtureTask()
+        task.operators.add("arithmetic")
+
+        val summary = task.runAnalysis().summary
+
+        assertTrue(Regex("^Mutants: 1$", RegexOption.MULTILINE).containsMatchIn(summary), summary)
+    }
+
+    @Test
+    fun `an unknown operator fails before any test runs`() {
+        val task = fixtureTask()
+        task.operators.add("nope")
+
+        val error = assertThrows<GradleException> { task.runAnalysis() }
+
+        assertTrue("Unknown operator 'nope'" in error.message.orEmpty(), error.message)
+    }
+
+    @Test
+    fun `a run where every mutant ends in ERROR fails after writing the report`() {
+        val task = fixtureTask()
+        task.engines.set(setOf("junit-vintage"))
+
+        val error = assertThrows<GradleException> { task.analyse() }
+
+        assertEquals("All 2 mutants ended in ERROR; check engines/classpath", error.message)
+        assertTrue(
+            task.reportsDir
+                .get()
+                .asFile
+                .resolve("mutkt.txt")
+                .readText()
+                .contains("ERROR        2"),
+        )
+    }
+
+    private fun fixtureTask(): MutKtTask {
+        val compiled = compileKotlin(FIXTURE, inheritClassPath = true)
+        val main = dir.resolve("main").also { write(it, compiled.filterKeys { name -> !name.endsWith("Test") }) }
+        val tests = dir.resolve("test").also { write(it, compiled.filterKeys { name -> name.endsWith("Test") }) }
+        return task(main, tests, dir.resolve("none"))
     }
 
     private fun task(

@@ -9,6 +9,9 @@ internal data class ForkStartup(
     val projectClassDir: Path,
     val testClassDir: Path,
     val classpath: List<Path>,
+    val engines: List<String>,
+    val includeTags: List<String> = emptyList(),
+    val excludeTags: List<String> = emptyList(),
 ) {
     companion object {
         fun parse(file: Path): ForkStartup {
@@ -18,18 +21,26 @@ internal data class ForkStartup(
                     .filter { it.isNotBlank() }
                     .map { line ->
                         require('=' in line) { "Malformed startup line: $line" }
-                        line.substringBefore('=') to Path.of(line.substringAfter('='))
+                        line.substringBefore('=') to line.substringAfter('=')
                     }.groupBy({ it.first }, { it.second })
-            val unknown = entries.keys - setOf("projectClassDir", "testClassDir", "classpath")
+            val unknown = entries.keys - KEYS
             require(unknown.isEmpty()) { "Unknown startup keys: $unknown" }
+            val engines = entries["engine"].orEmpty()
+            require(engines.isNotEmpty()) { "Startup file needs at least one engine" }
             return ForkStartup(
-                entries.single("projectClassDir"),
-                entries.single("testClassDir"),
-                entries["classpath"].orEmpty(),
+                Path.of(entries.single("projectClassDir")),
+                Path.of(entries.single("testClassDir")),
+                entries["classpath"].orEmpty().map(Path::of),
+                engines,
+                entries["includeTag"].orEmpty(),
+                entries["excludeTag"].orEmpty(),
             )
         }
 
-        private fun Map<String, List<Path>>.single(key: String): Path =
+        private val KEYS =
+            setOf("projectClassDir", "testClassDir", "classpath", "engine", "includeTag", "excludeTag")
+
+        private fun Map<String, List<String>>.single(key: String): String =
             requireNotNull(this[key]?.singleOrNull()) { "Startup file needs exactly one $key" }
     }
 }

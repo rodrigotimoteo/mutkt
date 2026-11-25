@@ -175,6 +175,22 @@ class ForkedTestExecutorTest {
     }
 
     @Test
+    fun `tag and engine settings reach the child`() {
+        val test =
+            "class CalcTest { @Tag(\"fast\") @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } @Test fun ok() {} }"
+        val killed = Outcome.Killed("CalcTest.adds")
+        assertEquals(killed, executor(testSource = test).run(mutantBytes()))
+
+        val excluded = executor(testSource = test) { it.copy(excludeTags = listOf("fast")) }
+        assertEquals(Outcome.Survived, excluded.run(mutantBytes()))
+        val included = executor(testSource = test) { it.copy(includeTags = listOf("fast")) }
+        assertEquals(killed, included.run(mutantBytes()))
+        val vintage = executor(testSource = test) { it.copy(engines = listOf("junit-vintage")) }
+        val error = assertThrows<IllegalStateException> { vintage.run(mutantBytes()) }
+        assertTrue("No TestEngine ID matched" in error.message.orEmpty(), error.message)
+    }
+
+    @Test
     fun `a missing java executable fails with a clear message`() {
         val pool = executor { it.copy(javaExecutable = dir.resolve("no-java")) }
         val error = assertThrows<IllegalStateException> { pool.run(mutantBytes(CALC)) }

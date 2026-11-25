@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.platform.commons.JUnitException
 import org.objectweb.asm.Opcodes.ACONST_NULL
 import org.objectweb.asm.Opcodes.IRETURN
 import java.util.concurrent.CountDownLatch
@@ -28,7 +29,19 @@ class JUnitTestExecutorTest {
         production: String = CALC,
     ) = executorFor("$IMPORTS$production\n$tests").also { executors += it }
 
+    private fun filtered(
+        engines: List<String> = listOf("junit-jupiter"),
+        include: List<String> = emptyList(),
+        exclude: List<String> = emptyList(),
+    ): JUnitTestExecutor {
+        val (project, tests) = splitClasses("$IMPORTS$CALC\n$tagged")
+        return JUnitTestExecutor(project, tests, runtimeJars(), engines, include, exclude).also { executors += it }
+    }
+
     private fun JUnitTestExecutor.runMutant(bytes: ByteArray = mutantBytes()) = run(mutantOf(), bytes, deadline)
+
+    private val tagged =
+        "class CalcTest { @Tag(\"fast\") @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } @Test fun ok() {} }"
 
     private val addsTest = "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
 
@@ -207,6 +220,24 @@ class JUnitTestExecutorTest {
         executor.close()
         val error = assertThrows<IllegalStateException> { executor.runMutant() }
         assertTrue("closed" in error.message.orEmpty(), error.message)
+    }
+
+    @Test
+    fun `excluded tags skip the killing test, so the mutant survives`() {
+        assertEquals(Outcome.Killed("CalcTest.adds"), filtered().runMutant())
+        assertEquals(Outcome.Survived, filtered(exclude = listOf("fast")).runMutant())
+    }
+
+    @Test
+    fun `included tags run only the matching tests`() {
+        assertEquals(Outcome.Killed("CalcTest.adds"), filtered(include = listOf("fast")).runMutant())
+        assertEquals(Outcome.NoTests, filtered(include = listOf("slow")).runMutant())
+    }
+
+    @Test
+    fun `an engine missing from the classpath fails the run`() {
+        val error = assertThrows<JUnitException> { filtered(engines = listOf("junit-vintage")).runMutant() }
+        assertTrue("No TestEngine ID matched" in error.message.orEmpty(), error.message)
     }
 
     private companion object {
