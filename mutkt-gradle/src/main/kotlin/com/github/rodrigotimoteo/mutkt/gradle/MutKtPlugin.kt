@@ -4,16 +4,19 @@ import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 
-/** Registers the `mutkt` extension; tasks are wired separately. */
+/** Registers the `mutkt` extension and, with the java plugin, the `mutkt` task. */
 public class MutKtPlugin : Plugin<Project> {
     override fun apply(project: Project) {
         val mutkt = project.extensions.create("mutkt", MutKtExtension::class.java)
         mutkt.timeoutMs.convention(DEFAULT_TIMEOUT_MS)
-        mutkt.engines.convention(setOf("jupiter"))
+        mutkt.engines.convention(DEFAULT_ENGINES)
         mutkt.reports.console.convention(true)
 
         // Only `java` creates source sets: a java-base-only project passes the check below but has no model.
-        project.pluginManager.withPlugin("java") { project.registerMutktModel() }
+        project.pluginManager.withPlugin("java") {
+            project.registerMutktModel()
+            project.registerMutktTask(mutkt)
+        }
 
         var jvmPluginApplied = false
         // The Kotlin JVM plugin applies java-base too, so one hook covers both.

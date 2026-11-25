@@ -26,3 +26,13 @@ Requires the Java or Kotlin JVM plugin. A test fails when this table drifts from
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | `console` | Boolean | true | Print the summary to the build log |
+
+## Running
+
+`./gradlew mutkt` (group `verification`) mutates the `main` classes and runs the `test` classes against each mutant in child JVMs that copy the `test` task's JVM arguments, system properties, working directory and Java launcher (the environment is inherited from the Gradle daemon). The task is up to date until the classes, the test runtime classpath, the sources or these settings change, and it supports the configuration cache. An up-to-date run prints no summary. `-javaagent` arguments of the `test` task are not forwarded, so coverage agents never see mutated classes. Only the console summary exists so far; `operators`, `engines` (other than `jupiter`), `includeTags`, `excludeTags` and `failBelowScore` are rejected at run time until they are supported.
+
+It is not part of `check`. To opt in:
+
+```kotlin
+tasks.check { dependsOn("mutkt") }
+```

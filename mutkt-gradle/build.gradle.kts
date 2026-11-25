@@ -54,4 +54,5 @@ dependencies {
     implementation(project(":mutkt-report"))
 
     testImplementation(project(":mutkt-testing"))
+    testImplementation(gradleTestKit())
 }
