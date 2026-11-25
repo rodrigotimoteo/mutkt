@@ -18,14 +18,14 @@ Plugin id `io.github.rodrigotimoteo.mutkt`, group `io.github.rodrigotimoteo` (AD
 
 ## Secrets (TO BE CONFIGURED BY THE OWNER)
 
-Repository secrets only; no value ever goes in a file. All are read by the `publish` job and exposed per step, never to the verify job.
+Repository secrets only; no value ever goes in a file. All are read by the `publish` job and exposed per step, never to the verify job. `GPG_SIGNING_KEY`, `GPG_SIGNING_PASSWORD`, `SONATYPE_USERNAME` and `SONATYPE_PASSWORD` already exist in the repo (used by 0.3.3).
 
 | Secret | Used for |
 |---|---|
-| `SIGNING_KEY` | ASCII-armored private GPG key (`gpg --armor --export-secret-keys <id>`). Its public key must be on a keyserver (`keys.openpgp.org`) so Central can check signatures. |
-| `SIGNING_PASSWORD` | Passphrase of that key; empty if the key has none. |
-| `CENTRAL_USERNAME`, `CENTRAL_PASSWORD` | A Central Portal user token (central.sonatype.com, Account, Generate User Token): the two halves of the token, not the login. The token is used both for the Gradle upload and for the finalize call. The namespace `io.github.rodrigotimoteo` must be verified in the Portal first. |
-| `GRADLE_PUBLISH_KEY`, `GRADLE_PUBLISH_SECRET` | API key and secret from plugins.gradle.org (Profile, API Keys). The first publication of a new plugin id may need manual approval by Gradle. |
+| `GPG_SIGNING_KEY` | ASCII-armored private GPG key (`gpg --armor --export-secret-keys <id>`). Its public key must be on a keyserver (`keys.openpgp.org`) so Central can check signatures. |
+| `GPG_SIGNING_PASSWORD` | Passphrase of that key; empty if the key has none. |
+| `SONATYPE_USERNAME`, `SONATYPE_PASSWORD` | A Central Portal user token (central.sonatype.com, Account, Generate User Token): the two halves of the token, not the login. The token is used both for the Gradle upload and for the finalize call. The namespace `io.github.rodrigotimoteo` must be verified in the Portal first. |
+| `GRADLE_PUBLISH_KEY`, `GRADLE_PUBLISH_SECRET` | Still to add. API key and secret from plugins.gradle.org (Profile, API Keys). The first publication of a new plugin id may need manual approval by Gradle. |
 
 Also create the `release` environment (Settings, Environments) and add required reviewers: that is the approval gate. Restrict who can push `v*` tags (tag protection rule).
 
