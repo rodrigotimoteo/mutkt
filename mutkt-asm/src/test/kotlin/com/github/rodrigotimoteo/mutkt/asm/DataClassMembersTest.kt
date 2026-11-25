@@ -22,6 +22,7 @@ class DataClassMembersTest {
             }
             data object Single
             @JvmInline value class Meters(val v: Int)
+            data class Tagged(val name: String, val size: Meters)
             """.trimIndent(),
         )
 
@@ -78,6 +79,12 @@ class DataClassMembersTest {
 
         assertEquals(emptySet<String>(), sites intersect setOf("toString", "hashCode", "equals"))
         assertEquals(true, sites.containsAll(listOf("toString-impl", "hashCode-impl", "equals-impl")))
+    }
+
+    // A value class in the signature mangles a name to "<name>-<hash>" (component2-..., copy-..., getSize-...).
+    @Test
+    fun `mangled data class members have no sites`() {
+        assertEquals(setOf("getName", "getSize"), sitesIn("Tagged").map { it.substringBefore('-') }.toSet())
     }
 
     // The generated members are recognised by their missing line numbers, which every method lacks here.
