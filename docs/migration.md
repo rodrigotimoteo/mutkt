@@ -1,10 +1,10 @@
-# Migrating from 0.3.x to 1.0
+# Migrating from 0.3.x to 0.4.0
 
-1.0 is a rebuild, not an upgrade: the plugin id, the extension, the task, the operator ids and several defaults changed. The 0.3.x line is tag `v0.3.3`.
+0.4.0 is a rebuild, not an upgrade: the plugin id, the extension, the task, the operator ids and several defaults changed. The 0.3.x line is tag `v0.3.3`.
 
 ## Setup
 
-| 0.3.x | 1.0 |
+| 0.3.x | 0.4.0 |
 |---|---|
 | plugin id `io.github.rodrigotimoteo.mutation-kotlin` | `io.github.rodrigotimoteo.mutkt` |
 | extension `mutationTest { }` | `mutkt { }` |
@@ -17,7 +17,7 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 
 ## DSL properties
 
-"Removed" means 1.0 has no equivalent. Unless a row says otherwise the feature is not planned for 1.0. An unknown property fails the build script, so nothing is silently ignored.
+"Removed" means 0.4.0 has no equivalent. Unless a row says otherwise the feature is not planned for 0.4.0. An unknown property fails the build script, so nothing is silently ignored.
 
 | Old property | New | Notes |
 |---|---|---|
@@ -46,7 +46,7 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 | `excludeTestPatterns` | removed | Narrow with `excludeTags` |
 | `reportFormats` | removed | Always written: console summary, `mutkt.txt`, `mutation-report.json` (Stryker schema) and `mutation-report.html` in `build/reports/mutkt/` (ADR 0003) |
 | `showClassScores` | removed | Always shown: the console summary has a table per class, the HTML report scores each file |
-| `generateGraph` | removed | The graph report is not planned for 1.0 |
+| `generateGraph` | removed | The graph report is not planned for 0.4.0 |
 | `ciMode` | removed | `reports.console` and `failBelowScore` cover it |
 | `verbose` | removed | Was already a no-op |
 | `enableIncrementalAnalysis` | removed | The task is up to date until its inputs change; no git-diff mode |
@@ -55,12 +55,12 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 | `enableWeakMutation` | removed | No weak-mutation pass |
 | `enableInlinedFinally` | removed | No inlined-finally filter |
 | `enableTestOrdering` | removed | No test ordering |
-| `isAndroid` | removed | Android is not supported in 1.0 (decision D6: Android deferred) |
+| `isAndroid` | removed | Android is not supported in 0.4.0 (decision D6: Android deferred) |
 | `androidPluginType` | removed | As above |
 | `androidVariant` | removed | As above |
 | `androidContext` | removed | As above |
 
-New in 1.0 with no old counterpart: `engines`, `includeTags`, `excludeTags` (they were constructor arguments of the old engine, not DSL), and `reports.console`. See [dsl.md](dsl.md).
+New in 0.4.0 with no old counterpart: `engines`, `includeTags`, `excludeTags` (they were constructor arguments of the old engine, not DSL), and `reports.console`. See [dsl.md](dsl.md).
 
 ## Removed APIs
 
@@ -72,7 +72,7 @@ ADR 0004: no JUnit extension API and no runner module. Existing tests run unchan
 
 ## Behavior changes
 
-- **Score.** 0.3.x: killed / total as a rounded integer. 1.0: (KILLED + TIMEOUT) / (total - ERROR) as a decimal; NO_COVERAGE and SURVIVED count as not detected, ERROR mutants are left out (ADR 0002). Scores move, so re-baseline `failBelowScore`.
+- **Score.** 0.3.x: killed / total as a rounded integer. 0.4.0: (KILLED + TIMEOUT) / (total - ERROR) as a decimal; NO_COVERAGE and SURVIVED count as not detected, ERROR mutants are left out (ADR 0002). Scores move, so re-baseline `failBelowScore`.
 - **Class filters.** Globs only, on dotted names: `*` stays in a segment, `**` crosses dots. 0.3.x slashed patterns such as `**/*Test` become `**Test`. There are no default exclusions any more (0.3.x skipped tests, `BuildConfig`, `R`, Dagger and Hilt output and more): only `main` classes are mutated, but exclude generated code yourself.
 - **Operators.** The default set is the same six as 0.3.x (`arithmetic`, `conditionals-boundary`, `negate-conditionals`, `null-returns`, `return-vals`, `empty-returns`). A non-empty `operators` runs exactly those ids. Site differences per operator are in [parity.md](parity.md).
 - **JUnit engines.** Default `junit-jupiter` only; 0.3.x also ran `junit-vintage` and `junit-platform-suite-engine`. Opt in with `engines` and put the engine on the test runtime classpath (ADR 0005).

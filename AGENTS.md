@@ -11,7 +11,7 @@ Work comes from Linear: team ROD, project **MutKt Rebuild**. Read the issue, its
 1. **Clean architecture.** Dependencies point inward: `domain` ← `application` ← adapters (`asm`, `junit`, `report`, `gradle`).
 2. **YAGNI.** No feature, option, port or abstraction without an open task that needs it. Deferred features stay in Linear (P6/P7).
 3. **Short code.** Main files ≤ 300 lines, test files ≤ 400, one operator per file, functions ≤ 40 lines.
-4. **Correct before fast.** No performance work until the 1.0 RC (ROD-135).
+4. **Correct before fast.** No performance work until the 0.4.0 RC (ROD-135).
 5. **Real inputs in tests.** Bytecode tests run on real compiler output, not hand-made ASM only.
 
 ## Code style (low verbosity)
