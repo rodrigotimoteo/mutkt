@@ -19,9 +19,9 @@ MutKt does not measure coverage: every selected test runs against every mutant, 
 
 ## Why does TIMEOUT count as detected?
 
-A mutant that makes a test run past the deadline usually turned a loop or a recursion endless: the tests noticed a change, they just never finished. The deadline is per mutant and starts when the tests start, after class loading. It is 4 times how long the tests ran on the original classes (the baseline run) plus 4 s, at most `timeoutMs` (10 s by default). A child JVM that passes it is killed and replaced, so an endless loop does not hold a thread.
+A mutant that makes a test run past the deadline usually turned a loop or a recursion endless: the tests noticed a change, they just never finished. The deadline is per mutant and starts when the tests start, after class loading. It is 4 times how long the tests ran on the original classes (the baseline run) plus 4 s, at most `timeoutMs` (60 s by default). A child JVM that passes it is killed and replaced, so an endless loop does not hold a thread.
 
-If many mutants end in TIMEOUT, the suite is too slow for the deadline: raise `timeoutMs`, or lower `threads`: deadlines scale from a baseline run alone, so `threads` above the core count can cause false TIMEOUTs. Otherwise a slow or busy machine can inflate the score. The baseline run gets 5 times `timeoutMs`, since its JVM starts cold.
+If many mutants end in TIMEOUT, the suite is too slow for the deadline. When `timeoutMs` cut the deadline, the run warns with `Per-mutant deadline capped at timeoutMs` and names the value to set. Raise `timeoutMs`, or lower `threads`: deadlines scale from a baseline run alone, so `threads` above the core count can cause false TIMEOUTs. Otherwise a slow or busy machine can inflate the score. The baseline run gets 5 times `timeoutMs`, since its JVM starts cold.
 
 ## What about flaky tests?
 

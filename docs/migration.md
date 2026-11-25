@@ -27,7 +27,7 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 | `coverageExecFile` | removed | No JaCoCo input; the baseline run replaces it (behavior changes) |
 | `autoRunJaCoCo` | removed | Was already a no-op |
 | `enabledOperators` | `operators` | Ids are kebab-case (`arithmetic`), see [operators.md](operators.md); empty runs the default six |
-| `timeoutMs` | `timeoutMs` | Default 30000 ms became 10000 ms |
+| `timeoutMs` | `timeoutMs` | Default 30000 ms became 60000 ms, and it now caps a deadline derived from the baseline run (see `docs/dsl.md`) |
 | `mutantTimeoutMs` | `timeoutMs` | Deprecated duplicate |
 | `maxParallelMutants` | `threads` | Default 4 became the available processors |
 | `outputDir` | removed | Fixed at `build/reports/mutkt` |

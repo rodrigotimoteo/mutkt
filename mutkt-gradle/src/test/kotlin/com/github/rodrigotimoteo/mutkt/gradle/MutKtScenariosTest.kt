@@ -85,17 +85,22 @@ class MutKtScenariosTest {
 
     @OnGradleVersions
     fun `a mutant that never ends times out and the build still finishes`(version: String) {
-        val summary =
-            run(
-                version,
-                "mutkt { timeoutMs = 2000L }",
-                mapOf("demo/Loop.java" to LOOP),
-                mapOf(
-                    "demo/LoopTest.java" to LOOP_TEST,
-                ),
-            )
+        val project = TestKitProject(dir, version)
+        // A derived deadline is at least 4 s, so 2 s always caps it.
+        project.setUp(
+            "mutkt { timeoutMs = 2000L }",
+            mapOf("demo/Loop.java" to LOOP),
+            mapOf("demo/LoopTest.java" to LOOP_TEST),
+        )
+        val output = project.build().output
+        val summary = project.report.readText()
 
         assertLine(summary, "TIMEOUT      1")
+        val capped = "Per-mutant deadline capped at timeoutMs (2.0s); the tests took "
+        assertTrue(capped in summary, summary)
+        // Warned right after the baseline, then repeated in the summary logged at the end.
+        assertEquals(2, output.split(capped).size - 1, output)
+        assertTrue(output.indexOf(capped) < output.indexOf("Mutation report"), output)
     }
 
     private fun assertLine(

@@ -17,8 +17,9 @@ internal fun strykerReport(
     buildMap {
         put("schemaVersion", SCHEMA_VERSION)
         put("thresholds", mapOf("high" to HIGH_THRESHOLD, "low" to LOW_THRESHOLD))
-        // The schema leaves config free-form; this keeps the cap omission visible outside the console summary.
-        if (report.omitted > 0) put("config", mapOf("omittedByCap" to report.omitted))
+        // The schema leaves config free-form; this keeps the cap omission and a capped deadline visible outside the
+        // console summary.
+        config(report).takeIf { it.isNotEmpty() }?.let { put("config", it) }
         put(
             "files",
             report.results
@@ -26,6 +27,16 @@ internal fun strykerReport(
                 .toSortedMap()
                 .mapValues { fileResult(it.value, sources) },
         )
+    }
+
+private fun config(report: MutationReport): Map<String, Any> =
+    buildMap {
+        if (report.omitted > 0) put("omittedByCap", report.omitted)
+        report.deadlineCap?.let { cap ->
+            put("deadlineCappedAtMs", cap.timeout.inWholeMilliseconds)
+            put("baselineMs", cap.baseline.inWholeMilliseconds)
+            put("suggestedTimeoutMs", suggestedTimeoutMs(cap))
+        }
     }
 
 // A class without a SourceFile attribute has no file to show; its path is the class name so it still gets an entry.
