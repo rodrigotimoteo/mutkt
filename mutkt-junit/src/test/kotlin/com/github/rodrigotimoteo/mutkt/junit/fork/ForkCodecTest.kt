@@ -81,6 +81,16 @@ class ForkCodecTest {
     }
 
     @Test
+    fun `baseline request round-trips`() {
+        assertEquals(ForkRequest.Baseline(1500L), roundTrip(ForkRequest.Baseline(1500L)))
+    }
+
+    @Test
+    fun `baseline request rejects a non-positive timeout`() {
+        assertThrows<IllegalArgumentException> { ForkRequest.Baseline(0) }
+    }
+
+    @Test
     fun `shutdown request, ready and started replies round-trip`() {
         assertEquals(ForkRequest.Shutdown, roundTrip(ForkRequest.Shutdown))
         assertEquals(ForkReply.Ready(), roundTrip(ForkReply.Ready()))

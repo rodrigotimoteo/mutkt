@@ -184,6 +184,64 @@ class RunMutationAnalysisTest {
         assertEquals(1, writer.written.size)
     }
 
+    @Test
+    fun `runs the baseline once with five times the configured timeout before the mutants`() {
+        val executor = FakeExecutor()
+        analysis((0 until 3).map { mutant(ordinal = it) }, executor).run()
+        assertEquals(listOf(35.seconds), executor.baselines.toList())
+    }
+
+    @Test
+    fun `a red baseline stops the run naming the failing test, before any mutant or report`() {
+        val executor = FakeExecutor(baseline = { Outcome.Killed("a.FooTest.unrelated") })
+        val error = assertThrows(IllegalStateException::class.java) { analysis(listOf(mutant()), executor).run() }
+        assertTrue("a.FooTest.unrelated" in error.message.orEmpty(), error.message)
+        assertTrue(executor.received.isEmpty())
+        assertTrue(writer.written.isEmpty())
+    }
+
+    @Test
+    fun `a baseline that times out or cannot load stops the run`() {
+        listOf(Outcome.Timeout, Outcome.LoadError("VerifyError: x")).forEach { baseline ->
+            val executor = FakeExecutor(baseline = { baseline })
+            assertThrows(IllegalStateException::class.java) { analysis(listOf(mutant()), executor).run() }
+            assertTrue(executor.received.isEmpty())
+        }
+        assertTrue(writer.written.isEmpty())
+    }
+
+    @Test
+    fun `a baseline that throws is reported as such and no mutant is scored`() {
+        val executor = FakeExecutor(baseline = { throw IllegalStateException("Forked test JVM failed (exit code 1)") })
+        val error = assertThrows(IllegalStateException::class.java) { analysis(listOf(mutant()), executor).run() }
+        assertTrue("no mutant was scored" in error.message.orEmpty() && "exit code 1" in error.message.orEmpty())
+        assertTrue(executor.received.isEmpty())
+        assertTrue(writer.written.isEmpty())
+    }
+
+    @Test
+    fun `a timed out baseline names timeoutMs`() {
+        val error =
+            assertThrows(IllegalStateException::class.java) {
+                analysis(listOf(mutant()), FakeExecutor(baseline = { Outcome.Timeout })).run()
+            }
+        assertTrue("timeoutMs" in error.message.orEmpty(), error.message)
+    }
+
+    @Test
+    fun `a baseline without tests does not stop the run`() {
+        val report = analysis(listOf(mutant()), FakeExecutor(baseline = { Outcome.NoTests })).run()
+        assertEquals(1, report.results.size)
+    }
+
+    @Test
+    fun `an empty run skips the baseline`() {
+        val executor = FakeExecutor(baseline = { Outcome.Killed("red") })
+        analysis(emptyList(), executor).run()
+        assertTrue(executor.baselines.isEmpty())
+        assertEquals(1, writer.written.size)
+    }
+
     private fun assertPoolStopped(executor: FakeExecutor) =
         executor.threads.forEach {
             it.join(TimeUnit.SECONDS.toMillis(WAIT_SECONDS))

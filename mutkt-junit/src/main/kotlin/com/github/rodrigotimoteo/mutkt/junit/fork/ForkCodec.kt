@@ -12,6 +12,7 @@ internal const val MAX_FRAME_BYTES: Int = 64 * 1024 * 1024
 
 private const val REQUEST_RUN: Int = 1
 private const val REQUEST_SHUTDOWN: Int = 2
+private const val REQUEST_BASELINE: Int = 3
 private const val REPLY_READY: Int = 1
 private const val REPLY_RESULT: Int = 2
 private const val REPLY_STARTED: Int = 3
@@ -27,6 +28,10 @@ internal fun writeRequest(
             writeByteArray(request.bytes)
             writeLong(request.timeoutMillis)
         }
+        is ForkRequest.Baseline -> {
+            writeByte(REQUEST_BASELINE)
+            writeLong(request.timeoutMillis)
+        }
         ForkRequest.Shutdown -> writeByte(REQUEST_SHUTDOWN)
     }
 }
@@ -36,6 +41,7 @@ internal fun readRequest(input: DataInputStream): ForkRequest? =
     readFrame(input) {
         when (val tag = readUnsignedByte()) {
             REQUEST_RUN -> ForkRequest.Run(readMutant(), readByteArray(), readLong())
+            REQUEST_BASELINE -> ForkRequest.Baseline(readLong())
             REQUEST_SHUTDOWN -> ForkRequest.Shutdown
             else -> throw ForkProtocolException("Unknown request tag $tag")
         }

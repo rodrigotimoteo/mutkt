@@ -14,4 +14,10 @@ public interface TestExecutor {
         bytes: ByteArray,
         deadline: Duration,
     ): Outcome
+
+    /**
+     * Runs the tests against the original classes, in the same environment as [run]; [deadline] as there.
+     * Anything but [Outcome.Survived] or [Outcome.NoTests] means the suite is not green.
+     */
+    public fun baseline(deadline: Duration): Outcome
 }

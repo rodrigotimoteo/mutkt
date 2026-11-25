@@ -48,8 +48,10 @@ internal class FakeGenerator(
 }
 
 internal class FakeExecutor(
+    private val baseline: () -> Outcome = { Outcome.Survived },
     private val behavior: (Mutant) -> Outcome = { Outcome.Survived },
 ) : TestExecutor {
+    val baselines = ConcurrentLinkedQueue<Duration>()
     val threads = ConcurrentLinkedQueue<Thread>()
     val received = ConcurrentLinkedQueue<Triple<Mutant, String, Duration>>()
 
@@ -61,6 +63,11 @@ internal class FakeExecutor(
         threads += Thread.currentThread()
         received += Triple(mutant, String(bytes), deadline)
         return behavior(mutant)
+    }
+
+    override fun baseline(deadline: Duration): Outcome {
+        baselines += deadline
+        return baseline()
     }
 }
 

@@ -68,6 +68,20 @@ class ForkLoopTest {
     }
 
     @Test
+    fun `answers a baseline with the original classes, between mutants`() {
+        assertEquals(
+            listOf(
+                ForkReply.Ready(),
+                ForkReply.Started,
+                ForkReply.Result(Outcome.Survived),
+                ForkReply.Started,
+                ForkReply.Result(Outcome.Killed("CalcTest.adds")),
+            ),
+            replies(ForkRequest.Baseline(10_000), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
+        )
+    }
+
+    @Test
     fun `shutdown stops the loop without reading further requests`() {
         assertEquals(listOf(ForkReply.Ready()), replies(ForkRequest.Shutdown, run(mutantBytes(CALC))))
     }

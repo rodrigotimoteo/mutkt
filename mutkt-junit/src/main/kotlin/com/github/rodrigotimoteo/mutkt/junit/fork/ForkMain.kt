@@ -70,6 +70,11 @@ internal fun runForkLoop(
                 val outcome = executor.run(request.mutant, request.bytes, deadline, started)
                 writeReply(output, ForkReply.Result(outcome))
             }
+            is ForkRequest.Baseline -> {
+                val started = { writeReply(output, ForkReply.Started) }
+                val outcome = executor.baseline(request.timeoutMillis.milliseconds, started)
+                writeReply(output, ForkReply.Result(outcome))
+            }
             ForkRequest.Shutdown, null -> return
         }
     }

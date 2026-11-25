@@ -33,7 +33,25 @@ public class RunMutationAnalysis(
             filters.limit(
                 generator.discover(classes).filter { filters.acceptsMethod(it.className, it.methodName) },
             )
+        // Without a green suite every failing test would count as a kill, so nothing is scored.
+        if (mutants.isNotEmpty()) requireGreenBaseline()
         return MutationReport(analyse(mutants, progress)).also(writer::write)
+    }
+
+    private fun requireGreenBaseline() {
+        val deadline = config.timeout * BASELINE_TIMEOUT_FACTOR
+        val problem =
+            try {
+                when (val outcome = executor.baseline(deadline)) {
+                    is Outcome.Killed -> "the first failure is ${outcome.by}"
+                    is Outcome.LoadError -> "they cannot run: ${outcome.message}"
+                    Outcome.Timeout -> "they did not finish within $deadline; raise timeoutMs"
+                    Outcome.Survived, Outcome.NoTests -> return
+                }
+            } catch (e: IllegalStateException) {
+                throw IllegalStateException("$BASELINE_FAILED: ${e.message}", e)
+            }
+        error("$BASELINE_FAILED: $problem")
     }
 
     // Results are keyed by discovery index so completion order never leaks into the report.
@@ -76,6 +94,11 @@ public class RunMutationAnalysis(
 }
 
 private const val SHUTDOWN_WAIT_SECONDS = 5L
+
+// The baseline runs the whole suite on a cold JVM (class loading, engine start-up) that mutants then reuse.
+private const val BASELINE_TIMEOUT_FACTOR = 5
+
+private const val BASELINE_FAILED = "The tests fail on the original classes, so no mutant was scored"
 
 // Workers must not outlive run(); the interrupt flag is restored so the caller still sees it.
 private fun ExecutorService.stopAndAwait() {

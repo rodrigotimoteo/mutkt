@@ -64,6 +64,8 @@ public class JUnitTestExecutor(
         deadline: Duration,
     ): Outcome = run(mutant, bytes, deadline) {}
 
+    override fun baseline(deadline: Duration): Outcome = baseline(deadline) {}
+
     // [onExecuting] runs once on the worker when the launcher exists and the deadline is about to start; it is
     // skipped when the mutant or a test class fails to link. The fork protocol reports it as Started.
     internal fun run(
@@ -72,16 +74,33 @@ public class JUnitTestExecutor(
         deadline: Duration,
         onExecuting: () -> Unit,
     ): Outcome {
+        val loaded = classes + (mutant.className to bytes)
+        return launch(mutant.id.toString(), loaded, mutant.className, deadline, onExecuting)
+    }
+
+    internal fun baseline(
+        deadline: Duration,
+        onExecuting: () -> Unit,
+    ): Outcome = launch("the baseline", classes, null, deadline, onExecuting)
+
+    // [linked] is the mutated class, linked before the tests run; null when nothing is replaced.
+    private fun launch(
+        label: String,
+        loaded: Map<String, ByteArray>,
+        linked: String?,
+        deadline: Duration,
+        onExecuting: () -> Unit,
+    ): Outcome {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
-        check(!closed) { "JUnitTestExecutor is closed, cannot run ${mutant.id}" }
-        return MutantClassLoader(base, classes + (mutant.className to bytes)).use { loader ->
+        check(!closed) { "JUnitTestExecutor is closed, cannot run $label" }
+        return MutantClassLoader(base, loaded).use { loader ->
             val started = CountDownLatch(1)
             val task =
                 FutureTask {
                     // Launcher and engines discover and load through the context loader.
                     Thread.currentThread().contextClassLoader = loader
                     try {
-                        execute(mutant, loader) {
+                        execute(linked, loader) {
                             onExecuting()
                             started.countDown()
                         }
@@ -89,7 +108,7 @@ public class JUnitTestExecutor(
                         started.countDown()
                     }
                 }
-            Thread(task, "mutkt-mutant-${mutant.id.hashCode()}")
+            Thread(task, "mutkt-mutant-${label.hashCode()}")
                 .apply { isDaemon = true }
                 .start()
             try {
@@ -113,7 +132,7 @@ public class JUnitTestExecutor(
     }
 
     private fun execute(
-        mutant: Mutant,
+        linked: String?,
         loader: ClassLoader,
         executing: () -> Unit,
     ): Outcome {
@@ -121,7 +140,7 @@ public class JUnitTestExecutor(
         // declaredMethods links the mutant, which is what surfaces VerifyError before any test touches it.
         val types =
             try {
-                loader.loadClass(mutant.className).declaredMethods
+                linked?.let { loader.loadClass(it).declaredMethods }
                 testNames.map(loader::loadClass).filter(::isRunnableRoot)
             } catch (e: LinkageError) {
                 return Outcome.LoadError(e.toString())

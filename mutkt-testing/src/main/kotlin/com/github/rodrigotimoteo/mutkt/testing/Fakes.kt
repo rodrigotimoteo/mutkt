@@ -27,12 +27,17 @@ class FakeMutantGenerator(
     override fun materialize(mutant: Mutant): ByteArray = bytes[mutant] ?: error("No bytes registered for $mutant")
 }
 
-/** Returns the scripted outcome per mutant ([default] otherwise) and records each call's mutant, bytes and deadline. */
+/**
+ * Returns the scripted outcome per mutant ([default] otherwise) and records each call's mutant, bytes and deadline;
+ * [baseline] answers the baseline run, whose deadlines are recorded in [baselines].
+ */
 class FakeTestExecutor(
     private val outcomes: Map<Mutant, Outcome> = emptyMap(),
     private val default: Outcome = Outcome.Survived,
+    private val baseline: Outcome = Outcome.Survived,
 ) : TestExecutor {
     val runs = mutableListOf<Triple<Mutant, ByteArray, Duration>>()
+    val baselines = mutableListOf<Duration>()
 
     override fun run(
         mutant: Mutant,
@@ -41,6 +46,11 @@ class FakeTestExecutor(
     ): Outcome {
         runs += Triple(mutant, bytes, deadline)
         return outcomes[mutant] ?: default
+    }
+
+    override fun baseline(deadline: Duration): Outcome {
+        baselines += deadline
+        return baseline
     }
 }
 

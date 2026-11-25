@@ -117,9 +117,9 @@ public abstract class MutKtTask : DefaultTask() {
         val file = File(dir, "mutkt.txt")
         file.writeText(summary)
         if (consoleReport.get()) logger.lifecycle(summary.trimEnd())
-        // Every error is a mutant the tests never ran against (wrong engine, broken classpath): not a clean build.
+        // Every error is a mutant the tests never ran against: not a clean build.
         if (result.mutants > 0 && result.errors == result.mutants) {
-            throw GradleException("All ${result.mutants} mutants ended in ERROR; check engines/classpath")
+            throw GradleException("All ${result.mutants} mutants ended in ERROR: none loaded or ran, see the report")
         }
         if (score == null) {
             val note = if (failBelowScore.isPresent) "; failBelowScore is not applied" else ""
