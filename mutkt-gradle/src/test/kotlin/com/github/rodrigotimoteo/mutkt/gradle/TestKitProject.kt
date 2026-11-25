@@ -51,16 +51,16 @@ internal class TestKitProject(
         text: String,
     ) = dir.resolve(path).apply { parentFile.mkdirs() }.writeText(text)
 
-    fun build(): BuildResult = runner().build()
+    fun build(task: String = "mutkt"): BuildResult = runner(task).build()
 
-    fun buildAndFail(): BuildResult = runner().buildAndFail()
+    fun buildAndFail(): BuildResult = runner("mutkt").buildAndFail()
 
-    private fun runner() =
+    private fun runner(task: String) =
         GradleRunner
             .create()
             .withProjectDir(dir)
             .withPluginClasspath()
-            .withArguments("mutkt", "--configuration-cache", "--console=plain", "--offline", "--stacktrace")
+            .withArguments(task, "--configuration-cache", "--console=plain", "--offline", "--stacktrace")
             .also { runner -> version?.let(runner::withGradleVersion) }
 
     private fun jars(pattern: Regex): String =
