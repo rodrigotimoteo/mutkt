@@ -33,6 +33,8 @@ Requires the Java or Kotlin JVM plugin. A test fails when this table drifts from
 
 The child JVMs run the project's own JUnit Platform when its test runtime classpath has `junit-platform-launcher`, so a project on a newer Jupiter works; without it they fall back to the Platform bundled with the plugin (1.10.2), which may be older than the project's engine. Recommended: `testRuntimeOnly("org.junit.platform:junit-platform-launcher")` (it needs the JUnit BOM or an explicit version; Gradle 8 injects the launcher into the `test` task only, so it is often absent from the classpath MutKt sees).
 
+Class files read as resources inside the child JVMs (`Foo::class.java.getResourceAsStream("Foo.class")`) come back through a `mutkt-class:` URL, so libraries that require `file:` or `jar:` URIs for single class resources may not work.
+
 It is not part of `check`. To opt in:
 
 ```kotlin

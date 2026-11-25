@@ -2,14 +2,18 @@ package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.testing.buildClass
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotSame
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.objectweb.asm.Opcodes.ICONST_1
 import org.objectweb.asm.Opcodes.ICONST_2
 import org.objectweb.asm.Opcodes.IRETURN
+import java.net.URLClassLoader
+import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -101,6 +105,61 @@ class MutantClassLoaderTest {
         loader.close()
         loader.close()
         assertThrows<IllegalStateException> { loader.loadClass("Answer") }
+    }
+
+    private fun parentWith(vararg files: Pair<String, ByteArray>): URLClassLoader {
+        val root = Files.createTempDirectory("mutkt-parent")
+        files.forEach { (name, bytes) ->
+            Files.createDirectories(root.resolve(name).parent)
+            Files.write(root.resolve(name), bytes)
+        }
+        return URLClassLoader(arrayOf(root.toUri().toURL()), null)
+    }
+
+    private fun java.net.URL.bytes() = openStream().use { it.readBytes() }
+
+    @Test
+    fun `class resource of a mapped class is its bytes, ahead of a parent copy`() {
+        val bytes = answer(ICONST_2)
+        parentWith("p/Answer.class" to byteArrayOf(1, 2, 3)).use { parent ->
+            MutantClassLoader(parent, mapOf("p.Answer" to bytes)).use {
+                assertArrayEquals(bytes, it.getResourceAsStream("p/Answer.class")!!.use { s -> s.readBytes() })
+                assertArrayEquals(bytes, it.getResource("p/Answer.class")!!.bytes())
+                assertEquals(bytes.size, it.getResource("p/Answer.class")!!.openConnection().contentLength)
+                assertEquals(bytes.size.toLong(), it.getResource("p/Answer.class")!!.openConnection().contentLengthLong)
+                assertNull(it.getResource("/p/Answer.class"))
+                assertArrayEquals(
+                    bytes,
+                    it
+                        .getResources("p/Answer.class")
+                        .toList()
+                        .single()
+                        .bytes(),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `class resource lookups from the defined class agree with its bytes`() {
+        val classes = compileKotlin("package p\nclass Foo")
+        MutantClassLoader(testLoader, classes).use {
+            val foo = it.loadClass("p.Foo")
+            assertArrayEquals(classes.getValue("p.Foo"), foo.getResourceAsStream("Foo.class")!!.readBytes())
+            assertArrayEquals(classes.getValue("p.Foo"), foo.getResourceAsStream("/p/Foo.class")!!.readBytes())
+        }
+    }
+
+    @Test
+    fun `other resources and unmapped class resources delegate to the parent`() {
+        val parentBytes = byteArrayOf(9)
+        parentWith("data.txt" to parentBytes, "Other.class" to parentBytes).use { parent ->
+            MutantClassLoader(parent, mapOf("Answer" to answer(ICONST_2))).use {
+                assertArrayEquals(parentBytes, it.getResourceAsStream("data.txt")!!.use { s -> s.readBytes() })
+                assertArrayEquals(parentBytes, it.getResourceAsStream("Other.class")!!.use { s -> s.readBytes() })
+                assertNull(it.getResource("Missing.class"))
+            }
+        }
     }
 
     @Test
