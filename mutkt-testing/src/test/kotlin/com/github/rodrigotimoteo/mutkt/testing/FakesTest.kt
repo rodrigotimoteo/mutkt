@@ -69,7 +69,7 @@ class FakesTest {
     fun `source lookup finds known lines only`() {
         val lookup = FakeSourceLookup(mapOf(("a.Foo" to 3) to "if (x) y()"))
 
-        assertEquals("if (x) y()", lookup.lineText("a.Foo", 3))
-        assertNull(lookup.lineText("a.Foo", 4))
+        assertEquals("if (x) y()", lookup.lineText("a.Foo", "Foo.kt", 3))
+        assertNull(lookup.lineText("a.Foo", "Foo.kt", 4))
     }
 }

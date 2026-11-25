@@ -68,16 +68,18 @@ public class AsmMutantGenerator internal constructor(
         suppressions: Suppressions,
     ): List<Planned> {
         val unchanged by lazy { HierarchyClassWriter(hierarchy).also { parse(bytes).accept(it) }.toByteArray() }
+        val sourceFile = parse(bytes).sourceFile
         return operators.flatMap { op ->
             discover(bytes, op, suppressions, hierarchy)
                 .filterNot { mutate(bytes, op, it, hierarchy).contentEquals(unchanged) }
-                .map { Planned(mutantOf(op, it), op, it, bytes) }
+                .map { Planned(mutantOf(op, it, sourceFile), op, it, bytes) }
         }
     }
 
     private fun mutantOf(
         op: Operator,
         found: Found,
+        sourceFile: String?,
     ): Mutant {
         val className = found.className.replace('/', '.')
         return Mutant(
@@ -88,6 +90,7 @@ public class AsmMutantGenerator internal constructor(
             methodDescriptor = found.descriptor,
             line = found.line,
             description = found.description,
+            sourceFile = sourceFile,
         )
     }
 }
