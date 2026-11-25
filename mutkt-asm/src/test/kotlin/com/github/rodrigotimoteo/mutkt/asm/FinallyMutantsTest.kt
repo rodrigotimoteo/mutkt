@@ -157,7 +157,10 @@ class FinallyMutantsTest {
     private object PositionOperator : Operator {
         override val id = OperatorId("position")
 
-        override fun sites(method: MethodNode): List<Site> =
+        override fun sites(
+            method: MethodNode,
+            cls: ClassInfo,
+        ): List<Site> =
             method.instructions.filter { it.opcode == IADD }.map {
                 Site(
                     it,

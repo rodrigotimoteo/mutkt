@@ -3,6 +3,8 @@ package com.github.rodrigotimoteo.mutkt.asm.operators
 import com.github.rodrigotimoteo.mutkt.asm.Hierarchy
 import com.github.rodrigotimoteo.mutkt.asm.discover
 import com.github.rodrigotimoteo.mutkt.asm.mutate
+import com.github.rodrigotimoteo.mutkt.asm.parse
+import com.github.rodrigotimoteo.mutkt.asm.toBytes
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import com.github.rodrigotimoteo.mutkt.testing.loadAndInvoke
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -250,6 +252,43 @@ class CoroutineOperatorTest {
         assertEquals(emptyList<Any>(), sites("invokeSuspend", "SourceKt\$withUnit\$1"))
         val plumbing = CLASSES.values.flatMap { discover(it, CoroutineOperator) }.map { it.description }
         assertTrue(plumbing.none { "Boxing" in it || ".create" in it || "<init>" in it }, plumbing.toString())
+    }
+
+    @Test
+    fun `only a ContinuationImpl subclass re-enters its function`() {
+        val impostor =
+            parse(
+                CLASSES.getValue("SourceKt\$twice\$1"),
+            ).also { it.superName = "java/lang/Object" }.toBytes()
+
+        assertEquals(
+            listOf("SourceKt.twice"),
+            discover(impostor, CoroutineOperator).map {
+                it.description.substringAfter(": ")
+            },
+        )
+    }
+
+    @Test
+    fun `a restricted suspend function's re-entry is not a site`() {
+        val restricted =
+            compileKotlin(
+                """
+                suspend fun SequenceScope<Int>.pair() {
+                    yield(1)
+                    yield(2)
+                }
+                fun numbers() = sequence { pair() }
+                """.trimIndent(),
+            )
+
+        val continuation = restricted.keys.single { it.startsWith("SourceKt\$pair\$") }
+        // kotlinc extends ContinuationImpl here; RestrictedContinuationImpl is accepted for other compilers.
+        assertEquals(
+            true,
+            parse(restricted.getValue(continuation)).superName?.endsWith("ContinuationImpl"),
+        )
+        assertEquals(emptyList<Any>(), discover(restricted.getValue(continuation), CoroutineOperator))
     }
 
     @Test

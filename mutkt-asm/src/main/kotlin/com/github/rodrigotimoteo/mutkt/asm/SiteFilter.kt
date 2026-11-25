@@ -18,11 +18,11 @@ internal interface SiteFilter {
  */
 internal fun sitesOf(
     op: Operator,
-    className: String,
+    cls: ClassInfo,
     method: MethodNode,
 ): List<Site> {
-    val sites = op.sites(method)
+    val sites = op.sites(method, cls)
     if (sites.isEmpty()) return sites
-    val noise = SiteFilters.all.flatMapTo(HashSet()) { it.noise(className, method) }
+    val noise = SiteFilters.all.flatMapTo(HashSet()) { it.noise(cls.internalName, method) }
     return sites.filterNot { it.instruction in noise }
 }

@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -35,7 +36,10 @@ private fun name(opcode: Int) = NAMES[opcode - IFEQ]
 internal object NegateConditionalsOperator : Operator {
     override val id = OperatorId("negate-conditionals")
 
-    override fun sites(method: MethodNode): List<Site> =
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
         method.instructions
             .filterIsInstance<JumpInsnNode>()
             .filter { it.opcode in IFEQ..IF_ACMPNE }

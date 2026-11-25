@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -11,8 +12,11 @@ import org.objectweb.asm.tree.MethodNode
 internal object VoidMethodCallsOperator : Operator {
     override val id = OperatorId("void-method-calls")
 
-    override fun sites(method: MethodNode): List<Site> =
-        removableCalls(method)
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
+        removableCalls(method, cls)
             .filter { Type.getReturnType(it.desc) == Type.VOID_TYPE }
             .map { Site(it, it.describe("remove call")) }
 

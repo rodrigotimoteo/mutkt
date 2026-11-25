@@ -11,6 +11,7 @@ internal fun mutate(
     hierarchy: Hierarchy,
 ): ByteArray {
     val node = parse(bytes)
+    val cls = node.info()
     check(target.className == node.name) { "Site is for ${target.className} but the class is ${node.name}" }
     val method =
         checkNotNull(
@@ -22,12 +23,12 @@ internal fun mutate(
         ) {
             "No mutable method ${node.name}.${target.methodName}${target.descriptor}"
         }
-    val sites = sitesOf(op, node.name, method)
+    val sites = sitesOf(op, cls, method)
     check(target.ordinal in sites.indices) {
         "No ordinal ${target.ordinal} in ${node.name}.${target.methodName}${target.descriptor} (${sites.size} sites)"
     }
     val site = sites[target.ordinal]
-    val twins = twinSites(op, method, site)
+    val twins = twinSites(op, cls, method, site)
     op.apply(method, site)
     twins.forEach { op.apply(method, it) }
     return HierarchyClassWriter(hierarchy).also(node::accept).toByteArray()
@@ -39,9 +40,10 @@ internal fun mutate(
 // the copies of one body are noise, or not, together.
 private fun twinSites(
     op: Operator,
+    cls: ClassInfo,
     method: MethodNode,
     site: Site,
 ): List<Site> {
     val copies = finallyTwins(method)[site.instruction].orEmpty().toSet()
-    return op.sites(method).filter { it.instruction in copies && it.description == site.description }
+    return op.sites(method, cls).filter { it.instruction in copies && it.description == site.description }
 }

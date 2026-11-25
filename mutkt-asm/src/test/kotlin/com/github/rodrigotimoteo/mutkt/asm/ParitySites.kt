@@ -23,7 +23,7 @@ internal fun sha256(bytes: ByteArray): String =
 internal fun newRows(operator: Operator): List<Row> =
     parityClasses.values.flatMap { it.values }.flatMap { bytes ->
         val node = parse(bytes)
-        val sites = node.methods.filter(::isMutable).flatMap { sitesOf(operator, node.name, it) }
+        val sites = node.methods.filter(::isMutable).flatMap { sitesOf(operator, node.info(), it) }
         val found = discover(bytes, operator)
         check(found.size == sites.size) { "discover and sites disagree for ${operator.id.value}" }
         found.zip(sites) { found, site ->

@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -14,7 +15,10 @@ private val INCREMENT_RANGE = Short.MIN_VALUE + 1..Short.MAX_VALUE
 internal object IncrementsOperator : Operator {
     override val id = OperatorId("increments")
 
-    override fun sites(method: MethodNode): List<Site> =
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
         method.instructions
             .filter { it.opcode == IINC }
             .map { it as IincInsnNode }

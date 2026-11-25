@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -65,7 +66,10 @@ private val PRIMITIVE_ARRAY =
 internal object EmptyReturnsOperator : Operator {
     override val id = OperatorId("empty-returns")
 
-    override fun sites(method: MethodNode): List<Site> {
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> {
         val returnType = Type.getReturnType(method.desc).descriptor
         return if (returnType.startsWith("[") || returnType in EMPTY_FACTORY) {
             val targets = jumpTargets(method)

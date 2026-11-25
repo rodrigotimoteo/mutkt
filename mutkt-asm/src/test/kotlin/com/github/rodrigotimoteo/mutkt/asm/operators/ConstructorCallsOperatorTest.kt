@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.asm.operators
 
 import com.github.rodrigotimoteo.mutkt.asm.Hierarchy
 import com.github.rodrigotimoteo.mutkt.asm.discover
+import com.github.rodrigotimoteo.mutkt.asm.info
 import com.github.rodrigotimoteo.mutkt.asm.mutate
 import com.github.rodrigotimoteo.mutkt.asm.parse
 import com.github.rodrigotimoteo.mutkt.testing.buildClass
@@ -154,8 +155,9 @@ class ConstructorCallsOperatorTest {
     @Test
     fun `super and this calls in constructors are not sites`() {
         listOf("Child", "Base", "Box").forEach { name ->
-            val init = parse(classes.getValue(name)).methods.filter { it.name == "<init>" }
-            assertEquals(emptyList<Any>(), init.flatMap { ConstructorCallsOperator.sites(it) }, name)
+            val node = parse(classes.getValue(name))
+            val init = node.methods.filter { it.name == "<init>" }
+            assertEquals(emptyList<Any>(), init.flatMap { ConstructorCallsOperator.sites(it, node.info()) }, name)
         }
     }
 

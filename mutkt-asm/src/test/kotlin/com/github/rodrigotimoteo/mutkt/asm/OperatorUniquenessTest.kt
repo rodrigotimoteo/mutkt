@@ -38,10 +38,13 @@ internal class OperatorUniquenessTest {
     private fun sharedInstructions(operators: List<Operator>): List<String> =
         corpus.values.flatMap { bytes ->
             val node = parse(bytes)
+            val cls = node.info()
             node.methods.filter(::isMutable).flatMap { method ->
                 val claims =
                     operators.flatMap { op ->
-                        op.sites(method).map { Triple(method.instructions.indexOf(it.instruction), op, it.instruction) }
+                        op
+                            .sites(method, cls)
+                            .map { Triple(method.instructions.indexOf(it.instruction), op, it.instruction) }
                     }
                 claims
                     .groupBy({ it.first }, { it.second to it.third })

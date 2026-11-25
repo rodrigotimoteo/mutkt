@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -14,8 +15,11 @@ private const val CONTINUATION = "Lkotlin/coroutines/Continuation;"
 internal object NonVoidMethodCallsOperator : Operator {
     override val id = OperatorId("non-void-method-calls")
 
-    override fun sites(method: MethodNode): List<Site> =
-        removableCalls(method)
+    override fun sites(
+        method: MethodNode,
+        cls: ClassInfo,
+    ): List<Site> =
+        removableCalls(method, cls)
             .filter(::isCandidate)
             .map { Site(it, it.describe("replace call with default:")) }
 

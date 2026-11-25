@@ -38,7 +38,10 @@ class AsmMutantGeneratorTest {
     private object ToyMultiply : Operator {
         override val id = OperatorId("toy-add-to-mul")
 
-        override fun sites(method: MethodNode) = ToyOperator.sites(method)
+        override fun sites(
+            method: MethodNode,
+            cls: ClassInfo,
+        ) = ToyOperator.sites(method, cls)
 
         override fun apply(
             method: MethodNode,
@@ -49,7 +52,10 @@ class AsmMutantGeneratorTest {
     private object ToyNoChange : Operator {
         override val id = OperatorId("toy-no-change")
 
-        override fun sites(method: MethodNode) = ToyOperator.sites(method)
+        override fun sites(
+            method: MethodNode,
+            cls: ClassInfo,
+        ) = ToyOperator.sites(method, cls)
 
         override fun apply(
             method: MethodNode,
