@@ -1,5 +1,6 @@
 plugins {
     id("mutkt.kotlin-library")
+    id("mutkt.publishing")
     id("org.jetbrains.kotlinx.kover")
 }
 

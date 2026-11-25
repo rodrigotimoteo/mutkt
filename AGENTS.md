@@ -63,6 +63,7 @@ Port fakes land here with ROD-87.
 - Reports: console + HTML + Stryker-schema JSON (ROD-83).
 - No JUnit extension API or runner module (ROD-84).
 - JDK 17 and 21, Gradle 8.x, Jupiter engine by default; vintage/suite opt-in (ROD-85).
+- Releases: plain `maven-publish` + `signing` to Central, `plugin-publish` for the Plugin Portal, one tag-triggered workflow, no GitHub Packages (ROD-121, [docs/release.md](docs/release.md)).
 
 ## Commands
 

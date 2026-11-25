@@ -1,18 +1,12 @@
 name: Release
 
-# Scaffold only. Real publishing is implemented in Linear issue ROD-121 (P4).
-# Until then a tag run verifies the build and then FAILS at the publish step on purpose,
-# so a stray tag cannot publish anything.
+# The only workflow that can publish: a v* tag, after the full CI and the approval of the "release" environment.
+# Every stage first asks the target repository whether it already has the version, so a re-run after a
+# partial failure skips what is done and never replaces a published artifact. See docs/release.md.
 
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Verify and publish to the local Maven repo only
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -25,17 +19,72 @@ jobs:
     name: Publish
     needs: verify
     runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    env:
+      TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Dry run (local publish)
-        run: ./gradlew publishToMavenLocal
-      - name: Real publish (not configured yet)
-        if: ${{ github.event_name == 'push' || inputs.dry_run == false }}
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-disabled: true
+      - name: Resolve version from the tag
         run: |
-          echo "Publishing is not configured yet (ROD-121). Refusing to publish."
-          exit 1
+          version="${TAG#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]] || {
+            echo "::error::tag $TAG is not vMAJOR.MINOR.PATCH[-prerelease]"
+            exit 1
+          }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Maven Central
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+          ORG_GRADLE_PROJECT_centralUsername: ${{ secrets.CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_centralPassword: ${{ secrets.CENTRAL_PASSWORD }}
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          if tools/release/published.sh central "$VERSION"; then
+            echo "Central already has $VERSION, skipping the upload"
+          else
+            ./gradlew publish "-Pmutkt.version=$VERSION"
+            tools/release/central-release.sh
+          fi
+      - name: Wait until Central serves the version
+        run: tools/release/published.sh central "$VERSION" 2700
+      - name: Gradle Plugin Portal
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+          GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}
+          GRADLE_PUBLISH_SECRET: ${{ secrets.GRADLE_PUBLISH_SECRET }}
+        run: |
+          if tools/release/published.sh plugin-portal "$VERSION"; then
+            echo "The Plugin Portal already has $VERSION, skipping the upload"
+          else
+            ./gradlew :mutkt-gradle:publishPlugins "-Pmutkt.version=$VERSION"
+            tools/release/published.sh plugin-portal "$VERSION" 900
+          fi
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping"
+          else
+            flags=()
+            [[ "$VERSION" == *-* ]] && flags+=(--prerelease)
+            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG" "${flags[@]}"
+          fi
