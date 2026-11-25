@@ -1,9 +1,14 @@
 package com.github.rodrigotimoteo.mutkt.asm.operators
 
+import org.objectweb.asm.Opcodes.ACONST_NULL
+import org.objectweb.asm.Opcodes.DCONST_0
+import org.objectweb.asm.Opcodes.FCONST_0
+import org.objectweb.asm.Opcodes.ICONST_0
 import org.objectweb.asm.Opcodes.INVOKEINTERFACE
 import org.objectweb.asm.Opcodes.INVOKESPECIAL
 import org.objectweb.asm.Opcodes.INVOKESTATIC
 import org.objectweb.asm.Opcodes.INVOKEVIRTUAL
+import org.objectweb.asm.Opcodes.LCONST_0
 import org.objectweb.asm.Opcodes.NOP
 import org.objectweb.asm.Opcodes.POP
 import org.objectweb.asm.Opcodes.POP2
@@ -27,8 +32,26 @@ private val PLUMBING_OWNERS =
         "kotlin/ResultKt",
     )
 
+// Static entry points of kotlinx.coroutines: the builders (launch, async, runBlocking, withContext) and the Job
+// helpers. GlobalScope has no statics; its builders are BuildersKt calls on GlobalScope.INSTANCE.
+private val COROUTINE_OWNERS = setOf("kotlinx/coroutines/BuildersKt", "kotlinx/coroutines/JobKt")
+
+// A suspend call ends in the Continuation and returns Object; with default arguments the compiler routes it
+// through a static foo$default(..., Continuation, int, Object) bridge that has the same result.
+private val SUSPEND_TAILS =
+    listOf(
+        "Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+        "Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;",
+    )
+
 /** Calls that either call-removal operator may drop; the operator then filters on the return type. */
-internal fun removableCalls(method: MethodNode): List<MethodInsnNode> {
+internal fun removableCalls(method: MethodNode): List<MethodInsnNode> =
+    // Coroutine calls are the coroutine operator's sites, as copy calls are the data-class-copy operator's:
+    // removing them here would give a second operator the same instruction and the same mutant.
+    candidateCalls(method).filterNot { it.isCopyCall() || it.isCoroutineCall() }
+
+/** Every call that may be dropped before the owning operator's own exclusions. */
+internal fun candidateCalls(method: MethodNode): List<MethodInsnNode> {
     // The operator contract gives no class, so the owner comes from the type of local 0 (`this`) in the debug
     // info. Without it no INVOKESPECIAL is a site, which is safe.
     val self =
@@ -40,10 +63,21 @@ internal fun removableCalls(method: MethodNode): List<MethodInsnNode> {
         .filterIsInstance<MethodInsnNode>()
         .filter { it.opcode in CALL_OPCODES || (it.opcode == INVOKESPECIAL && it.name != "<init>" && it.owner == self) }
         .filter { PLUMBING_OWNERS.none(it.owner::startsWith) }
-        // A copy call is the data-class-copy operator's site; removing it here would give a second operator
-        // the same instruction and the same mutant.
-        .filterNot { it.isCopyCall() }
 }
+
+/** A static call into a kotlinx.coroutines builder or Job helper, or a call of a suspend function. */
+internal fun MethodInsnNode.isCoroutineCall(): Boolean =
+    (opcode == INVOKESTATIC && owner in COROUTINE_OWNERS) || SUSPEND_TAILS.any(desc::endsWith)
+
+/** The default value instruction of [type]: 0, 0L, 0f, 0.0 or null. */
+internal fun defaultOf(type: Type) =
+    when (type.sort) {
+        Type.LONG -> LCONST_0
+        Type.FLOAT -> FCONST_0
+        Type.DOUBLE -> DCONST_0
+        Type.OBJECT, Type.ARRAY -> ACONST_NULL
+        else -> ICONST_0
+    }
 
 /**
  * A call of the shape Kotlin emits for a data class copy: `owner.copy(...)` returning `owner`, or the static

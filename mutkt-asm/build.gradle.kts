@@ -9,6 +9,7 @@ dependencies {
     implementation(libs.asm.tree)
     testImplementation(project(":mutkt-testing"))
     testImplementation(libs.asm.util)
+    testImplementation(libs.kotlinx.coroutines.core)
 }
 
 tasks.test {

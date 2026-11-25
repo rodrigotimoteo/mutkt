@@ -35,7 +35,7 @@
 # map DATA_CLASS_COPY -
 # map SEALED_WHEN sealed-when
 # map NULL_SAFETY null-safety
-# map COROUTINE -
+# map COROUTINE coroutine
 # columns: operator class method+descriptor line opcode
 ARITHMETIC	Dog	legs()I	23	ISUB
 ARITHMETIC	ParityArithmetic	add(II)I	3	IADD
