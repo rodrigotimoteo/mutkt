@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 private const val WAIT_SECONDS = 10L
@@ -265,6 +266,20 @@ class RunMutationAnalysisTest {
         val executor = FakeExecutor()
         analysis((0 until 3).map { mutant(ordinal = it) }, executor).run()
         assertEquals(listOf(35.seconds), executor.baselines.toList())
+    }
+
+    @Test
+    fun `each mutant gets the measured baseline time scaled by the factor plus the constant`() {
+        val executor = FakeExecutor(baselineElapsed = 500.milliseconds)
+        analysis((0 until 2).map { mutant(ordinal = it) }, executor).run()
+        assertEquals(listOf(6.seconds, 6.seconds), executor.received.map { it.third })
+    }
+
+    @Test
+    fun `the configured timeout caps the derived deadline`() {
+        val executor = FakeExecutor(baselineElapsed = 3.seconds)
+        analysis(listOf(mutant()), executor).run()
+        assertEquals(listOf(7.seconds), executor.received.map { it.third })
     }
 
     @Test

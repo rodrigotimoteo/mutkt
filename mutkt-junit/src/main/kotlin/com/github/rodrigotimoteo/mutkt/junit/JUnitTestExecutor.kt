@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.junit
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
+import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
 import org.junit.platform.launcher.EngineFilter.includeEngines
@@ -18,6 +19,7 @@ import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.nanoseconds
 
 internal const val JUPITER_ENGINE = "junit-jupiter"
 
@@ -63,9 +65,9 @@ public class JUnitTestExecutor(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
-    ): Outcome = run(mutant, bytes, deadline) {}
+    ): Outcome = run(mutant, bytes, deadline) {}.outcome
 
-    override fun baseline(deadline: Duration): Outcome = baseline(deadline) {}
+    override fun baseline(deadline: Duration): TimedOutcome = baseline(deadline) {}
 
     // [onExecuting] runs once on the worker when the tests are discovered and the deadline is about to start; it is
     // skipped when the mutant or a test class fails to link. The fork protocol reports it as Started.
@@ -74,7 +76,7 @@ public class JUnitTestExecutor(
         bytes: ByteArray,
         deadline: Duration,
         onExecuting: () -> Unit,
-    ): Outcome {
+    ): TimedOutcome {
         val loaded = classes + (mutant.className to bytes)
         return launch(mutant.id.toString(), loaded, mutant.className, deadline, onExecuting)
     }
@@ -82,7 +84,7 @@ public class JUnitTestExecutor(
     internal fun baseline(
         deadline: Duration,
         onExecuting: () -> Unit,
-    ): Outcome = launch("the baseline", classes, null, deadline, onExecuting)
+    ): TimedOutcome = launch("the baseline", classes, null, deadline, onExecuting)
 
     // [linked] is the mutated class, linked before the tests run; null when nothing is replaced.
     private fun launch(
@@ -91,7 +93,7 @@ public class JUnitTestExecutor(
         linked: String?,
         deadline: Duration,
         onExecuting: () -> Unit,
-    ): Outcome {
+    ): TimedOutcome {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { "JUnitTestExecutor is closed, cannot run $label" }
         return MutantClassLoader(base, loaded).use { loader ->
@@ -115,9 +117,14 @@ public class JUnitTestExecutor(
             try {
                 // Loading, linking and discovery happen before the latch, so they are not charged to the deadline.
                 started.await()
-                task.get(deadline.inWholeNanoseconds, TimeUnit.NANOSECONDS)
-            } catch (_: TimeoutException) {
-                Outcome.Timeout
+                val start = System.nanoTime()
+                val outcome =
+                    try {
+                        task.get(deadline.inWholeNanoseconds, TimeUnit.NANOSECONDS)
+                    } catch (_: TimeoutException) {
+                        Outcome.Timeout
+                    }
+                TimedOutcome(outcome, (System.nanoTime() - start).nanoseconds)
             } catch (e: ExecutionException) {
                 throw e.cause ?: e
             } finally {

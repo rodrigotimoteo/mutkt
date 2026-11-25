@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.testing
 
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
@@ -57,9 +58,9 @@ class FakesTest {
 
     @Test
     fun `executor answers the baseline with its scripted outcome and records the deadline`() {
-        val executor = FakeTestExecutor(baseline = Outcome.Killed("FooTest"))
+        val executor = FakeTestExecutor(baseline = Outcome.Killed("FooTest"), baselineElapsed = 2.seconds)
 
-        assertEquals(Outcome.Killed("FooTest"), executor.baseline(3.seconds))
+        assertEquals(TimedOutcome(Outcome.Killed("FooTest"), 2.seconds), executor.baseline(3.seconds))
         assertEquals(listOf(3.seconds), executor.baselines)
         assertEquals(emptyList<Any>(), executor.runs)
     }

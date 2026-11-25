@@ -42,13 +42,16 @@ class ForkLoopTest {
         val buffer = ByteArrayOutputStream()
         runForkLoop(input(*requests), DataOutputStream(buffer), executor())
         val stream = DataInputStream(ByteArrayInputStream(buffer.toByteArray()))
-        return generateSequence { readReply(stream) }.toList()
+        // Elapsed times vary; the baseline's own is checked through the executor.
+        return generateSequence { readReply(stream) }
+            .map { (it as? ForkReply.Result)?.copy(elapsedMillis = 0) ?: it }
+            .toList()
     }
 
     @Test
     fun `announces readiness, then answers a killed mutant`() {
         assertEquals(
-            listOf(ForkReply.Ready(), ForkReply.Started, ForkReply.Result(Outcome.Killed("CalcTest.adds"))),
+            listOf(ForkReply.Ready(), ForkReply.Started, ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0)),
             replies(run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )
     }
@@ -59,9 +62,9 @@ class ForkLoopTest {
             listOf(
                 ForkReply.Ready(),
                 ForkReply.Started,
-                ForkReply.Result(Outcome.Survived),
+                ForkReply.Result(Outcome.Survived, 0),
                 ForkReply.Started,
-                ForkReply.Result(Outcome.Killed("CalcTest.adds")),
+                ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0),
             ),
             replies(run(mutantBytes(CALC)), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )
@@ -73,9 +76,9 @@ class ForkLoopTest {
             listOf(
                 ForkReply.Ready(),
                 ForkReply.Started,
-                ForkReply.Result(Outcome.Survived),
+                ForkReply.Result(Outcome.Survived, 0),
                 ForkReply.Started,
-                ForkReply.Result(Outcome.Killed("CalcTest.adds")),
+                ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0),
             ),
             replies(ForkRequest.Baseline(10_000), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )

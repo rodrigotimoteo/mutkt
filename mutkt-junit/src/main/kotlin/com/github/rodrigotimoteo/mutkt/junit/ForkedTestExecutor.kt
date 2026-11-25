@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
+import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.junit.fork.ChildProcess
 import com.github.rodrigotimoteo.mutkt.junit.fork.ForkRequest
@@ -48,16 +49,16 @@ public class ForkedTestExecutor(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
-    ): Outcome = onChild(deadline, "running a mutant") { ForkRequest.Run(mutant, bytes, it) }
+    ): Outcome = onChild(deadline, "running a mutant") { ForkRequest.Run(mutant, bytes, it) }.outcome
 
-    override fun baseline(deadline: Duration): Outcome =
+    override fun baseline(deadline: Duration): TimedOutcome =
         onChild(deadline, "running the baseline") { ForkRequest.Baseline(it) }
 
     private fun onChild(
         deadline: Duration,
         context: String,
         request: (timeoutMillis: Long) -> ForkRequest,
-    ): Outcome {
+    ): TimedOutcome {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { CLOSED }
         val timeoutMillis = deadline.inWholeMilliseconds.coerceAtLeast(1)
@@ -79,12 +80,12 @@ public class ForkedTestExecutor(
         request: ForkRequest,
         context: String,
         timeoutMillis: Long,
-    ): Outcome {
+    ): TimedOutcome {
         var reusable = false
         try {
             val outcome = child.exchange(request, context, timeoutMillis, settings.graceMillis, settings.prepareMillis)
             // A child that timed out may still be running the abandoned mutant thread.
-            reusable = outcome != Outcome.Timeout
+            reusable = outcome.outcome != Outcome.Timeout
             return outcome
         } finally {
             if (reusable) idle.push(child)

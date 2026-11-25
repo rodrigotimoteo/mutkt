@@ -2,6 +2,7 @@
 
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
+import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import com.github.rodrigotimoteo.mutkt.junit.JUnitTestExecutor
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -67,15 +68,18 @@ internal fun runForkLoop(
             is ForkRequest.Run -> {
                 val deadline = request.timeoutMillis.milliseconds
                 val started = { writeReply(output, ForkReply.Started) }
-                val outcome = executor.run(request.mutant, request.bytes, deadline, started)
-                writeReply(output, ForkReply.Result(outcome))
+                writeResult(output, executor.run(request.mutant, request.bytes, deadline, started))
             }
             is ForkRequest.Baseline -> {
                 val started = { writeReply(output, ForkReply.Started) }
-                val outcome = executor.baseline(request.timeoutMillis.milliseconds, started)
-                writeReply(output, ForkReply.Result(outcome))
+                writeResult(output, executor.baseline(request.timeoutMillis.milliseconds, started))
             }
             ForkRequest.Shutdown, null -> return
         }
     }
 }
+
+private fun writeResult(
+    output: DataOutputStream,
+    result: TimedOutcome,
+) = writeReply(output, ForkReply.Result(result.outcome, result.elapsed.inWholeMilliseconds))

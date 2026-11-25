@@ -9,7 +9,7 @@ The other statuses:
 | Status | Meaning | Score |
 |---|---|---|
 | SURVIVED | Every selected test passed | not detected |
-| TIMEOUT | The tests did not finish within `timeoutMs` | detected |
+| TIMEOUT | The tests did not finish within the mutant's deadline | detected |
 | NO_COVERAGE | No test ran at all, for example because `includeTags` or `engines` select none | not detected |
 | ERROR | The mutant could not be loaded or run (a `VerifyError`, a crashed child JVM) | left out |
 
@@ -17,9 +17,9 @@ MutKt does not measure coverage: every selected test runs against every mutant, 
 
 ## Why does TIMEOUT count as detected?
 
-A mutant that makes a test run past the deadline usually turned a loop or a recursion endless: the tests noticed a change, they just never finished. The deadline (`timeoutMs`, 10 s by default) is per mutant and starts when the tests start, after class loading. A child JVM that passes it is killed and replaced, so an endless loop does not hold a thread.
+A mutant that makes a test run past the deadline usually turned a loop or a recursion endless: the tests noticed a change, they just never finished. The deadline is per mutant and starts when the tests start, after class loading. It is 4 times how long the tests ran on the original classes (the baseline run) plus 4 s, at most `timeoutMs` (10 s by default). A child JVM that passes it is killed and replaced, so an endless loop does not hold a thread.
 
-If many mutants end in TIMEOUT, the suite is too slow for the deadline: raise `timeoutMs`. Otherwise a slow or busy machine can inflate the score. The baseline run gets 5 times `timeoutMs`, since its JVM starts cold.
+If many mutants end in TIMEOUT, the suite is too slow for the deadline: raise `timeoutMs`, or lower `threads`: deadlines scale from a baseline run alone, so `threads` above the core count can cause false TIMEOUTs. Otherwise a slow or busy machine can inflate the score. The baseline run gets 5 times `timeoutMs`, since its JVM starts cold.
 
 ## What about flaky tests?
 

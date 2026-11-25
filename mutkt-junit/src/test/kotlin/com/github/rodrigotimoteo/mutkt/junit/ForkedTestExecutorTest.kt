@@ -232,7 +232,7 @@ class ForkedTestExecutorTest {
             "class CalcTest { @Test fun env() { assertEquals(\"v1\", System.getenv(\"MUTKT_FORK_VAR\")) } " +
                 "@Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
         val pool = executor(testSource = test) { it.copy(environment = mapOf("MUTKT_FORK_VAR" to "v1")) }
-        assertEquals(Outcome.Survived, pool.baseline(LONG))
+        assertEquals(Outcome.Survived, pool.baseline(LONG).outcome)
         assertEquals(Outcome.Killed("CalcTest.adds"), pool.run(mutantBytes()))
         assertEquals(1, pool.startedChildren)
     }
@@ -242,15 +242,22 @@ class ForkedTestExecutorTest {
         val test =
             "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } " +
                 "@Tag(\"slow\") @Test fun unrelated() { fail<Unit>(\"red\") } }"
-        assertEquals(Outcome.Killed("CalcTest.unrelated"), executor(testSource = test).baseline(LONG))
+        assertEquals(Outcome.Killed("CalcTest.unrelated"), executor(testSource = test).baseline(LONG).outcome)
         val excluded = executor(testSource = test) { it.copy(excludeTags = listOf("slow")) }
-        assertEquals(Outcome.Survived, excluded.baseline(LONG))
+        assertEquals(Outcome.Survived, excluded.baseline(LONG).outcome)
+    }
+
+    @Test
+    fun `the baseline reports how long the child ran the tests`() {
+        val pool = executor(testSource = "class CalcTest { @Test fun slow() { Thread.sleep(500) } }")
+        val elapsed = pool.baseline(LONG).elapsed
+        assertTrue(elapsed >= 500.milliseconds && elapsed < LONG, "elapsed $elapsed")
     }
 
     @Test
     fun `a baseline that outlives its deadline kills the child`() {
         val pool = executor(testSource = "class CalcTest { @Test fun spin() { while (System.nanoTime() > 0) {} } }")
-        assertEquals(Outcome.Timeout, pool.baseline(1.seconds))
+        assertEquals(Outcome.Timeout, pool.baseline(1.seconds).outcome)
         assertTrue(pool.liveProcesses.isEmpty())
     }
 

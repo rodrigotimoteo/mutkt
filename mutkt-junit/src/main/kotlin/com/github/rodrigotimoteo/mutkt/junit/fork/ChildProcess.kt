@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.DataInputStream
@@ -10,6 +11,7 @@ import java.nio.file.Path
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val STDERR_TAIL_BYTES = 4096
 private const val READY_WAIT_MILLIS = 60_000L
@@ -36,7 +38,7 @@ internal class ChildProcess private constructor(
 
     /**
      * Sends [request]. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
-     * detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout].
+     * detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout] of [timeoutMillis].
      */
     fun exchange(
         request: ForkRequest,
@@ -44,7 +46,7 @@ internal class ChildProcess private constructor(
         timeoutMillis: Long,
         graceMillis: Long,
         prepareMillis: Long,
-    ): Outcome =
+    ): TimedOutcome =
         try {
             writeRequest(output, request)
             // A mutant or test class that cannot link answers Result without a Started.
@@ -56,8 +58,8 @@ internal class ChildProcess private constructor(
                     )
             val reply = if (first is ForkReply.Started) awaitReply(timeoutMillis + graceMillis) else first
             when (reply) {
-                null -> Outcome.Timeout
-                is ForkReply.Result -> reply.outcome
+                null -> TimedOutcome(Outcome.Timeout, timeoutMillis.milliseconds)
+                is ForkReply.Result -> TimedOutcome(reply.outcome, reply.elapsedMillis.milliseconds)
                 else -> throw ForkProtocolException("Unexpected reply $reply")
             }
         } catch (e: IOException) {

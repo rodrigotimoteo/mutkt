@@ -7,6 +7,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
+import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import kotlin.time.Duration
@@ -32,12 +33,13 @@ class FakeMutantGenerator(
 
 /**
  * Returns the scripted outcome per mutant ([default] otherwise) and records each call's mutant, bytes and deadline;
- * [baseline] answers the baseline run, whose deadlines are recorded in [baselines].
+ * [baseline] answers the baseline run in [baselineElapsed]; its deadlines are recorded in [baselines].
  */
 class FakeTestExecutor(
     private val outcomes: Map<Mutant, Outcome> = emptyMap(),
     private val default: Outcome = Outcome.Survived,
     private val baseline: Outcome = Outcome.Survived,
+    private val baselineElapsed: Duration = Duration.ZERO,
 ) : TestExecutor {
     val runs = mutableListOf<Triple<Mutant, ByteArray, Duration>>()
     val baselines = mutableListOf<Duration>()
@@ -51,9 +53,9 @@ class FakeTestExecutor(
         return outcomes[mutant] ?: default
     }
 
-    override fun baseline(deadline: Duration): Outcome {
+    override fun baseline(deadline: Duration): TimedOutcome {
         baselines += deadline
-        return baseline
+        return TimedOutcome(baseline, baselineElapsed)
     }
 }
 

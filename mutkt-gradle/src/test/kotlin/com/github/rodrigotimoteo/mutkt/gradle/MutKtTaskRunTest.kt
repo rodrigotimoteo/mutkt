@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -97,6 +98,25 @@ class MutKtTaskRunTest {
         )
     }
 
+    // Without a deadline derived from the fast baseline, the endless mutant would run for timeoutMs (5 minutes).
+    @Test
+    @Timeout(value = 90, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `an endless mutant of a fast suite times out long before timeoutMs`() {
+        val task = fixtureTask(LOOP)
+        task.operators.add("arithmetic")
+        task.timeoutMs.set(300_000L)
+
+        val json = task.runAnalysis().json
+
+        val statuses =
+            STATUS
+                .findAll(json)
+                .map { it.groupValues[1] }
+                .sorted()
+                .toList()
+        assertEquals(listOf("Killed", "Timeout"), statuses, json)
+    }
+
     @Test
     fun `a mutant that kills its JVM is listed with the exit code next to the scored ones`() {
         val task = fixtureTask(EXITING)
@@ -172,12 +192,40 @@ class MutKtTaskRunTest {
     private companion object {
         const val PAGE_TAIL = 2000
 
+        val STATUS = Regex(""""status": "(\w+)"""")
+
         // What the fixture's tests need at run time; the Launcher API comes from the plugin side.
         val PROJECT_JARS =
             Regex("^(junit-jupiter|junit-platform-(engine|commons)|opentest4j|apiguardian|kotlin-stdlib)")
 
         // A long id must not push the exit code out of the capped cause.
         const val LONG = "addNumbersWithAVeryLongMethodNameToProveTheCapKeepsTheExitCode"
+
+        // `i += step` mutated to `i -= step` never reaches n; a Long counter cannot wrap around in time to end it.
+        val LOOP =
+            """
+            package demo
+
+            import org.junit.jupiter.api.Assertions.assertEquals
+            import org.junit.jupiter.api.Test
+
+            class Loop {
+                fun sum(n: Long, step: Long): Long {
+                    var total = 0L
+                    var i = 0L
+                    while (i < n) {
+                        total += i
+                        i += step
+                    }
+                    return total
+                }
+            }
+
+            class LoopTest {
+                @Test
+                fun sums() = assertEquals(6L, Loop().sum(4, 1))
+            }
+            """.trimIndent()
 
         // Negating the guard makes the mutant call System.exit, which the parent sees as an unexpected child exit.
         val EXITING =

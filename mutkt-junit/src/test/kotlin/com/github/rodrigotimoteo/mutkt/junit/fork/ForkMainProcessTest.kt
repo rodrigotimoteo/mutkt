@@ -11,6 +11,7 @@ import com.github.rodrigotimoteo.mutkt.junit.splitClasses
 import com.github.rodrigotimoteo.mutkt.junit.writeClasses
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
@@ -75,10 +76,12 @@ class ForkMainProcessTest {
 
         writeRequest(out, ForkRequest.Run(mutantOf(), mutantBytes(CALC_MUTANT), 20_000))
         assertEquals(ForkReply.Started, readReply(input))
-        assertEquals(ForkReply.Result(Outcome.Killed("CalcTest.adds")), readReply(input))
+        val killed = readReply(input) as ForkReply.Result
+        assertEquals(Outcome.Killed("CalcTest.adds"), killed.outcome)
+        assertTrue(killed.elapsedMillis >= 0, "elapsed ${killed.elapsedMillis}")
         writeRequest(out, ForkRequest.Run(mutantOf(), mutantBytes(CALC), 20_000))
         assertEquals(ForkReply.Started, readReply(input))
-        assertEquals(ForkReply.Result(Outcome.Survived), readReply(input))
+        assertEquals(Outcome.Survived, (readReply(input) as ForkReply.Result).outcome)
 
         writeRequest(out, ForkRequest.Shutdown)
         assertEquals(0, child.exit())
