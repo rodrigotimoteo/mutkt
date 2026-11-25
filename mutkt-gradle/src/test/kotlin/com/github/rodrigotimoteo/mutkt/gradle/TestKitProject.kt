@@ -71,7 +71,8 @@ internal class TestKitProject(
                 "--stacktrace",
             ).also { runner -> version?.let(runner::withGradleVersion) }
 
-    private fun jars(pattern: Regex): String =
+    /** The jars of this JVM's classpath whose file name matches [pattern], as quoted Groovy strings. */
+    fun jars(pattern: Regex): String =
         System
             .getProperty("java.class.path")
             .split(File.pathSeparator)

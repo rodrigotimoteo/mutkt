@@ -42,13 +42,18 @@ fun scale(x: Int): Int = x * 1
 
 The annotation is `com.github.rodrigotimoteo.mutkt.annotations.SuppressMutations` from `io.github.rodrigotimoteo:mutkt-annotations` (`compileOnly` is enough: MutKt reads it from the bytecode). It applies to a class or a function, and to the lambdas and classes declared inside it. Without `operators` it suppresses every operator. An unknown operator id fails the run when the annotation is on a targeted class or on code enclosing one; elsewhere it is ignored. `excludedClasses` and `excludedMethods` in the [DSL](dsl.md) skip code by name instead.
 
-## Why are `-javaagent` arguments not forwarded?
+## Which `-javaagent` arguments are forwarded?
 
-The child JVMs copy the `test` task's JVM arguments except `-javaagent`, so agents of the `test` task (coverage tools such as JaCoCo, other instrumentation) never run on mutated classes.
+The child JVMs copy the `test` task's JVM arguments, `-javaagent` included, except coverage agents: an agent whose jar name contains `jacoco`, `kover` or `intellij-coverage` is dropped, so coverage never records mutant runs or rewrites its data files. Other agents, such as a mocking library's, run in the child JVMs as they do in the `test` task. Every child JVM runs them, so an agent that writes one output file (JCov, an OpenTelemetry or Datadog agent) has each child write to it, and `-agentlib:jdwp` with a fixed port clashes when `threads` is above 1.
 
 ## Do mocking libraries work?
 
-Agent-based mocking is not supported yet: a mocking library that the `test` task loads through `-javaagent` is dropped in the child JVMs like any other agent, so tests that depend on it may fail in the baseline run.
+Yes, including inline mocking. Measured on JDK 17 and 21 with MockK 1.14 mocking a static method of a project class:
+
+- Without a `-javaagent`, MockK attaches its agent at runtime in the child JVMs as in the `test` task (JDK 21 prints a dynamic agent loading warning).
+- With the agent set on the `test` task and dynamic loading turned off (`jvmArgs '-XX:-EnableDynamicAgentLoading', '-javaagent:<byte-buddy-agent jar>'`), the agent is forwarded and the tests pass in both tasks. Mockito 5's `-javaagent:<mockito-core jar>` setup is forwarded the same way (not measured).
+
+One limitation: MockK's string form `mockkStatic("com.example.Prices")` fails with `ClassNotFoundException` in the child JVMs, because MockK resolves the name through its own class loader, which does not see the project's classes there. Use the class form, `mockkStatic(Prices::class)`.
 
 ## Where are the reports, and why is there no output?
 
