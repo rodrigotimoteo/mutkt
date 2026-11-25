@@ -4,6 +4,8 @@
 
 A mutant is KILLED when a test or a container (a test class, its `@BeforeAll`) fails while the mutant is loaded: a failed assertion and an exception thrown by the mutated code both count. Aborted tests (failed assumptions) and disabled tests do not. The test classes run one at a time, sorted by name, and the run stops at the first class with a failure; the report names that first failing test (`killedBy` in the JSON report).
 
+A mutant that exits its child JVM once the tests have started is KILLED too, as in PIT: a `System.exit` or an `OutOfMemoryError` (JUnit does not catch it). `killedBy` then reads `JVM exit 7` (the exit code) or `OutOfMemoryError`. A `StackOverflowError` in a test is an ordinary test failure. These stay ERROR: a child ended by a signal (exit code above 128, such as the OS out-of-memory killer's 137), reported as `killed by signal 9`, since that is usually the machine rather than the mutant; and a child that dies earlier, while it loads the classes and discovers the tests. If the baseline run exits the JVM, the task fails with `the test JVM exited with code 7 on the original classes`.
+
 The other statuses:
 
 | Status | Meaning | Score |
@@ -11,7 +13,7 @@ The other statuses:
 | SURVIVED | Every selected test passed | not detected |
 | TIMEOUT | The tests did not finish within the mutant's deadline | detected |
 | NO_COVERAGE | No test ran at all, for example because `includeTags` or `engines` select none | not detected |
-| ERROR | The mutant could not be loaded or run (a `VerifyError`, a crashed child JVM) | left out |
+| ERROR | The mutant could not be loaded or run (a `VerifyError`, a child JVM that died before the tests started) | left out |
 
 MutKt does not measure coverage: every selected test runs against every mutant, so NO_COVERAGE never means "no test reaches this line". Score = (KILLED + TIMEOUT) / (all mutants − ERROR).
 
