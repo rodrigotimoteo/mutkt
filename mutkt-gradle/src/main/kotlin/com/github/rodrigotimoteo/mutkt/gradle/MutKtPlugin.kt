@@ -12,6 +12,9 @@ public class MutKtPlugin : Plugin<Project> {
         mutkt.engines.convention(setOf("jupiter"))
         mutkt.reports.console.convention(true)
 
+        // Only `java` creates source sets: a java-base-only project passes the check below but has no model.
+        project.pluginManager.withPlugin("java") { project.registerMutktModel() }
+
         var jvmPluginApplied = false
         // The Kotlin JVM plugin applies java-base too, so one hook covers both.
         project.pluginManager.withPlugin("java-base") { jvmPluginApplied = true }
