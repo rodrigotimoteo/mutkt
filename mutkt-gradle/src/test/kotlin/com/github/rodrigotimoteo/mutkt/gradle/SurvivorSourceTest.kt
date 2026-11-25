@@ -39,7 +39,7 @@ class SurvivorSourceTest {
         val classes = compileKotlin(source, fileName = fileName).map { ClassFile(it.key, it.value) }
         val generator =
             AsmMutantGenerator { name -> ClassLoader.getSystemResourceAsStream("$name.class")?.use { it.readBytes() } }
-        val results = generator.discover(classes).map { MutantResult(it, SURVIVED) }
+        val results = generator.discover(classes, classes).map { MutantResult(it, SURVIVED) }
         return StringBuilder()
             .also {
                 ConsoleReportWriter(

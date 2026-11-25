@@ -138,6 +138,7 @@ class RunMutationAnalysisTest {
             )
         val report = analysis(mutants, generator = generator, filters = filters).run()
         assertEquals(listOf(listOf("a.Foo", "a.Baz")), generator.discovered.toList())
+        assertEquals(listOf(listOf("a.Foo", "b.Bar", "a.Baz")), generator.known.toList())
         assertEquals(listOf("a.Foo", "a.Baz"), report.results.map { it.mutant.className })
         assertEquals(listOf("keep", "x"), report.results.map { it.mutant.methodName })
     }

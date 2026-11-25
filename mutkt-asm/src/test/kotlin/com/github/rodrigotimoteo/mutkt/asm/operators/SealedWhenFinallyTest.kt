@@ -57,8 +57,9 @@ class SealedWhenFinallyTest {
     }
 
     private fun generated() =
-        AsmMutantGenerator(setOf("sealed-when")) { null }
-            .discover(classes.map { (name, bytes) -> ClassFile(name, bytes) })
+        classes.map { (name, bytes) -> ClassFile(name, bytes) }.let {
+            AsmMutantGenerator(setOf("sealed-when")) { null }.discover(it, it)
+        }
 
     @Test
     fun `a type test written once in a finally is a lone test with no site`() {

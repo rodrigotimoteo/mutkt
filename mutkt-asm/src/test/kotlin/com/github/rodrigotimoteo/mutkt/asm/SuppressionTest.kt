@@ -17,6 +17,8 @@ class SuppressionTest {
         compileKotlin("import com.github.rodrigotimoteo.mutkt.annotations.SuppressMutations\n$source", true)
             .map { (name, bytes) -> ClassFile(name, bytes) }
 
+    private fun AsmMutantGenerator.discover(files: List<ClassFile>) = discover(files, files)
+
     private fun operatorsByMethod(source: String): Map<String, Set<String>> =
         AsmMutantGenerator(operators) { null }
             .discover(filesOf(source))
@@ -196,6 +198,71 @@ class SuppressionTest {
             )
 
         assertEquals(mapOf("On\$Companion.g" to setOf("arithmetic")), result)
+    }
+
+    private fun targetedOperatorsByMethod(
+        source: String,
+        vararg targets: String,
+    ): Map<String, Set<String>> {
+        val all = filesOf(source)
+        return AsmMutantGenerator(operators) { null }
+            .discover(all, all.filter { it.name in targets })
+            .groupBy({ "${it.className}.${it.methodName}" }, { it.operator.value })
+            .mapValues { it.value.toSet() }
+    }
+
+    @Test
+    fun `targeting only a nested class keeps the enclosing class suppression`() {
+        val source =
+            """
+            @SuppressMutations(["arithmetic"])
+            class Outer {
+                class Inner { fun f(a: Int) = if (a > 1) a + 1 else 0 }
+                fun g(): Runnable = object : Runnable { override fun run() { check(System.nanoTime() + 1 > 0) } }
+            }
+            """.trimIndent()
+
+        assertEquals(
+            mapOf("Outer\$Inner.f" to setOf("conditionals-boundary")),
+            targetedOperatorsByMethod(source, "Outer\$Inner"),
+        )
+        assertEquals(
+            mapOf("Outer\$g\$1.run" to setOf("conditionals-boundary")),
+            targetedOperatorsByMethod(source, "Outer\$g\$1"),
+        )
+    }
+
+    @Test
+    fun `targeting only a local class keeps the suppression of its function and not its neighbor's`() {
+        val source =
+            """
+            class C {
+                @SuppressMutations
+                fun off(): Int { class L { fun f(a: Int) = a + 1 }; return L().f(1) }
+                fun on(): Int { class L { fun f(a: Int) = a + 1 }; return L().f(1) }
+            }
+            """.trimIndent()
+
+        assertEquals(
+            mapOf("C\$on\$L.f" to setOf("arithmetic")),
+            targetedOperatorsByMethod(source, "C\$off\$L", "C\$on\$L"),
+        )
+    }
+
+    @Test
+    fun `an unknown operator name is ignored in an excluded class and rejected in the enclosing class of a target`() {
+        val source =
+            """
+            @SuppressMutations(["arithmetik"])
+            class Bad { fun g(a: Int) = a + 1 }
+            @SuppressMutations(["arithmetik"])
+            class Outer { class Inner { fun f(a: Int) = a + 1 } }
+            class Good { fun h(a: Int) = a + 1 }
+            """.trimIndent()
+
+        assertEquals(mapOf("Good.h" to setOf("arithmetic")), targetedOperatorsByMethod(source, "Good"))
+        val error = assertThrows<IllegalArgumentException> { targetedOperatorsByMethod(source, "Outer\$Inner") }
+        assertTrue("arithmetik" in error.message.orEmpty(), error.message)
     }
 
     @Test

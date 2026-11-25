@@ -22,14 +22,17 @@ private data class Suppression(
 }
 
 /**
- * The `@SuppressMutations` rules of the classes analysed in one discover call, validated against [valid].
- * A method is covered by its class, its own annotation, the annotation of the function whose lambda body it
- * is, and, for classes nested in or declared inside another analysed class (or one of its methods), by that
- * enclosing code too. A method's own annotation matches by name and descriptor; a lambda only knows its
- * owner's name, so it inherits from every overload with that name.
+ * The `@SuppressMutations` rules read from every class in [classes], so a target keeps the rules of enclosing
+ * code that is not itself a target. Only the [targets] (internal names) and the code enclosing them are validated
+ * against [valid]: an unknown operator name in an excluded class is ignored.
+ * A method is covered by its class, its own annotation, the annotation of the function whose lambda body it is,
+ * and, for classes nested in or declared inside another class (or one of its methods), by that enclosing code.
+ * A method's own annotation matches by name and descriptor; a lambda only knows its owner's name, so it
+ * inherits from every overload with that name.
  */
 internal class Suppressions(
     classes: List<ByteArray>,
+    targets: Set<String>,
     private val valid: List<OperatorId>,
 ) {
     private val nodes: Map<String, ClassNode> =
@@ -38,7 +41,7 @@ internal class Suppressions(
             .associateBy { it.name }
 
     init {
-        nodes.values.forEach { node ->
+        nodes.values.filter { it.name in targets }.forEach { node ->
             forClass(node.name)
             node.methods.forEach { forMethod(node.name, it.name, it.desc) }
         }

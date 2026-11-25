@@ -35,10 +35,15 @@ internal class FakeGenerator(
     private val failure: Throwable = IllegalStateException("cannot materialize"),
 ) : MutantGenerator {
     val discovered = ConcurrentLinkedQueue<List<String>>()
+    val known = ConcurrentLinkedQueue<List<String>>()
 
-    override fun discover(classes: List<ClassFile>): List<Mutant> {
-        discovered += classes.map { it.name }
-        return mutants.filter { m -> classes.any { it.name == m.className } }
+    override fun discover(
+        classes: List<ClassFile>,
+        targets: List<ClassFile>,
+    ): List<Mutant> {
+        known += classes.map { it.name }
+        discovered += targets.map { it.name }
+        return mutants.filter { m -> targets.any { it.name == m.className } }
     }
 
     override fun materialize(mutant: Mutant): ByteArray {
