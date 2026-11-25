@@ -1,0 +1,47 @@
+package com.github.rodrigotimoteo.mutkt.junit.fork
+
+import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
+import java.nio.file.Files
+import java.nio.file.Path
+
+// Parsed from a key=value file (repeatable keys) because the classpath can exceed the OS command-line limit.
+internal data class ForkStartup(
+    val projectClassDir: Path,
+    val testClassDir: Path,
+    val classpath: List<Path>,
+) {
+    companion object {
+        fun parse(file: Path): ForkStartup {
+            val entries =
+                Files
+                    .readAllLines(file)
+                    .filter { it.isNotBlank() }
+                    .map { line ->
+                        require('=' in line) { "Malformed startup line: $line" }
+                        line.substringBefore('=') to Path.of(line.substringAfter('='))
+                    }.groupBy({ it.first }, { it.second })
+            val unknown = entries.keys - setOf("projectClassDir", "testClassDir", "classpath")
+            require(unknown.isEmpty()) { "Unknown startup keys: $unknown" }
+            return ForkStartup(
+                entries.single("projectClassDir"),
+                entries.single("testClassDir"),
+                entries["classpath"].orEmpty(),
+            )
+        }
+
+        private fun Map<String, List<Path>>.single(key: String): Path =
+            requireNotNull(this[key]?.singleOrNull()) { "Startup file needs exactly one $key" }
+    }
+}
+
+internal fun readClassFiles(root: Path): List<ClassFile> =
+    Files.walk(root).use { paths ->
+        paths
+            .filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".class") }
+            .map {
+                ClassFile(
+                    root.relativize(it).joinToString(".") { part -> part.toString() }.removeSuffix(".class"),
+                    Files.readAllBytes(it),
+                )
+            }.toList()
+    }

@@ -35,14 +35,19 @@ internal fun mutantBytes(
 ) = compileKotlin(source)[name] ?: error("No class $name")
 
 /** Compiles [source] with Jupiter visible and splits the output: classes named in [production] versus tests. */
+internal fun splitClasses(
+    source: String,
+    production: Set<String> = setOf("Calc"),
+): Pair<List<ClassFile>, List<ClassFile>> =
+    compileKotlin(source, inheritClassPath = true)
+        .map { ClassFile(it.key, it.value) }
+        .partition { it.name in production }
+
 internal fun executorFor(
     source: String,
     production: Set<String> = setOf("Calc"),
 ): JUnitTestExecutor {
-    val (project, tests) =
-        compileKotlin(source, inheritClassPath = true)
-            .map { ClassFile(it.key, it.value) }
-            .partition { it.name in production }
+    val (project, tests) = splitClasses(source, production)
     return JUnitTestExecutor(project, tests, runtimeJars())
 }
 
