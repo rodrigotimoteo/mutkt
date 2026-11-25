@@ -3,11 +3,6 @@ package com.github.rodrigotimoteo.mutkt.asm.operators
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
-import org.objectweb.asm.Opcodes.ACONST_NULL
-import org.objectweb.asm.Opcodes.DCONST_0
-import org.objectweb.asm.Opcodes.FCONST_0
-import org.objectweb.asm.Opcodes.ICONST_0
-import org.objectweb.asm.Opcodes.LCONST_0
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.InsnNode
 import org.objectweb.asm.tree.MethodInsnNode
@@ -38,13 +33,4 @@ internal object NonVoidMethodCallsOperator : Operator {
         val suspends = Type.getArgumentTypes(call.desc).lastOrNull()?.descriptor == CONTINUATION
         return returned != Type.VOID_TYPE && returned.descriptor != "Lkotlin/Unit;" && !suspends
     }
-
-    private fun defaultOf(type: Type) =
-        when (type.sort) {
-            Type.LONG -> LCONST_0
-            Type.FLOAT -> FCONST_0
-            Type.DOUBLE -> DCONST_0
-            Type.OBJECT, Type.ARRAY -> ACONST_NULL
-            else -> ICONST_0
-        }
 }

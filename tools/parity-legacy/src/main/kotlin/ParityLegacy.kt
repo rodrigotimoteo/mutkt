@@ -102,5 +102,5 @@ private val LEGACY_TO_NEW =
         "DATA_CLASS_COPY" to "-",
         "SEALED_WHEN" to "sealed-when",
         "NULL_SAFETY" to "null-safety",
-        "COROUTINE" to "-",
+        "COROUTINE" to "coroutine",
     )

@@ -7,7 +7,6 @@
 - Legacy line `-1` means unknown and matches any line of the same site.
 - The fixture-bytes hash check is informational: the tool compiled against kotlin-stdlib 2.1.10, the repo resolves a newer one, and only the `ParityClasses` facade differs.
 - Regenerate: `./gradlew -p tools/parity-legacy run --args="$PWD/mutkt-asm/src/test/resources/parity"` (see `tools/parity-legacy/README.md`).
-- Legacy operators with no new counterpart yet (COROUTINE) are P3 (ROD-115).
 - Legacy SEALED_WHEN maps to `sealed-when`; NULL_SAFETY maps to `null-safety` with no deviation.
 - Legacy DATA_CLASS_COPY fired only when the calling class was itself a data class (order-dependent detection); `data-class-copy` fires in any class. It has a counterpart but stays unmapped: no parity fixture calls `copy`, so the legacy table has no rows to compare, and it is not a deviation entry.
 
@@ -38,5 +37,8 @@ Every documented difference, from `mutkt-asm/src/test/kotlin/com/github/rodrigot
 | D9c | true-returns | new only | `IRETURN` after `ICONST_0` | Legacy reports these as FALSE_RETURNS; the rebuild also makes them return true |
 | D9d | false-returns | new only | `IRETURN` after `ICONST_1` | Legacy reports these as TRUE_RETURNS; the rebuild makes them return false |
 | D10 | sealed-when | new only | A site for every `when` branch (`INSTANCEOF`, object `areEqual`, enum switch case) | Legacy mutates only the 2nd+ `INSTANCEOF` on one source line, or a switch after one, so it finds no site in the fixtures (every branch is on its own line) |
+| D11 | coroutine | new only | Suspend calls (`INVOKESTATIC` with a trailing `Continuation`) | Legacy's suspend test (`descriptor.endsWith("Continuation;")`) cannot match a real descriptor, which ends with its return type. Its only row is the `getCOROUTINE_SUSPENDED()` marker call, which the rebuild never mutates: replacing it by null made a real suspension resume a completed continuation (`ClassCastException` in `runBlocking`) |
+
+The legacy COROUTINE row has no line, so it pairs with one of the two suspend calls of `chain` (same site, any line) and D11 explains the other: the marker row itself is not matched by a rebuild site.
 
 Broad deviations: D8b matches any `INVOKESTATIC` in a suspend function, D9c/D9d any boolean site with that constant, and D10 every `sealed-when` site (legacy has no rows to pair with), so for those rows the side is effectively unchecked. Legacy true/false rows record the constant before `IRETURN`; the test describes new sites the same way so a site pairs only with the same constant.

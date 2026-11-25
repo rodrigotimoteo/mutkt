@@ -200,6 +200,14 @@ private val SOURCE =
         return s.total(5L, 1.5)
     }
 
+    // Suspend calls: a state machine, a tail call, wide arguments, an instance receiver.
+    suspend fun leaf(a: Int): Int = a + 1
+    suspend fun twice(a: Int): Int = leaf(a) + leaf(a + 1)
+    suspend fun tailCall(a: Int): Int = leaf(a)
+    suspend fun wideLeaf(a: Long, b: Double): Long = a + b.toLong()
+    suspend fun callWide(a: Long): Long = wideLeaf(a, 1.5) + 1
+    class Worker { suspend fun work(a: Int): Int = leaf(a) * 2 }
+    suspend fun delegate(w: Worker, a: Int): Int = w.work(a) + w.work(a + 1)
     // Null-handling shapes: lateinit read, not-null assertion, platform-type result, parameter check.
     class Late { lateinit var name: String }
     fun lateName(l: Late): String = l.name

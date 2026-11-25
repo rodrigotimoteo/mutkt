@@ -101,7 +101,7 @@ class ParityTest {
 
     @Test
     fun `legacy operators without a new counterpart are not yet implemented`() {
-        assertEquals(setOf("COROUTINE", "DATA_CLASS_COPY"), table.notImplemented)
+        assertEquals(setOf("DATA_CLASS_COPY"), table.notImplemented)
     }
 
     companion object {
