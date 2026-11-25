@@ -1,43 +1,17 @@
 # Security Policy
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-**Do NOT open a public issue for security vulnerabilities.**
+Do not open a public issue for a security vulnerability.
 
-Please report vulnerabilities privately via [GitHub Security Advisories](https://github.com/rodrigotimoteo/mutkt/security/advisories/new).
+Report it privately through GitHub private vulnerability reporting: [open an advisory](https://github.com/rodrigotimoteo/mutkt/security/advisories/new). We respond within 48 hours and agree on a fix and disclosure date with you before anything is made public.
 
-We will respond within 48 hours and work with you to understand and address the issue before any public disclosure.
+## Supported versions
 
-## Supported Versions
+Only the latest release gets security fixes. The 0.3.x line and earlier are superseded by the rebuild and no longer supported.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.2.x   | :white_check_mark: |
-| 0.1.x   | :white_check_mark: |
-| < 0.1   | :x:                |
+## What the project does
 
-## Security Measures
-
-- **Dependency Scanning**: Regular vulnerability scans of dependencies
-- **Code Signing**: GPG signing for published artifacts
-- **SBOM Generation**: Software Bill of Materials for supply chain security
-
-## Dependency Policy
-
-We use [OWASP Dependency Check](https://owasp.org/www-project-dependency-check/) to scan for known vulnerabilities in our dependencies.
-
-Dependencies with a CVSS score >= 7.0 are flagged in the report (build continues).
-
-## Supply Chain Security
-
-- All releases are signed with GPG keys
-- Dependencies are pinned to specific versions
-
-## Best Practices
-
-When using this library:
-
-1. Keep dependencies updated
-2. Use the latest stable version
-3. Follow secure coding practices
-4. Report any suspicious behavior
+- CodeQL and a verified-secret scan (TruffleHog) run on every push and pull request, and weekly (`.github/workflows/security.yml`).
+- Dependabot proposes Gradle and GitHub Actions updates weekly; versions are pinned in `gradle/libs.versions.toml`.
+- Releases are published only by `.github/workflows/release.yml` from a `v*` tag, after approval of the `release` environment, and every artifact is GPG-signed (see `docs/release.md`).

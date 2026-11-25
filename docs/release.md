@@ -37,7 +37,7 @@ Every PR and branch push runs the `Publish dry run` CI job. Locally:
 tools/release/dry-run.sh 0.4.0-rc.1
 ```
 
-It generates a throwaway GPG key, runs `publishToMavenLocal` into a temporary repository (`-Dmaven.repo.local`), and `verify-publication.sh` checks for the six published modules and the plugin marker: all files signed with a valid signature, sources and javadoc jars present, Dokka HTML (`index.html`) inside the javadoc jars of `mutkt-annotations` and `mutkt-gradle`, POM name, description, url, license, scm and developers set, and the plugin descriptor inside the plugin jar. Signing happens only when the `signingInMemoryKey` Gradle property is set, so ordinary builds are unsigned.
+It first runs `publishToMavenLocal` without a key and checks that every module and the plugin marker publish unsigned (ordinary builds must not need a key). Then it generates a throwaway GPG key, runs `publishToMavenLocal` into a temporary repository (`-Dmaven.repo.local`), and `verify-publication.sh` checks for the six published modules and the plugin marker: all files signed with a valid signature, sources and javadoc jars present, Dokka HTML (`index.html`) inside the javadoc jars of `mutkt-annotations` and `mutkt-gradle`, POM name, description, url, license, scm and developers set, and the plugin descriptor inside the plugin jar. Signing happens only when the `signingInMemoryKey` Gradle property is set, so ordinary builds are unsigned.
 
 ## Rehearsal (before the first public release; tracked in ROD-124)
 
