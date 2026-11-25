@@ -42,7 +42,7 @@ class EndToEndTest {
         val sources = Files.createTempDirectory("mutkt-e2e-src")
         val console = StringBuilder()
         try {
-            production.forEach { writeSource(sources, it.name) }
+            writeSource(sources)
             val report = analyse(production, tests, console, sources)
             assertEquals(EXPECTED, report.results.map { key(it.mutant) to it.status })
             assertGolden(console.toString())
@@ -67,12 +67,9 @@ class EndToEndTest {
             ).run()
         }
 
-    // FileSourceLookup finds a class's source by its name, so the fixture text is written once per class.
-    private fun writeSource(
-        root: Path,
-        className: String,
-    ) {
-        val file = root.resolve(className.replace('.', '/') + ".kt")
+    // The fixture compiles from Source.kt in package a.b.
+    private fun writeSource(root: Path) {
+        val file = root.resolve("a/b/Source.kt")
         Files.createDirectories(file.parent)
         Files.writeString(file, resource("Fixture.kt.txt"))
     }

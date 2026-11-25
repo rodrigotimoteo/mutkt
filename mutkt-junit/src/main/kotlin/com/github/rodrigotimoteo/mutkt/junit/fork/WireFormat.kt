@@ -37,6 +37,8 @@ internal fun DataOutputStream.writeMutant(mutant: Mutant) {
     writeBoolean(mutant.line != null)
     mutant.line?.let(::writeInt)
     writeString(mutant.description)
+    writeBoolean(mutant.sourceFile != null)
+    mutant.sourceFile?.let(::writeString)
 }
 
 internal fun DataInputStream.readMutant(): Mutant {
@@ -46,7 +48,17 @@ internal fun DataInputStream.readMutant(): Mutant {
     val descriptor = readString()
     val id = MutantId(operator, className, methodName, descriptor, readInt())
     val line = if (readBoolean()) readInt() else null
-    return Mutant(id, operator, className, methodName, descriptor, line, readString())
+    val description = readString()
+    return Mutant(
+        id,
+        operator,
+        className,
+        methodName,
+        descriptor,
+        line,
+        description,
+        if (readBoolean()) readString() else null,
+    )
 }
 
 internal fun DataOutputStream.writeOutcome(outcome: Outcome) {

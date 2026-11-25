@@ -2,7 +2,6 @@ package com.github.rodrigotimoteo.mutkt.report
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -26,37 +25,67 @@ class FileSourceLookupTest {
     fun `finds a line in a kotlin file`() {
         source(dir, "com/acme/Foo.kt", "one\ntwo\nthree\n")
         val lookup = FileSourceLookup(listOf(dir))
-        assertEquals("one", lookup.lineText("com.acme.Foo", 1))
-        assertEquals("three", lookup.lineText("com.acme.Foo", 3))
+        assertEquals("one", lookup.lineText("com.acme.Foo", "Foo.kt", 1))
+        assertEquals("three", lookup.lineText("com.acme.Foo", "Foo.kt", 3))
     }
 
     @Test
     fun `finds a line in a java file`() {
         source(dir, "com/acme/Foo.java", "class Foo {}\n")
-        assertEquals("class Foo {}", FileSourceLookup(listOf(dir)).lineText("com.acme.Foo", 1))
+        assertEquals("class Foo {}", FileSourceLookup(listOf(dir)).lineText("com.acme.Foo", "Foo.java", 1))
     }
 
     @Test
-    fun `inner class resolves to the outer file`() {
-        source(dir, "com/acme/Foo.kt", "one\ntwo\n")
-        assertEquals("two", FileSourceLookup(listOf(dir)).lineText("com.acme.Foo\$Inner\$1", 2))
+    fun `the source file name decides, not the class name`() {
+        source(dir, "com/acme/Prices.kt", "real")
+        source(dir, "com/acme/PricesKt.kt", "decoy")
+        val lookup = FileSourceLookup(listOf(dir))
+        assertEquals("real", lookup.lineText("com.acme.PricesKt", "Prices.kt", 1))
+        assertEquals("real", lookup.lineText("com.acme.Money", "Prices.kt", 1))
+        assertEquals("real", lookup.lineText("com.acme.Prices\$Inner\$1", "Prices.kt", 1))
     }
 
     @Test
-    fun `missing file and file-level class give null`() {
+    fun `package directory wins over same-named files elsewhere`() {
+        source(dir, "com/other/Foo.kt", "other")
+        source(dir, "com/acme/Foo.kt", "acme")
+        assertEquals("acme", FileSourceLookup(listOf(dir)).lineText("com.acme.Foo", "Foo.kt", 1))
+    }
+
+    @Test
+    fun `file outside its package directory is found when its name is unique`() {
+        source(dir, "src/misc/Foo.kt", "relocated")
+        assertEquals("relocated", FileSourceLookup(listOf(dir)).lineText("com.acme.Foo", "Foo.kt", 1))
+    }
+
+    @Test
+    fun `two same-named files outside the package directory find nothing`() {
+        source(dir, "one/Foo.kt", "one")
+        source(dir, "two/Foo.kt", "two")
+        assertNull(FileSourceLookup(listOf(dir)).lineText("com.acme.Foo", "Foo.kt", 1))
+    }
+
+    @Test
+    fun `a missing root is skipped`() {
+        source(dir, "misc/Foo.kt", "x")
+        assertEquals("x", FileSourceLookup(listOf(dir.resolve("none"), dir)).lineText("a.Foo", "Foo.kt", 1))
+    }
+
+    @Test
+    fun `no source file name or a missing file gives null`() {
         source(dir, "com/acme/Foo.kt", "one\n")
         val lookup = FileSourceLookup(listOf(dir))
-        assertNull(lookup.lineText("com.acme.Other", 1))
-        assertNull(lookup.lineText("com.acme.FooKt", 1))
+        assertNull(lookup.lineText("com.acme.Foo", null, 1))
+        assertNull(lookup.lineText("com.acme.Foo", "Other.kt", 1))
     }
 
     @Test
     fun `out of range lines give null`() {
         source(dir, "com/acme/Foo.kt", "one\ntwo\n")
         val lookup = FileSourceLookup(listOf(dir))
-        assertNull(lookup.lineText("com.acme.Foo", 0))
-        assertNull(lookup.lineText("com.acme.Foo", -1))
-        assertNull(lookup.lineText("com.acme.Foo", 3))
+        assertNull(lookup.lineText("com.acme.Foo", "Foo.kt", 0))
+        assertNull(lookup.lineText("com.acme.Foo", "Foo.kt", -1))
+        assertNull(lookup.lineText("com.acme.Foo", "Foo.kt", 3))
     }
 
     @Test
@@ -66,10 +95,10 @@ class FileSourceLookupTest {
         source(second, "com/acme/Foo.kt", "second")
         source(second, "com/acme/Bar.kt", "bar")
         val lookup = FileSourceLookup(listOf(first, second))
-        assertEquals("second", lookup.lineText("com.acme.Foo", 1))
+        assertEquals("second", lookup.lineText("com.acme.Foo", "Foo.kt", 1))
         source(first, "com/acme/Foo.kt", "first")
-        assertEquals("first", lookup.lineText("com.acme.Foo", 1))
-        assertEquals("bar", lookup.lineText("com.acme.Bar", 1))
+        assertEquals("first", lookup.lineText("com.acme.Foo", "Foo.kt", 1))
+        assertEquals("bar", lookup.lineText("com.acme.Bar", "Bar.kt", 1))
     }
 
     @Test
@@ -79,29 +108,28 @@ class FileSourceLookupTest {
             byteArrayOf('a'.code.toByte(), 0xC3.toByte(), '\n'.code.toByte(), 'b'.code.toByte()),
         )
         val lookup = FileSourceLookup(listOf(dir))
-        assertEquals("a" + Char(0xFFFD), lookup.lineText("Foo", 1))
-        assertEquals("b", lookup.lineText("Foo", 2))
+        assertEquals("a" + Char(0xFFFD), lookup.lineText("Foo", "Foo.kt", 1))
+        assertEquals("b", lookup.lineText("Foo", "Foo.kt", 2))
     }
 
     @Test
-    fun `class name cannot escape the root`() {
+    fun `class and file names cannot escape the root`() {
         val root = Files.createDirectory(dir.resolve("root"))
         source(dir, "Secret.kt", "secret")
-        val outside = dir.resolve("Secret").toString()
-        assumeTrue('.' !in outside)
-        assertEquals("secret", FileSourceLookup(listOf(dir)).lineText(outside, 1))
-        assertNull(FileSourceLookup(listOf(root)).lineText(outside, 1))
-        assertNull(FileSourceLookup(listOf(root)).lineText("../Secret", 1))
+        source(dir, "x/Secret.kt", "secret")
+        val lookup = FileSourceLookup(listOf(root))
+        assertNull(lookup.lineText("Foo", "../Secret.kt", 1))
+        assertNull(lookup.lineText("../x.Foo", "Secret.kt", 1))
     }
 
     @Test
     fun `no roots finds nothing`() {
-        assertNull(FileSourceLookup(emptyList()).lineText("com.acme.Foo", 1))
+        assertNull(FileSourceLookup(emptyList()).lineText("com.acme.Foo", "Foo.kt", 1))
     }
 
     @Test
     fun `class in the default package resolves`() {
         source(dir, "Foo.kt", "x")
-        assertEquals("x", FileSourceLookup(listOf(dir)).lineText("Foo", 1))
+        assertEquals("x", FileSourceLookup(listOf(dir)).lineText("Foo", "Foo.kt", 1))
     }
 }
