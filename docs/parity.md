@@ -7,7 +7,9 @@
 - Legacy line `-1` means unknown and matches any line of the same site.
 - The fixture-bytes hash check is informational: the tool compiled against kotlin-stdlib 2.1.10, the repo resolves a newer one, and only the `ParityClasses` facade differs.
 - Regenerate: `./gradlew -p tools/parity-legacy run --args="$PWD/mutkt-asm/src/test/resources/parity"` (see `tools/parity-legacy/README.md`).
-- Legacy operators with no new counterpart yet (NULL_SAFETY, COROUTINE, DATA_CLASS_COPY, SEALED_WHEN) are P3 (ROD-113/114/115).
+- Legacy operators with no new counterpart yet (NULL_SAFETY, COROUTINE, SEALED_WHEN) are P3 (ROD-113/114).
+- Legacy DATA_CLASS_COPY fired only when the calling class was itself a data class (order-dependent detection); `data-class-copy` fires in any class. Not a deviation entry: no parity rows exist.
+- DATA_CLASS_COPY has a counterpart (`data-class-copy`) but stays unmapped: no parity fixture calls `copy`, so the legacy table has no rows to compare.
 
 ## Deviations
 

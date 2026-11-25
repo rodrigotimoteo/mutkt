@@ -66,6 +66,14 @@ private val SOURCE =
         fun norm() = x * x + y * y
     }
 
+    // Copy shapes: all arguments, default arguments, wide arguments, a chain, a call from another class.
+    data class Wide2(val a: Long, val b: Double, val c: String)
+    class Mover { fun move(p: Point) = p.copy(x = 1).x }
+    fun copies(a: Int, w: Long): Int {
+        val p = Point(a, a).copy(7, 8).copy(y = 3)
+        return p.x + Wide2(w, 1.5, "s").copy(b = 2.5).copy(w, 3.5, "t").a.toInt()
+    }
+
     object Registry {
         private val names = mutableListOf<String>()
         fun register(n: String): Int {
