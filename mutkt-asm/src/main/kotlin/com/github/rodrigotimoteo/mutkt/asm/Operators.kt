@@ -17,9 +17,9 @@ import com.github.rodrigotimoteo.mutkt.asm.operators.SealedWhenOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.TrueReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.VoidMethodCallsOperator
 
-/** Every operator, in the order they are applied and reported. */
 internal object Operators {
-    val all: List<Operator> =
+    /** Enabled when no ids are given; the other operators are opt-in until proven on real projects. */
+    val defaults: List<Operator> =
         listOf(
             NegateConditionalsOperator,
             ArithmeticOperator,
@@ -27,6 +27,10 @@ internal object Operators {
             NullReturnsOperator,
             ReturnValsOperator,
             EmptyReturnsOperator,
+        )
+
+    private val optIn: List<Operator> =
+        listOf(
             ConstructorCallsOperator,
             IncrementsOperator,
             TrueReturnsOperator,
@@ -39,13 +43,16 @@ internal object Operators {
             CoroutineOperator,
         )
 
-    /** The operators named by [ids], in application order; no ids means all. */
+    /** Every operator, in the order they are applied and reported. */
+    val all: List<Operator> = defaults + optIn
+
+    /** The operators named by [ids], in application order; no ids means [defaults]. */
     fun byId(ids: Set<String>): List<Operator> {
         val valid = all.map { it.id.value }
         val unknown = ids.filterNot(valid::contains)
         require(unknown.isEmpty()) {
             "Unknown operator ${unknown.joinToString { "'$it'" }}; valid operators: ${valid.joinToString { "'$it'" }}"
         }
-        return if (ids.isEmpty()) all else all.filter { it.id.value in ids }
+        return if (ids.isEmpty()) defaults else all.filter { it.id.value in ids }
     }
 }

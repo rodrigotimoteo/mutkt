@@ -29,9 +29,9 @@ public class AsmMutantGenerator internal constructor(
     private val operators: List<Operator>,
     private val classpath: (String) -> ByteArray?,
 ) : MutantGenerator {
-    public constructor(classpath: (String) -> ByteArray?) : this(Operators.all, classpath)
+    public constructor(classpath: (String) -> ByteArray?) : this(Operators.defaults, classpath)
 
-    /** Enables only the operators with these ids (empty means all); an unknown id fails with the valid ones. */
+    /** Enables only these operator ids (empty means the defaults); an unknown id fails with the valid ones. */
     public constructor(operatorIds: Set<String>, classpath: (String) -> ByteArray?) :
         this(Operators.byId(operatorIds), classpath)
 

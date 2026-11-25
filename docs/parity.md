@@ -2,6 +2,7 @@
 
 ## Method
 
+- Every operator is compared, default-on or opt-in (see [Operators](operators.md)); parity does not depend on the default set.
 - New sites are those of `discover`, after the noise filters (see [Operators](operators.md#noise-filters)).
 - Per operator, sites are compared as multisets of (operator, class, method+descriptor, line, opcode): a static legacy table against the new engine's discovery over the seven fixtures in `mutkt-asm/src/test/resources/parity` (`ParityArithmetic`, `ParityClasses`, `ParityConditionals`, `ParityEmpties`, `ParityIdioms`, `ParityNulls`, `ParityReturns`). `ParityIdioms` holds the shapes of the Kotlin-specific operators: data class `copy` and `copy$default` calls, sealed and enum `when` (each branch on its own line, and all branches on one line), suspend functions and a coroutine builder (stdlib `startCoroutine` and `sequence`), and safe call, elvis, `!!` and `lateinit`.
 - The legacy table `mutkt-asm/src/test/resources/parity/legacy-0.3.3.tsv` was generated once by `tools/parity-legacy` from mutation-core 0.3.3; its header holds the jar SHA-1 and versions.

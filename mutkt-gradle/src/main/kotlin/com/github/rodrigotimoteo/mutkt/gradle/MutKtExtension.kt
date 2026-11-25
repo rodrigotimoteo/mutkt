@@ -19,7 +19,7 @@ public abstract class MutKtExtension {
     /** Method names or `pkg.Class#method` entries to skip. */
     public abstract val excludedMethods: ListProperty<String>
 
-    /** Operator ids to enable; empty means all. */
+    /** Operator ids to enable; empty means the default operators (see docs/operators.md). */
     public abstract val operators: SetProperty<String>
 
     /** Parallel test runs; unset means the available processors, resolved at run time. */

@@ -16,4 +16,7 @@ tasks.test {
     val parityDoc = rootProject.layout.projectDirectory.file("docs/parity.md")
     inputs.file(parityDoc)
     systemProperty("mutkt.parityDoc", parityDoc.asFile.absolutePath)
+    val operatorsDoc = rootProject.layout.projectDirectory.file("docs/operators.md")
+    inputs.file(operatorsDoc)
+    systemProperty("mutkt.operatorsDoc", operatorsDoc.asFile.absolutePath)
 }

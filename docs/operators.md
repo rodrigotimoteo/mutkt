@@ -1,5 +1,30 @@
 # Operators
 
+Operators run when `operators` is empty (the default) are marked default-on; the others are opt-in until proven on real projects, and run only when their id is listed (`mutkt { operators.addAll(...) }`, see [dsl.md](dsl.md)). Listing ids selects exactly those: to run every operator, list all of them.
+
+| Id | Default | Summary |
+|---|---|---|
+| `negate-conditionals` | yes | Inverts an integer or reference comparison |
+| `arithmetic` | yes | Swaps `+`/`-`, `*`/`/`, `%` to `*` |
+| `conditionals-boundary` | yes | Moves a comparison boundary (`<` to `<=`) |
+| `null-returns` | yes | Returns null from an object method |
+| `return-vals` | yes | Returns zero from a numeric method |
+| `empty-returns` | yes | Returns an empty array or collection |
+| `constructor-calls` | no | Replaces a construction with null |
+| `increments` | no | Flips the sign of `i++` / `i += n` |
+| `true-returns` | no | Returns true from a boolean method |
+| `false-returns` | no | Returns false from a boolean method |
+| `void-method-calls` | no | Removes a void call |
+| `non-void-method-calls` | no | Replaces a call's result by its default value |
+| `sealed-when` | no | Makes one `when` branch unreachable |
+| `null-safety` | no | Flips null branches, drops Kotlin null checks |
+| `data-class-copy` | no | Replaces a data class `copy` call by null |
+| `coroutine` | no | Replaces a coroutine builder or suspend call by its default value |
+
+Opt-in operators have sites in most Kotlin code and several yield mostly equivalent mutants (calls with no observable effect, parameter checks), so enabling them is a deliberate choice. Parity with the legacy engine is checked for every operator, default or not ([parity.md](parity.md)).
+
+## Reference
+
 | Id | Bytecode change | Kotlin before / after | Known equivalent mutants |
 |---|---|---|---|
 | `negate-conditionals` | `IFEQ`/`IFNE`, `IFLT`/`IFGE`, `IFGT`/`IFLE`, `IF_ICMPEQ`/`IF_ICMPNE`, `IF_ICMPLT`/`IF_ICMPGE`, `IF_ICMPGT`/`IF_ICMPLE`, `IF_ACMPEQ`/`IF_ACMPNE` swap to their negation | `if (a < b)` compiles to `IF_ICMPGE`, mutated to `IF_ICMPLT` (condition inverted) | Rare; a condition guarding two identical branches. `IFNULL`/`IFNONNULL` are never emitted: null checks belong to `null-safety`, which is Kotlin-only, so no operator mutates them in a Java class (intended). |
@@ -18,6 +43,107 @@
 | `null-safety` | `IFNULL`<->`IFNONNULL` swap. A call to `kotlin/jvm/internal/Intrinsics.checkNotNull`, `checkNotNullParameter`, `checkNotNullExpressionValue` or `throwUninitializedPropertyAccessException` is replaced by pops for its arguments (the compiler follows the lateinit throw with `ACONST_NULL`, so the getter then returns null). `throwNpe`/`throwJavaNpe` are not sites. Only classes carrying `@kotlin.Metadata` have sites (a Java null check is the author's own: no operator, this one or `negate-conditionals`, mutates a Java `IFNULL`/`IFNONNULL`, by design); methods the framework skips (constructors) get no site. | `s?.length`, `s ?: d`, `s == null` flip their branch; `s!!`, a parameter check, a platform-type result check or a `lateinit` read stops failing fast | Parameter checks (`checkNotNullParameter`) are typically equivalent for Kotlin callers, which cannot pass null, so removing them only matters for Java or reflective callers; a platform check whose value is never dereferenced; a flipped branch where both arms agree. Constructor parameter checks produce no sites (constructors are skipped centrally), which legacy 0.3.3 did not do. |
 | `data-class-copy` | A call recognised as a data class copy is replaced by pops for its arguments (`POP2` for long/double) and receiver, then `ACONST_NULL`. Two shapes: `INVOKEVIRTUAL owner.copy(...)` with at least one argument returning `owner`, and `INVOKESTATIC owner.copy$default(owner, ..., int, Object)` returning `owner` (the default-argument bridge). The data class is the callee's, in a class the operator never sees (only the class under mutation is known), so the rule is structural: a plain class with a same-shaped `copy` method is a site too. Independent of the order of methods and classes. Lookalikes that are not data classes (`Bitmap.copy`, a user `copy` returning its own type) are claimed by this operator, not by `non-void-method-calls`. A value class property mangles the name to `copy-<hash>`: such calls are not matched and stay `non-void-method-calls` sites. | `p.copy(x = 1)` / `null` (callers fail with an NPE) | Copies whose result is unused. For `return x.copy(...)` the effect overlaps with `null-returns`/`return-vals` (different instructions, same visible outcome). Calls of this shape are not sites of `non-void-method-calls` (it would emit the same mutant). |
 | `coroutine` | A static call on `kotlinx/coroutines/BuildersKt` (`launch`, `async`, `runBlocking`, `withContext`) or `JobKt` (`Job()`, `ensureActive`), or a call of a suspend function (`INVOKESTATIC`/`INVOKEVIRTUAL`/`INVOKEINTERFACE`, or `INVOKESPECIAL` of a private method of the class itself, whose descriptor ends `Lkotlin/coroutines/Continuation;)Ljava/lang/Object;`, or `Continuation;ILjava/lang/Object;)Ljava/lang/Object;` for the `foo$default` bridge of a suspend call with default arguments), is replaced by pops for its arguments and receiver and the return type's default (null for objects, nothing for `void`). The suspension marker `IntrinsicsKt.getCOROUTINE_SUSPENDED()`, the `kotlin/coroutines/intrinsics/*` and `jvm/internal/*` helpers, `ResultKt.throwOnFailure` and `Boxing` are never sites, so label switches and suspension checks stay as the compiler wrote them: the replaced call simply completes at once with null. The call that resumes a suspend function from its continuation class (an `invokeSuspend(Object)` of a class whose superclass is `kotlin/coroutines/jvm/internal/ContinuationImpl`; suspend lambdas extend `SuspendLambda` and keep their sites) is not a site. `GlobalScope` has no statics: `GlobalScope.launch` is a `BuildersKt` call. Independent of the order of methods. | `val j = launch { work() }` / `val j = null` (`j.join()` fails with an NPE); `launch { work() }` as a statement / the launch is dropped; `val n = fetch()` / `null` (callers unboxing it fail with an NPE) | `delay(...)` (a skipped delay changes timing only); calls whose result is unused and whose effect is covered by `launch` fire-and-forget tests that do not wait. Needs kotlinx.coroutines on the mutated code's classpath to produce builder sites; suspend calls need only the stdlib. Calls of this shape are not sites of `void-method-calls` or `non-void-method-calls` (they would emit the same mutant). |
+
+## Examples
+
+Each entry shows the source-level meaning of one mutant. Details and edge cases are in the reference table above.
+
+### `negate-conditionals`
+```kotlin
+if (a < b) take() else skip()   // mutant: if (a >= b) take() else skip()
+```
+Equivalent when both branches do the same thing.
+
+### `arithmetic`
+```kotlin
+val t = a + b                   // mutant: a - b   (a * b to a / b, a % b to a * b)
+```
+Equivalent for `x + 0`, `x - 0`, `x * 1`, `x / 1`.
+
+### `conditionals-boundary`
+```kotlin
+if (x >= 0) ok()                // mutant: if (x > 0) ok()
+```
+Equivalent when the equal case is unreachable (`i < n` with `i != n` guaranteed).
+
+### `null-returns`
+```kotlin
+fun name(): String = user.name  // mutant: always returns null (callers fail with an NPE)
+```
+Equivalent when callers never use the result.
+
+### `return-vals`
+```kotlin
+fun total(): Int = sum          // mutant: fun total(): Int = 0
+```
+Equivalent when the value is already zero.
+
+### `empty-returns`
+```kotlin
+fun items(): List<Item> = list  // mutant: returns an empty list (an empty array for arrays)
+```
+Equivalent when callers never use the result or it is already empty.
+
+### `constructor-calls`
+```kotlin
+val b = Box(a)                  // mutant: val b = null
+```
+Equivalent for an effect-free constructor whose value is never used.
+
+### `increments`
+```kotlin
+var i = 0; while (i < n) { i++ }   // mutant: i--   (i += 5 becomes i -= 5)
+```
+Equivalent when the counter is never read; a loop that no longer ends reports TIMEOUT.
+
+### `true-returns`
+```kotlin
+fun positive(a: Int) = a > 0    // mutant: fun positive(a: Int) = true
+```
+Equivalent when the method already returns true on every path.
+
+### `false-returns`
+```kotlin
+fun positive(a: Int) = a > 0    // mutant: fun positive(a: Int) = false
+```
+As `true-returns`, with false.
+
+### `void-method-calls`
+```kotlin
+log(x)                          // mutant: (call removed)
+```
+Equivalent for calls without observable effect (logging, caches, idempotent setters).
+
+### `non-void-method-calls`
+```kotlin
+val n = repo.count()            // mutant: val n = 0   (null for objects)
+```
+Equivalent when the result is already zero or null, or only used by logging.
+
+### `sealed-when`
+```kotlin
+when (s) { is Circle -> a; is Square -> b; else -> c }   // mutant: the Circle test is always false
+```
+Needs two type tests on the same subject (a lone `is` is not a site). Equivalent when no test reaches the branch or its body equals the else body.
+
+### `null-safety`
+```kotlin
+val len = s?.length             // mutant: null branch flipped; s!! or a parameter check stops failing fast
+```
+Parameter checks are typically equivalent for Kotlin callers, which cannot pass null.
+
+### `data-class-copy`
+```kotlin
+val q = p.copy(x = 1)           // mutant: val q = null
+```
+Equivalent when the copy is unused.
+
+### `coroutine`
+```kotlin
+val j = launch { work() }       // mutant: val j = null   (j.join() fails with an NPE; the call is BuildersKt.launch$default)
+val n = fetch()                 // mutant: val n = null   (a suspend call completes at once)
+```
+`delay(...)` only changes timing; fire-and-forget `launch` that tests do not wait for is equivalent.
 
 ## Noise filters
 

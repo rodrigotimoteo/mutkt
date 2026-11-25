@@ -9,8 +9,14 @@ import org.junit.jupiter.api.assertThrows
 
 class OperatorSelectionTest {
     private val files =
-        compileKotlin("class C { fun f(a: Int, b: Int): Int = if (a > b) a + b else 0 }")
-            .map { (name, bytes) -> ClassFile(name, bytes) }
+        compileKotlin(
+            """
+            class C {
+                fun f(a: Int, b: Int): Int = if (a > b) a + b else 0
+                fun g(l: MutableList<Int>) { l.clear() }
+            }
+            """.trimIndent(),
+        ).map { (name, bytes) -> ClassFile(name, bytes) }
 
     private fun operatorsFor(ids: Set<String>) =
         AsmMutantGenerator(ids) { null }
@@ -19,11 +25,23 @@ class OperatorSelectionTest {
             .toSet()
 
     @Test
-    fun `an empty selection enables every operator`() {
+    fun `an empty selection enables only the default operators`() {
         assertEquals(
             setOf("negate-conditionals", "arithmetic", "conditionals-boundary", "return-vals"),
             operatorsFor(emptySet()),
         )
+    }
+
+    @Test
+    fun `an empty selection leaves out the opt-in operators`() {
+        val ids = operatorsFor(emptySet())
+
+        assertTrue("null-safety" !in ids && "void-method-calls" !in ids, ids.toString())
+    }
+
+    @Test
+    fun `an opt-in operator runs only when selected`() {
+        assertEquals(setOf("void-method-calls"), operatorsFor(setOf("void-method-calls")))
     }
 
     @Test
