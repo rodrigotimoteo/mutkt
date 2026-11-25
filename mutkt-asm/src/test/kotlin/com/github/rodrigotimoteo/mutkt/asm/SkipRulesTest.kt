@@ -42,7 +42,7 @@ class SkipRulesTest {
     fun `regular methods are mutable`() {
         assertEquals(true, isMutable("Shape.twice()I"))
         assertEquals(true, isMutable("Box.compareTo(LBox;)I"))
-        assertEquals(true, isMutable("Point.component1()I"))
+        assertEquals(true, isMutable("Point.getX()I"))
     }
 
     @Test

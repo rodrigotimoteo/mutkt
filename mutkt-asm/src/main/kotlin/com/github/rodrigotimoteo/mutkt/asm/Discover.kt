@@ -18,8 +18,8 @@ internal fun discover(
     val cls = node.info(hierarchy)
     // The operator contract test calls this without suppressions on purpose: it checks operators, not filtering.
     val methods =
-        node.methods
-            .filter(::isMutable)
+        node
+            .mutableMethods()
             .filter { suppressions?.covers(node.name, it.name, it.desc, op.id) != true }
     return methods.flatMap { method ->
         sitesOf(op, cls, method).mapIndexed { ordinal, site ->
