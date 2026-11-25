@@ -69,6 +69,15 @@ tasks.check {
     dependsOn(e2eTest)
 }
 
+// Kover would otherwise run every Test task for the coverage report, pulling this network-bound one into build.
+kover {
+    currentProject {
+        instrumentation {
+            disabledForTestTasks.add("matrixTest")
+        }
+    }
+}
+
 dependencies {
     implementation(project(":mutkt-core"))
     implementation(project(":mutkt-annotations"))
