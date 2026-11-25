@@ -143,10 +143,12 @@ public class ForkedTestExecutor(
             check(!closed) { CLOSED }
             listOf(settings.javaExecutable.toString()) +
                 settings.jvmArgs +
-                listOf("-cp", classpath().joinToString(File.pathSeparator), FORK_MAIN, startup.value.toString())
+                listOf("-cp", classpath.joinToString(File.pathSeparator), FORK_MAIN, startup.value.toString())
         }
 
-    private fun classpath() = settings.engineClasspath ?: derivedEngineClasspath()
+    private val classpath by lazy {
+        engineClasspathFor(settings.engineClasspath ?: derivedEngineClasspath(), settings.classpath)
+    }
 
     // A file, not arguments: the classpath can exceed the OS command-line limit.
     private fun writeStartupFile(): Path {
