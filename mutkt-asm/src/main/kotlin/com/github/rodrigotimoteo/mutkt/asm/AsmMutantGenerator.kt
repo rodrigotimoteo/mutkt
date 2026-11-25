@@ -25,17 +25,20 @@ private class Plan(
  * Suppression names are validated against the full catalog, not the enabled subset.
  *
  * [discover] applies every site eagerly (fail-fast, and it drops mutants that change nothing), so a broken
- * operator or an unresolvable type fails the run before any test executes.
+ * operator fails the run before any test executes. A class whose frames need a type that neither [classpath] nor
+ * the JDK running the generator knows yields no mutants; [onSkip] receives one message naming the class and type.
  */
 public class AsmMutantGenerator internal constructor(
     private val operators: List<Operator>,
+    private val onSkip: (String) -> Unit,
     private val classpath: (String) -> ByteArray?,
 ) : MutantGenerator {
-    public constructor(classpath: (String) -> ByteArray?) : this(Operators.defaults, classpath)
+    public constructor(onSkip: (String) -> Unit, classpath: (String) -> ByteArray?) :
+        this(Operators.defaults, onSkip, classpath)
 
     /** Enables only these operator ids (empty means the defaults); an unknown id fails with the valid ones. */
-    public constructor(operatorIds: Set<String>, classpath: (String) -> ByteArray?) :
-        this(Operators.byId(operatorIds), classpath)
+    public constructor(operatorIds: Set<String>, onSkip: (String) -> Unit, classpath: (String) -> ByteArray?) :
+        this(Operators.byId(operatorIds), onSkip, classpath)
 
     @Volatile
     private var plan: Plan? = null
@@ -52,7 +55,7 @@ public class AsmMutantGenerator internal constructor(
                 targets.mapTo(mutableSetOf()) { it.name.replace('.', '/') },
                 Operators.all.map { it.id },
             )
-        val planned = targets.sortedBy { it.name }.flatMap { plannedFor(it.bytes, hierarchy, suppressions) }
+        val planned = targets.sortedBy { it.name }.flatMap { plannedOrSkipped(it, hierarchy, suppressions) }
         val byId = planned.associateBy { it.mutant.id }
         require(byId.size == planned.size) {
             "Duplicate mutant ids (duplicate class names or operator ids): " +
@@ -67,6 +70,20 @@ public class AsmMutantGenerator internal constructor(
         val planned = requireNotNull(current.byId[mutant.id]) { "Unknown mutant ${mutant.id}" }
         return mutate(planned.original, planned.operator, planned.found, current.hierarchy)
     }
+
+    // Frames are recomputed for the whole class, so one type missing from the hierarchy (on no classpath given, or
+    // a JDK type newer than this JVM) rules out every mutant of it; the rest of the run goes on.
+    private fun plannedOrSkipped(
+        target: ClassFile,
+        hierarchy: Hierarchy,
+        suppressions: Suppressions,
+    ): List<Planned> =
+        try {
+            plannedFor(target.bytes, hierarchy, suppressions)
+        } catch (e: UnresolvedTypeException) {
+            onSkip("Skipped ${target.name}: ${e.message}")
+            emptyList()
+        }
 
     // A mutant whose class equals the plain rewrite of the original changed nothing (equal-bytes operators
     // are dropped); comparing with the raw input would never match because the rewrite recomputes frames.

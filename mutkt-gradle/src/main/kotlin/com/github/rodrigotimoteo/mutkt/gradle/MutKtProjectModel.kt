@@ -16,6 +16,7 @@ internal class MutKtProjectModel(
     val testClasses: FileCollection,
     val supportClasses: FileCollection,
     val testRuntimeClasspath: FileCollection,
+    val mainCompileClasspath: FileCollection,
 )
 
 private const val MODEL_KEY = "mutkt.projectModel"
@@ -39,6 +40,7 @@ internal fun Project.registerMutktModel() {
             // The task's own classpath: builds may append entries to it that the source set never sees. Not
             // testTask.map { }: a mapped task provider would make mutkt depend on (and run) the test task.
             testRuntimeClasspath = files(providers.provider { testTask.get().classpath }),
+            mainCompileClasspath = files(main.map { it.compileClasspath }),
         ),
     )
 }

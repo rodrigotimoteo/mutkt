@@ -21,6 +21,7 @@ internal fun Project.registerMutktTask(extension: MutKtExtension) {
         task.testClassesDirs.from(model.testClasses)
         task.projectSupportClassesDirs.from(model.supportClasses)
         task.testRuntimeClasspath.from(model.testRuntimeClasspath)
+        task.compileClasspath.from(model.mainCompileClasspath)
         task.sourceDirs.from(model.mainSources)
         task.targetClasses.set(extension.targetClasses)
         task.excludedClasses.set(extension.excludedClasses)

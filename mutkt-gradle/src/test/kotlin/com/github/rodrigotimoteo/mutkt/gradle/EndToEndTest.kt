@@ -60,7 +60,7 @@ class EndToEndTest {
         JUnitTestExecutor(production, tests, runtimeJars()).use { executor ->
             RunMutationAnalysis(
                 FakeClassSource(production),
-                AsmMutantGenerator(MVP_OPERATORS, ::systemClass),
+                AsmMutantGenerator(MVP_OPERATORS, ::error, ::systemClass),
                 executor,
                 ConsoleReportWriter(console, FileSourceLookup(listOf(sources))),
                 AnalysisConfig(ClassFilters(), 10.seconds, parallelism = 2),

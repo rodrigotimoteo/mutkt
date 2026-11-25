@@ -8,6 +8,7 @@ import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Classpath
+import org.gradle.api.tasks.CompileClasspath
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
@@ -39,6 +40,10 @@ public abstract class MutKtTask : DefaultTask() {
     /** The `test` task's classpath; its class directories are replaced by the collections above. */
     @get:Classpath
     public abstract val testRuntimeClasspath: ConfigurableFileCollection
+
+    /** The main compile classpath, read only for supertypes of types absent at runtime (`compileOnly`). */
+    @get:CompileClasspath
+    public abstract val compileClasspath: ConfigurableFileCollection
 
     /** Source roots, read for survivor snippets only. */
     @get:InputFiles

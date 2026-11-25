@@ -118,26 +118,19 @@ class MutKtTaskRunTest {
     }
 
     @Test
-    fun `a mutant that kills its JVM is listed with the exit code next to the scored ones`() {
+    fun `a mutant that exits its JVM while the tests run is killed, named by the exit code`() {
         val task = fixtureTask(EXITING)
         task.operators.addAll("arithmetic", "negate-conditionals")
 
-        val summary = task.runAnalysis().summary
+        val result = task.runAnalysis()
 
-        assertTrue("ERROR        1" in summary && "KILLED       1" in summary, summary)
-        assertTrue(
-            Regex(
-                "^Errors \\(1\\)\\nnegate-conditionals:demo\\.Calc#$LONG\\(II\\)I:0: " +
-                    "Forked test JVM failed \\(exit code 7\\)",
-                RegexOption.MULTILINE,
-            ).containsMatchIn(summary),
-            summary,
-        )
+        assertTrue("KILLED       2" in result.summary && "ERROR        0" in result.summary, result.summary)
+        assertTrue("\"statusReason\": \"Killed by JVM exit 7\"" in result.json, result.json)
     }
 
     @Test
-    fun `when every mutant dies the task fails after writing the report with the cause`() {
-        val task = fixtureTask(EXITING)
+    fun `a JVM exit before the tests start is an ERROR, and when every mutant errs the task fails after the report`() {
+        val task = fixtureTask(EXITING_EARLY)
         task.operators.add("negate-conditionals")
 
         val error = assertThrows<GradleException> { task.analyse() }
@@ -149,7 +142,14 @@ class MutKtTaskRunTest {
                 .asFile
                 .resolve("mutkt.txt")
                 .readText()
-        assertTrue("Errors (1)" in report && "exit code 7" in report, report)
+        assertTrue(
+            Regex(
+                "^Errors \\(1\\)\\nnegate-conditionals:demo\\.Calc#$LONG\\(II\\)I:0: " +
+                    "Forked test JVM failed \\(exit code 7\\)",
+                RegexOption.MULTILINE,
+            ).containsMatchIn(report),
+            report,
+        )
     }
 
     @Test
@@ -240,7 +240,7 @@ class MutKtTaskRunTest {
             }
             """.trimIndent()
 
-        // Negating the guard makes the mutant call System.exit, which the parent sees as an unexpected child exit.
+        // Negating the guard makes the mutant call System.exit while the tests run: a kill.
         val EXITING =
             """
             package demo
@@ -255,6 +255,36 @@ class MutKtTaskRunTest {
                 }
             }
 
+            class CalcTest {
+                @Test
+                fun adds() = assertEquals(5, Calc().$LONG(2, 3))
+            }
+            """.trimIndent()
+
+        // Jupiter builds the generator while it discovers CalcTest, so the negated guard exits before the tests start.
+        val EXITING_EARLY =
+            """
+            package demo
+
+            import org.junit.jupiter.api.Assertions.assertEquals
+            import org.junit.jupiter.api.DisplayNameGeneration
+            import org.junit.jupiter.api.DisplayNameGenerator
+            import org.junit.jupiter.api.Test
+
+            class Calc {
+                fun $LONG(a: Int, b: Int): Int {
+                    if (a < 0) System.exit(7)
+                    return a + b
+                }
+            }
+
+            class NamesTest : DisplayNameGenerator.Standard() {
+                init {
+                    Calc().$LONG(2, 3)
+                }
+            }
+
+            @DisplayNameGeneration(NamesTest::class)
             class CalcTest {
                 @Test
                 fun adds() = assertEquals(5, Calc().$LONG(2, 3))

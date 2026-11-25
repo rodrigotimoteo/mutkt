@@ -25,7 +25,8 @@ private const val CLOSED = "ForkedTestExecutor is closed"
 /**
  * Runs mutants in a pool of child JVMs (ADR 0008), at most `parallelism` at a time; each child serves one mutant
  * at a time and is reused. A child that times out is killed and replaced, which is what stops an endless loop.
- * A crashed child, or one that cannot start, makes [run] throw with its exit code and last stderr lines.
+ * A child that dies once the tests started is a kill by the mutant and is replaced (ADR 0002); one that dies
+ * before, or cannot start, makes [run] throw with its exit code and last stderr lines.
  */
 public class ForkedTestExecutor(
     private val settings: ForkSettings,
@@ -65,7 +66,10 @@ public class ForkedTestExecutor(
         permits.acquire()
         try {
             check(!closed) { CLOSED }
-            return runOnChild(borrow(), request(timeoutMillis), context, timeoutMillis)
+            val outcome = runOnChild(borrow(), request(timeoutMillis), context, timeoutMillis)
+            // A child that close() killed mid-run looks like a kill by the mutant.
+            check(!closed) { CLOSED }
+            return outcome
         } catch (e: IllegalStateException) {
             // close() kills busy children, which looks like a crash from here.
             if (closed) throw IllegalStateException(CLOSED, e)
@@ -84,8 +88,8 @@ public class ForkedTestExecutor(
         var reusable = false
         try {
             val outcome = child.exchange(request, context, timeoutMillis, settings.graceMillis, settings.prepareMillis)
-            // A child that timed out may still be running the abandoned mutant thread.
-            reusable = outcome.outcome != Outcome.Timeout
+            // A child that timed out may still be running the abandoned mutant thread; one that died is replaced.
+            reusable = outcome.outcome != Outcome.Timeout && child.isAlive
             return outcome
         } finally {
             if (reusable) idle.push(child)

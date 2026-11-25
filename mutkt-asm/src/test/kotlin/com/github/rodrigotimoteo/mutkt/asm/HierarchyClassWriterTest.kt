@@ -47,8 +47,8 @@ class HierarchyClassWriterTest {
         val stdlib = "kotlin/collections/ArrayDeque"
 
         assertEquals("java/util/AbstractList", common(stdlib, "java/util/ArrayList", classpath))
-        val error = assertThrows<IllegalStateException> { common(stdlib, "java/util/ArrayList") }
-        assertTrue(error.message!!.contains(stdlib), error.message)
+        val error = assertThrows<UnresolvedTypeException> { common(stdlib, "java/util/ArrayList") }
+        assertTrue(error.message!!.contains("kotlin.collections.ArrayDeque"), error.message)
     }
 
     @Test
