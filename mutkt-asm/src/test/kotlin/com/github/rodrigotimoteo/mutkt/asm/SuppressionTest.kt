@@ -205,11 +205,64 @@ class SuppressionTest {
                 operatorsByMethod("class C { @SuppressMutations([\"arithmetik\"]) fun f(a: Int) = a + 1 }")
             }
 
-        assertTrue(
-            "arithmetik" in error.message.orEmpty() &&
-                "arithmetic, conditionals-boundary" in error.message.orEmpty() &&
-                "C.f" in error.message.orEmpty(),
-            error.message,
-        )
+        val message = error.message.orEmpty()
+        assertTrue("arithmetik" in message && "C.f" in message, message)
+        assertTrue(Operators.all.all { it.id.value in message }, message)
+    }
+
+    private fun mutantsOf(
+        selection: Set<String>,
+        source: String,
+    ) = AsmMutantGenerator(selection) { null }.discover(filesOf(source)).map { it.operator.value to it.methodName }
+
+    @Test
+    fun `a suppression naming an operator outside the selection is valid`() {
+        val source =
+            """
+            class C {
+                @SuppressMutations(["null-returns"])
+                fun f(a: Int) = a + 1
+            }
+            """.trimIndent()
+
+        assertEquals(listOf("arithmetic" to "f"), mutantsOf(setOf("arithmetic"), source))
+    }
+
+    @Test
+    fun `an empty selection accepts a suppression naming any catalog operator`() {
+        val mutants =
+            mutantsOf(
+                emptySet(),
+                """
+                @SuppressMutations(["coroutine"])
+                class C { fun f(a: Int) = a + 1 }
+                """.trimIndent(),
+            )
+
+        assertTrue(("arithmetic" to "f") in mutants, mutants.toString())
+    }
+
+    @Test
+    fun `enabling an operator honors its suppression`() {
+        val source =
+            """
+            class C {
+                @SuppressMutations(["null-returns"])
+                fun off(): String? = "x"
+                fun on(): String? = "x"
+            }
+            """.trimIndent()
+
+        assertEquals(listOf("null-returns" to "on"), mutantsOf(setOf("null-returns"), source))
+    }
+
+    @Test
+    fun `a typo fails even when the selection excludes every operator that would match`() {
+        val source = "class C { @SuppressMutations([\"null-return\"]) fun f(a: Int) = a + 1 }"
+
+        val error = assertThrows<IllegalArgumentException> { mutantsOf(setOf("arithmetic"), source) }
+
+        val message = error.message.orEmpty()
+        assertTrue("'null-return'" in message && "null-returns" in message && "coroutine" in message, message)
     }
 }
