@@ -33,7 +33,7 @@
 # map FALSE_RETURNS false-returns
 # map CONSTRUCTOR_CALLS constructor-calls
 # map DATA_CLASS_COPY -
-# map SEALED_WHEN -
+# map SEALED_WHEN sealed-when
 # map NULL_SAFETY null-safety
 # map COROUTINE -
 # columns: operator class method+descriptor line opcode

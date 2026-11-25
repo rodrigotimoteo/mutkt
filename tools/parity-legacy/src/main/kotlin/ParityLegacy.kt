@@ -100,7 +100,7 @@ private val LEGACY_TO_NEW =
         "FALSE_RETURNS" to "false-returns",
         "CONSTRUCTOR_CALLS" to "constructor-calls",
         "DATA_CLASS_COPY" to "-",
-        "SEALED_WHEN" to "-",
+        "SEALED_WHEN" to "sealed-when",
         "NULL_SAFETY" to "null-safety",
         "COROUTINE" to "-",
     )

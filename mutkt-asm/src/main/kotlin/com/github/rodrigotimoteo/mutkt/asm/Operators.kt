@@ -12,6 +12,7 @@ import com.github.rodrigotimoteo.mutkt.asm.operators.NonVoidMethodCallsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NullReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NullSafetyOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ReturnValsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.SealedWhenOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.TrueReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.VoidMethodCallsOperator
 
@@ -31,6 +32,7 @@ internal object Operators {
             FalseReturnsOperator,
             VoidMethodCallsOperator,
             NonVoidMethodCallsOperator,
+            SealedWhenOperator,
             NullSafetyOperator,
             DataClassCopyOperator,
         )

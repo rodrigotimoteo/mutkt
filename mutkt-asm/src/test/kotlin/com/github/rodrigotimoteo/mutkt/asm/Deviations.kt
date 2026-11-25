@@ -35,7 +35,7 @@ private fun newOnly(
     matches: (Row) -> Boolean,
 ) = Deviation(id, operator, Side.NEW_ONLY, reason, matches)
 
-// Legacy operators without a new counterpart (COROUTINE, DATA_CLASS_COPY, SEALED_WHEN) are not
+// Legacy operators without a new counterpart (COROUTINE, DATA_CLASS_COPY) are not
 // deviations: they are listed as not implemented by the legacy table.
 internal object Deviations {
     val all: List<Deviation> =
@@ -181,6 +181,13 @@ internal object Deviations {
                 "legacy reports these IRETURNs (after ICONST_1) as TRUE_RETURNS; the rebuild makes them return false",
             ) {
                 it.isBoolean && it.opcode == "ICONST_1"
+            },
+            newOnly(
+                "D10",
+                "sealed-when",
+                "legacy finds no site (needs two INSTANCEOF on one line); the rebuild has a site per when branch",
+            ) {
+                it.opcode in setOf("INSTANCEOF", "INVOKESTATIC", "TABLESWITCH", "LOOKUPSWITCH")
             },
         )
 }
