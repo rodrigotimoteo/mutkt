@@ -7,7 +7,7 @@
 - Legacy line `-1` means unknown and matches any line of the same site.
 - The fixture-bytes hash check is informational: the tool compiled against kotlin-stdlib 2.1.10, the repo resolves a newer one, and only the `ParityClasses` facade differs.
 - Regenerate: `./gradlew -p tools/parity-legacy run --args="$PWD/mutkt-asm/src/test/resources/parity"` (see `tools/parity-legacy/README.md`).
-- Legacy operators with no new counterpart yet (NULL_SAFETY, COROUTINE, SEALED_WHEN) are P3 (ROD-113/114).
+- Legacy operators with no new counterpart yet (COROUTINE, SEALED_WHEN) are P3 (ROD-114/115); NULL_SAFETY maps to `null-safety` with no deviation.
 - Legacy DATA_CLASS_COPY fired only when the calling class was itself a data class (order-dependent detection); `data-class-copy` fires in any class. Not a deviation entry: no parity rows exist.
 - DATA_CLASS_COPY has a counterpart (`data-class-copy`) but stays unmapped: no parity fixture calls `copy`, so the legacy table has no rows to compare.
 
@@ -26,11 +26,11 @@ Every documented difference, from `mutkt-asm/src/test/kotlin/com/github/rodrigot
 | D2d | null-returns | legacy only | Fires on a literal null return (`null` to `null`) | Rebuild skips it as equivalent |
 | D3a | empty-returns | new only | Empties `java.util.Collection` returns | Legacy has no Collection support |
 | D3b | empty-returns | legacy only | Empties an already empty return | Rebuild skips it (empty factory, `new T[0]`) |
-| D4 | negate-conditionals | legacy only | Negates `IFNULL`/`IFNONNULL` | Null checks are for NULL_SAFETY (P3) |
+| D4 | negate-conditionals | legacy only | Negates `IFNULL`/`IFNONNULL` | Null checks belong to `null-safety` |
 | D5 | arithmetic | legacy only | Treats `IINC` as arithmetic | Rebuild's increments operator owns it |
 | D6a | constructor-calls | legacy only | Mutates a directly returned construction | Rebuild leaves it to null-returns |
 | D6b | constructor-calls | legacy only | Mutates a directly thrown construction (`throw X()`) | Rebuild skips it as noise |
-| D7 | void-method-calls | legacy only | Removes `Intrinsics.checkNotNull*` and `ResultKt.throwOnFailure` (rows without a line, suspend functions, `javaEmptyList`/`javaEmptyCollection`) | Rebuild skips them |
+| D7 | void-method-calls | legacy only | Removes `Intrinsics.checkNotNull*` and `ResultKt.throwOnFailure` (rows without a line, suspend functions, `javaEmptyList`/`javaEmptyCollection`) | Rebuild skips them (`null-safety` owns the `Intrinsics` null checks) |
 | D8a | non-void-method-calls | legacy only | Mutates super calls (`INVOKESPECIAL`) | Rebuild only mutates private calls on this |
 | D8b | non-void-method-calls | legacy only | Mutates coroutine plumbing (suspend calls, `COROUTINE_SUSPENDED`, boxing) | Rebuild skips it |
 | D9a | true-returns | legacy only | Fires on a constant true return (`ICONST_1` before `IRETURN`) | Rebuild skips it (true to true) |

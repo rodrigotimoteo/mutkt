@@ -35,7 +35,7 @@ private fun newOnly(
     matches: (Row) -> Boolean,
 ) = Deviation(id, operator, Side.NEW_ONLY, reason, matches)
 
-// Legacy operators without a new counterpart (NULL_SAFETY, COROUTINE, DATA_CLASS_COPY, SEALED_WHEN) are not
+// Legacy operators without a new counterpart (COROUTINE, DATA_CLASS_COPY, SEALED_WHEN) are not
 // deviations: they are listed as not implemented by the legacy table.
 internal object Deviations {
     val all: List<Deviation> =
@@ -106,7 +106,7 @@ internal object Deviations {
             legacyOnly(
                 "D4",
                 "negate-conditionals",
-                "legacy negates IFNULL/IFNONNULL; null checks are for NULL_SAFETY (P3)",
+                "legacy negates IFNULL/IFNONNULL; null checks belong to null-safety",
             ) {
                 it.opcode == "IFNULL" || it.opcode == "IFNONNULL"
             },

@@ -10,6 +10,7 @@ import com.github.rodrigotimoteo.mutkt.asm.operators.IncrementsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NegateConditionalsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NonVoidMethodCallsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NullReturnsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.NullSafetyOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ReturnValsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.TrueReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.VoidMethodCallsOperator
@@ -30,6 +31,7 @@ internal object Operators {
             FalseReturnsOperator,
             VoidMethodCallsOperator,
             NonVoidMethodCallsOperator,
+            NullSafetyOperator,
             DataClassCopyOperator,
         )
 
