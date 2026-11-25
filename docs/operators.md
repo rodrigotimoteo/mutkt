@@ -21,7 +21,7 @@
 
 ## Noise filters
 
-Site filters (`mutkt-asm/.../asm/filters`) recognise compiler-generated instructions only; user code is never filtered. They run inside site enumeration (`sitesOf`), so `discover` and `mutate` see the same list and an ordinal is an index into the filtered sites. Operators do not know about filters. Counts are sites of all operators on the `ContractCorpus` (466 before, 417 after, 11% fewer) and on the parity fixtures (359 before, 336 after).
+Site filters (`mutkt-asm/.../asm/filters`) recognise compiler-generated instructions only; user code is never filtered. They run inside site enumeration (`sitesOf`), so `discover` and `mutate` see the same list and an ordinal is an index into the filtered sites. Operators do not know about filters. Counts are sites of all operators on the `ContractCorpus` (466 before, 404 after, 13% fewer) and on the parity fixtures (359 before, 336 after).
 
 | Rule | Recognised by | Sites removed (corpus / parity) |
 |---|---|---|
@@ -31,13 +31,13 @@ Site filters (`mutkt-asm/.../asm/filters`) recognise compiler-generated instruct
 | `WhenMappingsFilter` | Only the `ordinal()` call after `GETSTATIC X$WhenMappings.$EnumSwitchMapping$n; SWAP` (an enum `when`). The switch, the table lookup and the branches stay, so `sealed-when` sites on enum switches are not hidden (the sealed-when tests pass). The user's own `table[e.ordinal]` has no `SWAP`. | 4 / 1 |
 
 Not filters, because nothing needs one: `$default` bridges and the `$WhenMappings` class (synthetic or only `<clinit>`, skipped by the skip rules: 0 sites before and after), and `Intrinsics.areEqual` and the lateinit `throwUninitializedPropertyAccessException` (`kotlin/jvm/internal/*` calls are not sites of the call operators; the null checks around them belong to `null-safety`).
-A copy of a user-defined inline function in a caller is also filtered; the function's own body is still mutated, but only a test that calls it from Java (or reflection) can kill those mutants.
+A user-defined inline function is not mutated at all: `isMutable` skips a method whose own `$i$f$<its name>` marker runs to the end of the body (`isInlineFunctionOriginal`, shared with `InlinedBodyFilter`; the marker of a copy ends before the caller's return, so a regular method named like the inline function it calls stays mutable and its copy is filtered; mangled names of internal and value-class functions appear in the marker unchanged), so neither the original body nor its copies in callers are sites, and the original would otherwise leave survivors that only a Java or reflection call could kill. Callers' own code stays mutated. Blind spot: Java callers and function references of inline functions are not mutation-tested; a `::inlineFn` reference compiles to a regenerated class whose `invoke` holds a copy of the body (no call of the original). The marker is a local variable, so a class compiled without debug info still has its inline functions mutated.
 
 ## Suppression
 
 `@SuppressMutations(operators = [...], reason = "...")` on a class or function skips mutants: no `operators` means all, otherwise only the listed ids (unknown ids fail the run and list the valid ones).
 Class and function suppression are unioned. Nested, inner, companion and anonymous classes inherit from the enclosing class, and anonymous classes also from the enclosing function.
 A function's lambda bodies (`f$lambda$N`) are suppressed with it; they match by name, so every overload named `f` covers them. A function's own annotation matches name and descriptor.
-Limits: inline function bodies are inlined into callers, which stay mutated (deferred). Property accessors are suppressed only through their class.
+Limits: inline function bodies are never mutated (see Noise filters), so suppressing one has no effect. Property accessors are suppressed only through their class.
 
 See also: [Parity with legacy 0.3.3](parity.md)
