@@ -99,11 +99,6 @@ class ParityTest {
         )
     }
 
-    @Test
-    fun `legacy operators without a new counterpart are not yet implemented`() {
-        assertEquals(setOf("DATA_CLASS_COPY"), table.notImplemented)
-    }
-
     companion object {
         @JvmStatic
         fun operators(): List<String> = table.operatorMap.values.sorted()

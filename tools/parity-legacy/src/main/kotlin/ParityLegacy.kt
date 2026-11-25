@@ -78,7 +78,7 @@ fun main(args: Array<String>) {
             classes.forEach { (fixture, compiled) ->
                 compiled.toSortedMap().forEach { (name, bytes) -> add("# sha256 $fixture $name ${hex("SHA-256", bytes)}") }
             }
-            add("# legacy operator -> new operator id (-: no new operator planned in docs/operators.md)")
+            add("# legacy operator -> new operator id")
             LEGACY_TO_NEW.forEach { (legacy, new) -> add("# map $legacy $new") }
             add("# columns: operator class method+descriptor line opcode")
         }
@@ -99,7 +99,7 @@ private val LEGACY_TO_NEW =
         "TRUE_RETURNS" to "true-returns",
         "FALSE_RETURNS" to "false-returns",
         "CONSTRUCTOR_CALLS" to "constructor-calls",
-        "DATA_CLASS_COPY" to "-",
+        "DATA_CLASS_COPY" to "data-class-copy",
         "SEALED_WHEN" to "sealed-when",
         "NULL_SAFETY" to "null-safety",
         "COROUTINE" to "coroutine",
