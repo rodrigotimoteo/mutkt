@@ -1,6 +1,5 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
-import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.junit.CALC
 import com.github.rodrigotimoteo.mutkt.junit.CALC_MUTANT
@@ -9,6 +8,7 @@ import com.github.rodrigotimoteo.mutkt.junit.mutantBytes
 import com.github.rodrigotimoteo.mutkt.junit.mutantOf
 import com.github.rodrigotimoteo.mutkt.junit.runtimeJars
 import com.github.rodrigotimoteo.mutkt.junit.splitClasses
+import com.github.rodrigotimoteo.mutkt.junit.writeClasses
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -35,18 +35,6 @@ class ForkMainProcessTest {
 
     private val noisyTest =
         "class CalcTest { @Test fun adds() { println(\"noise\"); assertEquals(5, Calc().add(2, 3)) } }"
-
-    private fun writeClasses(
-        target: Path,
-        classes: List<ClassFile>,
-    ): Path {
-        classes.forEach {
-            val file = target.resolve(it.name.replace('.', '/') + ".class")
-            Files.createDirectories(file.parent)
-            Files.write(file, it.bytes)
-        }
-        return target
-    }
 
     private fun startup(lines: List<String>): Path = Files.write(dir.resolve("startup.properties"), lines)
 
