@@ -6,6 +6,8 @@ import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Nested
 
+internal val DEFAULT_ENGINES: Set<String> = setOf("jupiter")
+
 /** The `mutkt { }` DSL. Defaults are documented in docs/dsl.md. */
 public abstract class MutKtExtension {
     /** Class globs to mutate; empty means all. */
