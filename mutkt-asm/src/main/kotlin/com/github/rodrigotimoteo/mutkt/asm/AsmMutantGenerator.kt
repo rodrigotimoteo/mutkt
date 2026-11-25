@@ -22,6 +22,8 @@ private class Plan(
  * analysed classes (dependencies); the analysed classes and the JDK are resolved without it. It must be
  * thread-safe: [materialize] may run concurrently.
  *
+ * Suppression names are validated against the full catalog, not the enabled subset.
+ *
  * [discover] applies every site eagerly (fail-fast, and it drops mutants that change nothing), so a broken
  * operator or an unresolvable type fails the run before any test executes.
  */
@@ -41,7 +43,7 @@ public class AsmMutantGenerator internal constructor(
     override fun discover(classes: List<ClassFile>): List<Mutant> {
         val byName = classes.associate { it.name to it.bytes }
         val hierarchy: Hierarchy = { type -> byName[type.replace('/', '.')] ?: classpath(type) }
-        val suppressions = Suppressions(classes.map { it.bytes }, operators.map { it.id })
+        val suppressions = Suppressions(classes.map { it.bytes }, Operators.all.map { it.id })
         val planned = classes.sortedBy { it.name }.flatMap { plannedFor(it.bytes, hierarchy, suppressions) }
         val byId = planned.associateBy { it.mutant.id }
         require(byId.size == planned.size) {

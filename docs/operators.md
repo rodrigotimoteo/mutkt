@@ -162,7 +162,7 @@ A user-defined inline function is not mutated at all: `isMutable` skips a method
 
 ## Suppression
 
-`@SuppressMutations(operators = [...], reason = "...")` on a class or function skips mutants: no `operators` means all, otherwise only the listed ids (unknown ids fail the run and list the valid ones).
+`@SuppressMutations(operators = [...], reason = "...")` on a class or function skips mutants: no `operators` means all, otherwise only the listed ids. Names are checked against every operator, enabled or not, so a suppression for a disabled operator is valid; an unknown name fails the run and lists all valid ids.
 Class and function suppression are unioned. Nested, inner, companion and anonymous classes inherit from the enclosing class, and anonymous classes also from the enclosing function.
 A function's lambda bodies (`f$lambda$N`) are suppressed with it; they match by name, so every overload named `f` covers them. A function's own annotation matches name and descriptor.
 Limits: inline function bodies are never mutated (see Noise filters), so suppressing one has no effect. Property accessors are suppressed only through their class.
