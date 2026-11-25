@@ -5,6 +5,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
@@ -73,20 +74,20 @@ class MutKtTaskRunTest {
     }
 
     @Test
-    fun `a run where every mutant ends in ERROR fails after writing the report`() {
+    fun `a wrong engine id fails the baseline with the cause and writes no report`() {
         val task = fixtureTask()
         task.engines.set(setOf("junit-vintage"))
 
-        val error = assertThrows<GradleException> { task.analyse() }
+        val error = assertThrows<IllegalStateException> { task.analyse() }
 
-        assertEquals("All 2 mutants ended in ERROR; check engines/classpath", error.message)
-        assertTrue(
+        assertTrue("running the baseline" in error.message.orEmpty(), error.message)
+        assertTrue("No TestEngine ID matched" in error.message.orEmpty(), error.message)
+        assertFalse(
             task.reportsDir
                 .get()
                 .asFile
                 .resolve("mutkt.txt")
-                .readText()
-                .contains("ERROR        2"),
+                .exists(),
         )
     }
 

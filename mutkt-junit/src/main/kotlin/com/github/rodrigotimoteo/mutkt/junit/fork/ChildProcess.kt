@@ -1,7 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
-import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.DataInputStream
@@ -36,23 +35,23 @@ internal class ChildProcess private constructor(
     val isAlive: Boolean get() = process.isAlive
 
     /**
-     * Runs one mutant. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
+     * Sends [request]. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
      * detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout].
      */
-    fun run(
-        mutant: Mutant,
-        bytes: ByteArray,
+    fun exchange(
+        request: ForkRequest,
+        context: String,
         timeoutMillis: Long,
         graceMillis: Long,
         prepareMillis: Long,
     ): Outcome =
         try {
-            writeRequest(output, ForkRequest.Run(mutant, bytes, timeoutMillis))
+            writeRequest(output, request)
             // A mutant or test class that cannot link answers Result without a Started.
             val first =
                 awaitReply(prepareMillis)
                     ?: throw failure(
-                        "preparing ${mutant.id}, no Started within $prepareMillis ms",
+                        "$context, no Started within $prepareMillis ms",
                         IOException("Silent while preparing"),
                     )
             val reply = if (first is ForkReply.Started) awaitReply(timeoutMillis + graceMillis) else first
@@ -62,9 +61,9 @@ internal class ChildProcess private constructor(
                 else -> throw ForkProtocolException("Unexpected reply $reply")
             }
         } catch (e: IOException) {
-            throw failure("running ${mutant.id}", e)
+            throw failure(context, e)
         } catch (e: ForkProtocolException) {
-            throw failure("running ${mutant.id}", e)
+            throw failure(context, e)
         }
 
     fun requestShutdown() {

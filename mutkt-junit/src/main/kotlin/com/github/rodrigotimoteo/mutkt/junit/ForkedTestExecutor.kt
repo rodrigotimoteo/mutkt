@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.junit.fork.ChildProcess
+import com.github.rodrigotimoteo.mutkt.junit.fork.ForkRequest
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -47,13 +48,23 @@ public class ForkedTestExecutor(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
+    ): Outcome = onChild(deadline, "running ${mutant.id}") { ForkRequest.Run(mutant, bytes, it) }
+
+    override fun baseline(deadline: Duration): Outcome =
+        onChild(deadline, "running the baseline") { ForkRequest.Baseline(it) }
+
+    private fun onChild(
+        deadline: Duration,
+        context: String,
+        request: (timeoutMillis: Long) -> ForkRequest,
     ): Outcome {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { CLOSED }
+        val timeoutMillis = deadline.inWholeMilliseconds.coerceAtLeast(1)
         permits.acquire()
         try {
             check(!closed) { CLOSED }
-            return runOnChild(borrow(), mutant, bytes, deadline)
+            return runOnChild(borrow(), request(timeoutMillis), context, timeoutMillis)
         } catch (e: IllegalStateException) {
             // close() kills busy children, which looks like a crash from here.
             if (closed) throw IllegalStateException(CLOSED, e)
@@ -65,14 +76,13 @@ public class ForkedTestExecutor(
 
     private fun runOnChild(
         child: ChildProcess,
-        mutant: Mutant,
-        bytes: ByteArray,
-        deadline: Duration,
+        request: ForkRequest,
+        context: String,
+        timeoutMillis: Long,
     ): Outcome {
         var reusable = false
         try {
-            val millis = deadline.inWholeMilliseconds.coerceAtLeast(1)
-            val outcome = child.run(mutant, bytes, millis, settings.graceMillis, settings.prepareMillis)
+            val outcome = child.exchange(request, context, timeoutMillis, settings.graceMillis, settings.prepareMillis)
             // A child that timed out may still be running the abandoned mutant thread.
             reusable = outcome != Outcome.Timeout
             return outcome

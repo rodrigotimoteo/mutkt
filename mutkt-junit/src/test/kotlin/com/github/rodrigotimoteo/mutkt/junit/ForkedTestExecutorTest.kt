@@ -220,6 +220,34 @@ class ForkedTestExecutorTest {
     }
 
     @Test
+    fun `the baseline runs in the configured fork environment and reuses the child of later mutants`() {
+        val test =
+            "class CalcTest { @Test fun env() { assertEquals(\"v1\", System.getenv(\"MUTKT_FORK_VAR\")) } " +
+                "@Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
+        val pool = executor(testSource = test) { it.copy(environment = mapOf("MUTKT_FORK_VAR" to "v1")) }
+        assertEquals(Outcome.Survived, pool.baseline(LONG))
+        assertEquals(Outcome.Killed("CalcTest.adds"), pool.run(mutantBytes()))
+        assertEquals(1, pool.startedChildren)
+    }
+
+    @Test
+    fun `a red baseline names the unrelated failure unless a tag excludes it`() {
+        val test =
+            "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } " +
+                "@Tag(\"slow\") @Test fun unrelated() { fail<Unit>(\"red\") } }"
+        assertEquals(Outcome.Killed("CalcTest.unrelated"), executor(testSource = test).baseline(LONG))
+        val excluded = executor(testSource = test) { it.copy(excludeTags = listOf("slow")) }
+        assertEquals(Outcome.Survived, excluded.baseline(LONG))
+    }
+
+    @Test
+    fun `a baseline that outlives its deadline kills the child`() {
+        val pool = executor(testSource = "class CalcTest { @Test fun spin() { while (System.nanoTime() > 0) {} } }")
+        assertEquals(Outcome.Timeout, pool.baseline(1.seconds))
+        assertTrue(pool.liveProcesses.isEmpty())
+    }
+
+    @Test
     fun `a missing java executable fails with a clear message`() {
         val pool = executor { it.copy(javaExecutable = dir.resolve("no-java")) }
         val error = assertThrows<IllegalStateException> { pool.run(mutantBytes(CALC)) }

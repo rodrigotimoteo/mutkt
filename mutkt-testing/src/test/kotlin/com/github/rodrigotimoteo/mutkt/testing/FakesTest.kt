@@ -56,6 +56,15 @@ class FakesTest {
     }
 
     @Test
+    fun `executor answers the baseline with its scripted outcome and records the deadline`() {
+        val executor = FakeTestExecutor(baseline = Outcome.Killed("FooTest"))
+
+        assertEquals(Outcome.Killed("FooTest"), executor.baseline(3.seconds))
+        assertEquals(listOf(3.seconds), executor.baselines)
+        assertEquals(emptyList<Any>(), executor.runs)
+    }
+
+    @Test
     fun `report writer records reports`() {
         val writer = FakeReportWriter()
         val report = MutationReport(listOf(MutantResult(first, MutantStatus.KILLED)))
