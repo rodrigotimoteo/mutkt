@@ -22,6 +22,7 @@ private const val FORK_MAIN = "com.github.rodrigotimoteo.mutkt.junit.fork.ForkMa
 private const val MAX_START_FAILURES = 3
 private const val SHUTDOWN_WAIT_NANOS = 5_000_000_000L
 private const val CLOSED = "ForkedTestExecutor is closed"
+private const val TMPDIR = "java.io.tmpdir"
 private const val ROBOLECTRIC_MARKER = "org/robolectric/internal/SandboxManager.class"
 
 /**
@@ -42,6 +43,7 @@ public class ForkedTestExecutor(
     private val started = AtomicInteger()
     private val failedStarts = AtomicInteger()
     private val lastStartFailure = AtomicReference<String>()
+    private val tmpDirs = AtomicInteger()
     private val startup = lazy { writeStartupFile() }
 
     // Checked here so a missing engine fails before any child JVM starts.
@@ -139,9 +141,10 @@ public class ForkedTestExecutor(
             "Forked test JVM failed to start $MAX_START_FAILURES times in a row, giving up. " +
                 "Last failure: ${lastStartFailure.get()}"
         }
+        val (command, tmpDir) = command()
         val child =
             try {
-                ChildProcess.start(command(), settings.environment, settings.workingDir)
+                ChildProcess.start(command, settings.environment, settings.workingDir, tmpDir)
             } catch (e: IllegalStateException) {
                 failedStarts.incrementAndGet()
                 lastStartFailure.set(e.message)
@@ -164,13 +167,28 @@ public class ForkedTestExecutor(
     }
 
     // Under the lock so a close() cannot delete the startup directory just before it is (re)created.
-    private fun command(): List<String> =
+    // Each child gets its own java.io.tmpdir: libraries (Robolectric natives, MockK, JUnit) leave files there that
+    // only their shutdown hooks remove, and a killed child runs none; the child deletes it once it is gone.
+    private fun command(): Pair<List<String>, Path?> =
         synchronized(lock) {
             check(!closed) { CLOSED }
-            listOf(settings.javaExecutable.toString()) +
-                settings.jvmArgs +
-                listOf("-cp", classpath.joinToString(File.pathSeparator), FORK_MAIN, startup.value.toString())
+            val tmpDir =
+                if (userTmpDir) {
+                    null
+                } else {
+                    Files.createDirectory(
+                        startup.value.resolveSibling("tmp-${tmpDirs.incrementAndGet()}"),
+                    )
+                }
+            val command =
+                listOf(settings.javaExecutable.toString()) +
+                    settings.jvmArgs +
+                    listOfNotNull(tmpDir?.let { "-D$TMPDIR=$it" }) +
+                    listOf("-cp", classpath.joinToString(File.pathSeparator), FORK_MAIN, startup.value.toString())
+            command to tmpDir
         }
+
+    private val userTmpDir = settings.jvmArgs.any { it.startsWith("-D$TMPDIR=") }
 
     private val reuseChildren by lazy { settings.classpath.none(::hasRobolectric) }
 
