@@ -2,7 +2,6 @@ package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 private const val PARAMS_IMPORTS = "import org.junit.jupiter.params.*\nimport org.junit.jupiter.params.provider.*\n"
@@ -24,7 +23,7 @@ class JUnitTestExecutorKilledByTest {
         val tests =
             "class CalcTest { @ParameterizedTest @CsvSource(\"1,0,1\", \"2,2,4\") " +
                 "fun adds(a: Int, b: Int, sum: Int) { assertEquals(sum, Calc().add(a, b)) } }"
-        assertEquals(Outcome.Killed("CalcTest.adds[#2] [2] 2, 2, 4"), killedBy(tests))
+        assertKilledBy("CalcTest.adds[#2] [2] 2, 2, 4", killedBy(tests))
     }
 
     @Test
@@ -32,7 +31,7 @@ class JUnitTestExecutorKilledByTest {
         val tests =
             "class CalcTest { @TestFactory fun adds() = listOf(0, 2).mapIndexed { i, b -> " +
                 "DynamicTest.dynamicTest(\"case \$i\") { assertEquals(b + 1, Calc().add(1, b)) } } }"
-        assertEquals(Outcome.Killed("CalcTest.adds[#2] case 1"), killedBy(tests))
+        assertKilledBy("CalcTest.adds[#2] case 1", killedBy(tests))
     }
 
     @Test
@@ -40,7 +39,7 @@ class JUnitTestExecutorKilledByTest {
         val tests =
             "class CalcTest { @ParameterizedTest(name = \"same\\nname\") @CsvSource(\"1,0,1\", \"2,2,4\") " +
                 "fun adds(a: Int, b: Int, sum: Int) { assertEquals(sum, Calc().add(a, b)) } }"
-        assertEquals(Outcome.Killed("CalcTest.adds[#2] same name"), killedBy(tests))
+        assertKilledBy("CalcTest.adds[#2] same name", killedBy(tests))
     }
 
     @Test
@@ -48,6 +47,6 @@ class JUnitTestExecutorKilledByTest {
         val tests =
             "class CalcTest { companion object { " +
                 "@BeforeAll @JvmStatic fun setUp() { check(Calc().add(1, 1) == 2) } } @Test fun adds() {} }"
-        assertEquals(Outcome.Killed("CalcTest"), killedBy(tests))
+        assertKilledBy("CalcTest", killedBy(tests))
     }
 }

@@ -322,6 +322,14 @@ class RunMutationAnalysisTest {
     }
 
     @Test
+    fun `a red baseline names the cause of its first failure`() {
+        val cause = "org.opentest4j.AssertionFailedError: red"
+        val executor = FakeExecutor(baseline = { Outcome.Killed("a.FooTest.unrelated", cause) })
+        val error = assertThrows(IllegalStateException::class.java) { analysis(listOf(mutant()), executor).run() }
+        assertTrue("the first failure is a.FooTest.unrelated: $cause" in error.message.orEmpty(), error.message)
+    }
+
+    @Test
     fun `a baseline that times out or cannot load stops the run`() {
         listOf(Outcome.Timeout, Outcome.LoadError("VerifyError: x")).forEach { baseline ->
             val executor = FakeExecutor(baseline = { baseline })

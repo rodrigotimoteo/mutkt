@@ -102,6 +102,7 @@ class ForkCodecTest {
         listOf(
             Outcome.Killed("a.CalcTest.adds"),
             Outcome.Killed(""),
+            Outcome.Killed("a.CalcTest.adds", "java.lang.AssertionError: expected: <5>"),
             Outcome.Survived,
             Outcome.NoTests,
             Outcome.LoadError("bad é class"),

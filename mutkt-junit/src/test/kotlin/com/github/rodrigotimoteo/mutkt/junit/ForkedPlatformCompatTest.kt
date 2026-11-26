@@ -53,6 +53,6 @@ class ForkedPlatformCompatTest {
         val pool = pool(test)
 
         assertEquals(Outcome.Survived, pool.run(mutantOf(), mutantBytes(CALC), 60.seconds))
-        assertEquals(Outcome.Killed("CalcTest.adds"), pool.run(mutantOf(), mutantBytes(), 60.seconds))
+        assertKilledBy("CalcTest.adds", pool.run(mutantOf(), mutantBytes(), 60.seconds))
     }
 }
