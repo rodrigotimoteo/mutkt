@@ -57,6 +57,16 @@ Yes, including inline mocking. Measured on JDK 17 and 21 with MockK 1.14 mocking
 
 One limitation: MockK's string form `mockkStatic("com.example.Prices")` fails with `ClassNotFoundException` in the child JVMs, because MockK resolves the name through its own class loader, which does not see the project's classes there. Use the class form, `mockkStatic(Prices::class)`.
 
+## JUnit 4: "Cannot create Launcher without at least one TestEngine"
+
+MutKt runs the tests through the JUnit Platform, and a JUnit 4 build (`useJUnit()`, AGP's default) has no Platform engine. Select the vintage engine:
+
+```kotlin
+mutkt { engines = setOf("junit-vintage") }
+```
+
+MutKt then adds `junit-vintage-engine`, of the JUnit version it ships with, to its test JVMs. `junit:junit` must be on the test runtime classpath: it comes from the project. A project that already has a vintage engine on its test runtime classpath keeps its own. A project with its own JUnit Platform launcher (`junit-platform-launcher` on the test runtime classpath) runs on that Platform, which MutKt's engine may not match, so the task fails until you add `org.junit.vintage:junit-vintage-engine` of your JUnit Platform version to `testRuntimeOnly`.
+
 ## Does Robolectric work?
 
 Yes, at the cost of one child JVM per mutant. A child JVM normally runs mutant after mutant, but Robolectric caches its sandbox, with the copy of each project class it instrumented, in JVM-wide statics it never resets, so a reused JVM would test the class it loaded first and give wrong counts. When the test runtime classpath has Robolectric (`org/robolectric/internal/SandboxManager.class`), every run gets a fresh child JVM, which pays the JVM and sandbox start-up each time.
