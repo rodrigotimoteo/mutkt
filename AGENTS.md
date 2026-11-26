@@ -2,7 +2,7 @@
 
 Mutation testing for Kotlin/JVM: a Gradle plugin that mutates compiled bytecode and runs the project's existing JUnit tests against each mutant. Zero test changes required.
 
-This branch (`rebuild/v1`) is a from-zero rebuild. The old code lives on `master` and tag `v0.3.3`: use it only as a behavior reference (`git worktree add ../mutkt-legacy v0.3.3`), never copy code from it.
+This branch (`master`) is a from-zero rebuild. The legacy code lives on branch `old-master` and tag `v0.3.3`: use it only as a behavior reference (`git worktree add ../mutkt-legacy v0.3.3`), never copy code from it.
 
 Work comes from Linear: team ROD, project **MutKt Rebuild**. Read the issue, its blockers, and the project documents (architecture, legacy inventory, gap register) before starting.
 
@@ -88,9 +88,9 @@ Inline comments inside argument lists break ktlint: put comments on their own li
 
 ### Branches, worktrees, PRs
 
-- `rebuild/v1` is the integration branch. Each issue works on its own branch off it, named with Linear's branch name (e.g. `rodrigotimoteo2603/rod-86-domain-model…`).
-- One task at a time in this checkout. For a second concurrent task use a separate worktree: `git worktree add ../mutkt-rod-NN -b <branch> rebuild/v1`. Never run two tasks in the same working tree; remove the worktree after merge.
-- Merge only through a PR into `rebuild/v1` (CI green, reviewer pass done). Squash is not required; keep the useful commits.
+- `master` is the integration branch. Each issue works on its own branch off it, named with Linear's branch name (e.g. `rodrigotimoteo2603/rod-86-domain-model…`).
+- One task at a time in this checkout. For a second concurrent task use a separate worktree: `git worktree add ../mutkt-rod-NN -b <branch> master`. Never run two tasks in the same working tree; remove the worktree after merge.
+- Merge only through a PR into `master` (CI green, reviewer pass done). Squash is not required; keep the useful commits.
 - Subagents write code but do not commit or push; the main session reviews the diff, re-runs checks, then commits and pushes. Never tag, publish, force-push, or touch secrets without the owner.
 
 Subagent briefs follow `docs/agent-brief-template.md`. Agent output is a claim: re-run the checks and read the diff.
