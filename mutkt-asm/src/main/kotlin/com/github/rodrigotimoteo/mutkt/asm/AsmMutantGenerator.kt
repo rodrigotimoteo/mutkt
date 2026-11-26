@@ -47,8 +47,7 @@ public class AsmMutantGenerator internal constructor(
         classes: List<ClassFile>,
         targets: List<ClassFile>,
     ): List<Mutant> {
-        val byName = classes.associate { it.name to it.bytes }
-        val hierarchy: Hierarchy = { type -> byName[type.replace('/', '.')] ?: classpath(type) }
+        val hierarchy = hierarchyOf(classes.associate { it.name to it.bytes }, classpath)
         val suppressions =
             Suppressions(
                 classes.map { it.bytes },

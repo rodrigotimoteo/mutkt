@@ -111,6 +111,12 @@ class ForkCodecTest {
     }
 
     @Test
+    fun `a result that retires its child round-trips`() {
+        val reply = ForkReply.Result(Outcome.Survived, 7L, retire = true)
+        assertEquals(reply, roundTrip(reply))
+    }
+
+    @Test
     fun `several frames can be read from one stream`() {
         val bytes =
             encode {

@@ -25,6 +25,7 @@ private const val SIGNAL_EXIT_BASE = 128
 /** One forked JVM speaking the frame protocol; used by one thread at a time. */
 internal class ChildProcess private constructor(
     val process: Process,
+    private val tmpDir: Path?,
 ) : Closeable {
     private val stderr = StderrTail(STDERR_TAIL_BYTES)
     private val output = DataOutputStream(process.outputStream.buffered())
@@ -39,6 +40,10 @@ internal class ChildProcess private constructor(
     }
 
     val isAlive: Boolean get() = process.isAlive
+
+    /** True once a result asked not to reuse this child: its memory is past the limits. */
+    @Volatile var retiring: Boolean = false
+        private set
 
     /**
      * Sends [request]. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
@@ -102,10 +107,12 @@ internal class ChildProcess private constructor(
         }
     }
 
-    /** Idempotent: destroys the process tree, waits for it and releases the pipes. */
+    /** Idempotent: destroys the process tree, waits for it, releases the pipes and deletes its temp directory. */
     fun kill() {
         process.destroyTree()
         close()
+        // Never under a live child; one that outlived the kill wait is left to the executor's close.
+        if (!process.isAlive) tmpDir?.toFile()?.deleteRecursively()
     }
 
     override fun close() {
@@ -134,6 +141,7 @@ internal class ChildProcess private constructor(
                     replies.put(Event.Closed(null))
                     return
                 }
+                if (reply is ForkReply.Result && reply.retire) retiring = true
                 replies.put(Event.Reply(reply))
             }
         } catch (e: IOException) {
@@ -195,19 +203,23 @@ internal class ChildProcess private constructor(
     }
 
     companion object {
-        /** Starts the JVM and completes the handshake; fails with the exit code and stderr when it cannot. */
+        /**
+         * Starts the JVM and completes the handshake; fails with the exit code and stderr when it cannot.
+         * The child owns [tmpDir] and deletes it once it has ended.
+         */
         fun start(
             command: List<String>,
             environment: Map<String, String>,
             workingDir: Path?,
+            tmpDir: Path?,
         ): ChildProcess {
-            val child = spawn(command, environment, workingDir)
+            val child = spawn(command, environment, workingDir, tmpDir)
             try {
                 child.handshake()
             } catch (e: IOException) {
-                throw child.failure("starting", e)
+                throw child.failure("starting", e).also { child.kill() }
             } catch (e: ForkProtocolException) {
-                throw child.failure("starting", e)
+                throw child.failure("starting", e).also { child.kill() }
             }
             return child
         }
@@ -222,13 +234,15 @@ internal class ChildProcess private constructor(
             command: List<String>,
             environment: Map<String, String>,
             workingDir: Path?,
+            tmpDir: Path?,
         ): ChildProcess {
             val builder = ProcessBuilder(command)
             builder.environment().putAll(environment)
             builder.directory(workingDir?.toFile())
             return try {
-                ChildProcess(builder.start())
+                ChildProcess(builder.start(), tmpDir)
             } catch (e: IOException) {
+                tmpDir?.toFile()?.deleteRecursively()
                 throw IllegalStateException("Cannot start forked test JVM ${command.first()}: ${e.message}", e)
             }
         }

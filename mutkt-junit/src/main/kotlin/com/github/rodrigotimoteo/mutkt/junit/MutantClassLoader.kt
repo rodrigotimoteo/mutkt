@@ -2,19 +2,27 @@ package com.github.rodrigotimoteo.mutkt.junit
 
 import java.io.ByteArrayInputStream
 import java.net.URL
+import java.net.URLClassLoader
 import java.net.URLConnection
 import java.net.URLStreamHandler
+import java.nio.file.Files
+import java.nio.file.Path
+import java.security.CodeSigner
+import java.security.CodeSource
 import java.util.Collections
 import java.util.Enumeration
 
-// Only mapped names are child-first: classes linked from the parent keep seeing the parent's originals,
-// so whoever builds the chain must load the test classes through a loader that resolves to this one.
+// Mapped names are child-first; [classpath] entries are searched after the parent. Classes linked from the parent
+// keep seeing the parent's originals, so every class that must see a mapped one has to be defined here too.
+// A package scan (getResources("a/b/")) lists the class directories on [classpath] and reads the original class files
+// there, not the mapped bytes.
 internal class MutantClassLoader(
     parent: ClassLoader,
     mutatedClasses: Map<String, ByteArray>,
-) : ClassLoader(parent),
-    AutoCloseable {
+    classpath: List<Path> = emptyList(),
+) : URLClassLoader(classpath.map { it.toUri().toURL() }.toTypedArray(), parent) {
     private val mutatedClasses = mutatedClasses.toMap()
+    private val classDirs = classpath.filter(Files::isDirectory)
 
     @Volatile private var closed = false
 
@@ -27,10 +35,18 @@ internal class MutantClassLoader(
         check(!closed) { "Class loader is closed, cannot load $name" }
         val type =
             synchronized(getClassLoadingLock(name)) {
-                findLoadedClass(name) ?: defineClass(name, bytes, 0, bytes.size)
+                findLoadedClass(name) ?: defineClass(name, bytes, 0, bytes.size, codeSourceOf(name))
             }
         if (resolve) resolveClass(type)
         return type
+    }
+
+    // The class directory holding the original, as a URLClassLoader would report it: tools find sources from it
+    // (strikt's filepeek, Spring). SecureClassLoader keeps one ProtectionDomain per CodeSource, so per directory.
+    private fun codeSourceOf(name: String): CodeSource? {
+        val file = name.replace('.', '/') + CLASS_SUFFIX
+        val dir = classDirs.firstOrNull { Files.isRegularFile(it.resolve(file)) } ?: return null
+        return CodeSource(dir.toUri().toURL(), null as Array<CodeSigner>?)
     }
 
     // A class file a test reads as a resource must be the definition loadClass gives, never a parent copy.
@@ -66,6 +82,7 @@ internal class MutantClassLoader(
 
     override fun close() {
         closed = true
+        super.close()
     }
 
     private companion object {

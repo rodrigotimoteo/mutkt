@@ -55,7 +55,7 @@ internal fun projectClasspathFor(
     return project + listOf(codeSourceOf(VINTAGE_ENGINE_CLASS))
 }
 
-private fun Path.holds(resource: String): Boolean =
+internal fun Path.holds(resource: String): Boolean =
     when {
         Files.isDirectory(this) -> Files.exists(resolve(resource))
         fileName.toString().endsWith(".jar") && Files.isRegularFile(this) -> jarHolds(resource)
