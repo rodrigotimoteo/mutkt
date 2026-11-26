@@ -51,10 +51,13 @@ run_repo() {
   [[ -z $args_text ]] || while IFS= read -r arg; do gradle_args+=("$arg"); done <<<"$args_text"
   java_home=$(/usr/libexec/java_home -v "$jdk" 2>/dev/null) || { echo "FAIL no JDK $jdk installed"; return; }
   # --no-scan is the only switch that beats a build's own publishing.onlyIf { true }: Develocity ORs every onlyIf.
+  # Lenient verification: the init script adds MutKt's artifacts, which no repo's verification metadata lists.
+  # Run from the repo: some builds read files relative to the working directory (pluto's version.properties).
   local built=true
-  JAVA_HOME=$java_home "$dir/gradlew" -p "$dir" --no-scan --init-script "$e2e/mutkt-e2e.init.gradle" \
+  (cd "$dir" && JAVA_HOME=$java_home ./gradlew --no-scan --dependency-verification lenient \
+    --init-script "$e2e/mutkt-e2e.init.gradle" \
     "-Dmutkt.e2e.repo=file://$local_repo" "-Dmutkt.e2e.entry=$cache/logs/$name.entry.json" \
-    ${gradle_args[@]+"${gradle_args[@]}"} "$task" >>"$log" 2>&1 || built=false
+    ${gradle_args[@]+"${gradle_args[@]}"} "$task") >>"$log" 2>&1 || built=false
   # Scans carry the user name, host name and paths: one that got out anyway must not go unnoticed.
   if grep -Eq 'Publishing build scan|gradle\.com/s/' "$log"; then
     echo "FAIL build scan published: delete it at the URL in the log (log: $log)"

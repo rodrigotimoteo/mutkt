@@ -15,7 +15,7 @@ Needs macOS (`/usr/libexec/java_home` picks each repo's `jdk`), git, `python3`, 
 
 1. Publishes the plugin and its modules at version `0.0.0-e2e` to `build/e2e-repo` with the repository's own wrapper, unsigned.
 2. For each repo: fetches its pinned `commit` into `~/.cache/mutkt-e2e/repos/<name>` (`MUTKT_E2E_CACHE` moves the cache), checks it out over any local changes and removes untracked files; ignored files such as `build/` stay, so reruns are incremental.
-3. Runs `<module>:mutkt` with the repo's own `gradlew`, `JAVA_HOME` set from `jdk`, the init script `mutkt-e2e.init.gradle` and the entry's optional `gradleArgs`. Gradle's output goes to `~/.cache/mutkt-e2e/logs/<name>.log`.
+3. Runs `<module>:mutkt` from the repo's directory with its own `gradlew`, `JAVA_HOME` set from `jdk`, `--dependency-verification lenient` (MutKt's artifacts are in no repo's verification metadata), the init script `mutkt-e2e.init.gradle` and the entry's optional `gradleArgs`. Gradle's output goes to `~/.cache/mutkt-e2e/logs/<name>.log`.
 
 `gradleArgs` is an array of extra Gradle arguments for every Gradle call on that repo, such as `["-PossrhToken=unused"]` for a build script that reads a publishing property at configuration time. Values are placeholders, never credentials; each must be a non-empty single-line string.
 4. Checks `<module dir>/build/reports/mutkt/mutation-report.json` (the module path with `:` read as `/`) with `e2e.py check`.
