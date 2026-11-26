@@ -37,7 +37,7 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 | `maxMutationsPerClass` | `maxMutantsPerClass` | Renamed; 0 meant unlimited, unset means unlimited |
 | `excludedClasses` | `excludedClasses` | Globs on dotted class names, default empty, see Behavior changes |
 | `excludedMethods` | `excludedMethods` | `method` or `pkg.Class#method`; default empty (it was `main`, `toString`, `hashCode`, `equals`, `clone`, `finalize`) |
-| `excludeGeneratedClasses` | `excludedClasses` | The Android and generated-code defaults are gone; list what you need |
+| `excludeGeneratedClasses` | `excludedClasses` | Android projects start with generated-class globs again (R, BuildConfig, Hilt, Dagger, bindings, Compose; see `docs/dsl.md`); other projects have none, list what you need |
 | `targetClassPatterns` | `targetClasses` | Regex became glob |
 | `excludeClassPatterns` | `excludedClasses` | Regex became glob |
 | `targetPackages` | `targetClasses` | Use `com.example.service.**` |
@@ -73,7 +73,7 @@ ADR 0004: no JUnit extension API and no runner module. Existing tests run unchan
 ## Behavior changes
 
 - **Score.** 0.3.x: killed / total as a rounded integer. 0.4.0: (KILLED + TIMEOUT) / (total - ERROR) as a decimal; NO_COVERAGE and SURVIVED count as not detected, ERROR mutants are left out (ADR 0002). Scores move, so re-baseline `failBelowScore`.
-- **Class filters.** Globs only, on dotted names: `*` stays in a segment, `**` crosses dots. 0.3.x slashed patterns such as `**/*Test` become `**Test`. There are no default exclusions any more (0.3.x skipped tests, `BuildConfig`, `R`, Dagger and Hilt output and more): only `main` classes are mutated, but exclude generated code yourself.
+- **Class filters.** Globs only, on dotted names: `*` stays in a segment, `**` crosses dots. 0.3.x slashed patterns such as `**/*Test` become `**Test`. JVM projects have no default exclusions any more (0.3.x skipped tests, `BuildConfig`, `R`, Dagger and Hilt output and more): only `main` classes are mutated, but exclude generated code yourself. Android projects start `excludedClasses` with globs for R, BR, BuildConfig, Hilt, Dagger, view and data binding and Compose (see [dsl.md](dsl.md#android-generated-classes)); `add` extends them and `=` replaces them.
 - **Operators.** The default set is the same six as 0.3.x (`arithmetic`, `conditionals-boundary`, `negate-conditionals`, `null-returns`, `return-vals`, `empty-returns`). A non-empty `operators` runs exactly those ids. Site differences per operator are in [parity.md](parity.md).
 - **JUnit engines.** Default `junit-jupiter` only; 0.3.x also ran `junit-vintage` and `junit-platform-suite-engine`. Opt in with `engines` and put the engine on the test runtime classpath (ADR 0005).
 - **Forked JVM pool.** Mutants run in child JVMs that copy the `test` task's JVM setup; a hung mutant is killed and reported as TIMEOUT (ADR 0008).

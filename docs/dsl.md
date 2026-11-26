@@ -10,7 +10,7 @@ Requires the Java, Kotlin JVM or Android plugin. A test fails when this table dr
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | `targetClasses` | List<String> | empty (all) | Class globs to mutate |
-| `excludedClasses` | List<String> | empty | Class globs never mutated |
+| `excludedClasses` | List<String> | empty (Android: the generated-class globs below) | Class globs never mutated |
 | `excludedMethods` | List<String> | empty | `method` or `pkg.Class#method` entries to skip |
 | `operators` | Set<String> | empty (default operators) | Operator ids to enable, from [operators.md](operators.md); empty runs the six default-on operators, a non-empty set runs exactly those ids (list every id to run all); an unknown id fails the run and lists the valid ones |
 | `threads` | Int | unset (available processors, resolved at run time) | Parallel test runs; more than the cores can cause false TIMEOUTs, since deadlines scale from a baseline run alone |
@@ -27,6 +27,10 @@ Requires the Java, Kotlin JVM or Android plugin. A test fails when this table dr
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | `console` | Boolean | true | Print the summary to the build log |
+
+### Android generated classes
+
+With an Android plugin, `excludedClasses` starts with these globs, so classes the Android build generates are not mutated: `**.R`, `**.R$*`, `**.BR`, `**.BuildConfig` (resources and build config); `**.Hilt_*`, `**.*_HiltModules*`, `**.*_HiltComponents*` (Hilt); `**.*_*Factory`, `**.*_*Factory$*`, `**.*_MembersInjector`, `**.Dagger*Component`, `**.Dagger*Component$*`, `**.*Factory_Impl` (Dagger); `**.databinding.*Binding`, `**.databinding.*Binding*Impl`, `**.databinding.*Binding*Impl$*`, `**.DataBinderMapperImpl`, `**.generated.callback.*` (view and data binding); `**.ComposableSingletons$*`, `**.LiveLiterals$*` (Compose). `excludedClasses.add(...)` keeps them and adds yours; `excludedClasses = [...]` (or `set`) replaces them, and `excludedClasses = []` mutates everything. The globs go by name, not by annotation, so a user class that fits one is skipped too. The inexact ones: `**.R`, `**.BR` and `**.BuildConfig` match any class with that simple name; `**.*_*Factory` matches any class with an underscore that ends in `Factory` (`Api_V2Factory`); `**.databinding.*Binding*Impl` matches such a class in any `databinding` package. Apply the plugins in a `plugins { }` block: the globs are added when the Android plugin applies, so with legacy `apply plugin:` lines ordered MutKt, a `mutkt { excludedClasses = [...] }` block, then Android, they are appended to your value instead of being replaced by it.
 
 ## Running
 

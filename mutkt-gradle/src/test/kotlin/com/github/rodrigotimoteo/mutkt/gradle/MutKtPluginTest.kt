@@ -29,6 +29,8 @@ class MutKtPluginTest {
         assertEquals(60_000L, mutkt.timeoutMs.get())
         assertEquals(setOf("junit-jupiter"), mutkt.engines.get())
         assertTrue(mutkt.targetClasses.get().isEmpty())
+        // The generated-class globs are Android only.
+        assertTrue(mutkt.excludedClasses.get().isEmpty())
         assertTrue(mutkt.operators.get().isEmpty())
         assertFalse(mutkt.maxMutantsPerClass.isPresent)
         assertFalse(mutkt.failBelowScore.isPresent)
