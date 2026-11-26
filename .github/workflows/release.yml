@@ -47,6 +47,9 @@ jobs:
             exit 1
           }
           echo "VERSION=$version" >> "$GITHUB_ENV"
+      # Fails before anything is published when CHANGELOG.md has no section for the version.
+      - name: Release notes from CHANGELOG.md
+        run: tools/release/notes.sh "$VERSION" > "$RUNNER_TEMP/release-notes.md"
       - name: Maven Central
         env:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_SIGNING_KEY }}
@@ -86,5 +89,5 @@ jobs:
           else
             flags=()
             [[ "$VERSION" == *-* ]] && flags+=(--prerelease)
-            gh release create "$TAG" --verify-tag --generate-notes --title "$TAG" "${flags[@]}"
+            gh release create "$TAG" --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" --title "$TAG" "${flags[@]}"
           fi

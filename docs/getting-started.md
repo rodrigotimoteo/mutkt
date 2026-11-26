@@ -9,7 +9,7 @@
 
 ## Apply the plugin
 
-Once released, from the Gradle Plugin Portal:
+From the Gradle Plugin Portal (the latest version is in the [CHANGELOG](../CHANGELOG.md)):
 
 ```kotlin
 plugins {
@@ -18,7 +18,7 @@ plugins {
 }
 ```
 
-Before the first release, clone this repository and include it in `settings.gradle.kts` (the setup [dogfood.md](dogfood.md) uses):
+To try an unreleased change, clone this repository and include it in `settings.gradle.kts` (the setup [dogfood.md](dogfood.md) uses):
 
 ```kotlin
 pluginManagement {

@@ -4,13 +4,13 @@ One workflow publishes: [release.yml](../.github/workflows/release.yml), trigger
 
 ## Cut a release
 
-1. Move the `[Unreleased]` notes in [CHANGELOG.md](../CHANGELOG.md) under the new version on `master` and merge through a PR.
+1. Move the `[Unreleased]` notes in [CHANGELOG.md](../CHANGELOG.md) under the new version on `master` and merge through a PR. That section, without its heading, becomes the GitHub release notes, so write it for users. `tools/release/notes.sh <version>` prints it; the `publish` job runs it before any upload and fails if the section is missing or empty (`tools/release/notes-test.sh` checks it in CI).
 2. Tag the merged commit and push the tag: `git tag v0.4.0 && git push origin v0.4.0`. The tag is the only version source: the workflow passes `-Pmutkt.version=<tag without v>`; local builds stay `0.0.0-SNAPSHOT`. Tags must look like `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-prerelease`.
 3. The `verify` job runs the full CI. The `publish` job then waits for approval of the `release` environment.
 4. After approval the job runs these stages in order. Each one first asks the target repository whether it already has the version and skips itself if so:
    1. Maven Central: `./gradlew publish` signs and uploads annotations, core, asm, junit, report, gradle and the plugin marker to the Central Portal staging API, then `tools/release/central-release.sh` hands the upload over for automatic publishing. The job waits up to 45 minutes until Central serves all POMs.
    2. Gradle Plugin Portal: `./gradlew :mutkt-gradle:publishPlugins`, then waits up to 15 minutes for the marker. Only a 200 from the Portal, or a 303 to its CDN `plugins-artifacts.gradle.org`, counts: it answers 303 to Central for artifacts it does not host, and Central has the marker after stage one. `tools/release/published-test.sh` checks this against a local server.
-   3. GitHub release: `gh release create --generate-notes` (notes are the merged PRs and commits since the previous release; `-` in the version marks it a pre-release).
+   3. GitHub release: `gh release create --notes-file` with the version's CHANGELOG section from `tools/release/notes.sh` (`-` in the version marks it a pre-release).
 
 The `publish` job rebuilds from the tagged commit with the tag version; the artifacts are not the ones `verify` tested, only the same sources at a different version. Keep tags on commits that passed CI.
 
