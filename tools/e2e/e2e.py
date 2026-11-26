@@ -3,6 +3,7 @@
 Run with python3 -I. Subcommands:
   fields <corpus> [name]        one tab-separated line per repo: name url commit module jdk apply patch ("-" for null)
   entry <corpus> <name>         the repo's corpus entry as JSON, for the init script
+  gradle-args <corpus> <name>   the repo's gradleArgs, one per line (none when absent)
   check <expectations> <report> one summary line; exits 1 and prints the broken expectations when any fails
 """
 import json
@@ -25,6 +26,13 @@ def repos(corpus_path, name=None):
     if not found:
         sys.exit(f"no repo named {name} in {corpus_path}; names: {', '.join(e['name'] for e in entries)}")
     return found
+
+
+def gradle_args(entry):
+    args = entry.get("gradleArgs") or []
+    if not all(isinstance(a, str) and a and "\n" not in a for a in args):
+        sys.exit(f"{entry['name']}: gradleArgs must be non-empty single-line strings")
+    return args
 
 
 def glob_regex(pattern):
@@ -103,6 +111,9 @@ def main(args):
             print("\t".join("-" if entry.get(f) is None else str(entry[f]) for f in FIELDS))
     elif command == "entry" and len(args) == 3:
         print(json.dumps(repos(args[1], args[2])[0]))
+    elif command == "gradle-args" and len(args) == 3:
+        for arg in gradle_args(repos(args[1], args[2])[0]):
+            print(arg)
     elif command == "check" and len(args) == 3:
         report = load(args[2])
         found = list(problems(load(args[1]), report))
