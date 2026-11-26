@@ -89,8 +89,10 @@ class MutKtAndroidVariantTest {
     }
 
     // Both plugins go on one buildscript classpath, as with a plugins { } block, so MutKt sees AGP's classes.
+    // AGP 9 gives unit tests only to the tested build type (8.4 has no such option): keep both, as every cell expects.
     private fun setUp(dsl: String) {
         write("settings.gradle", "rootProject.name = 'sample'\n")
+        write("gradle.properties", "android.onlyEnableUnitTestForTheTestedBuildType=false\n")
         write("build.gradle", library(classpath = mutktClasspath() + "\n" + agpClasspath(), dsl = dsl))
     }
 
@@ -108,7 +110,7 @@ class MutKtAndroidVariantTest {
         |    }
         |}
         |apply plugin: 'com.android.library'
-        |${if (KGP in classpath) "apply plugin: 'org.jetbrains.kotlin.android'" else ""}
+        |${if (KGP in classpath && !BUILT_IN_KOTLIN) "apply plugin: 'org.jetbrains.kotlin.android'" else ""}
         |apply plugin: 'io.github.rodrigotimoteo.mutkt'
         |android {
         |    namespace = 'demo'
@@ -182,6 +184,9 @@ class MutKtAndroidVariantTest {
             """.trimIndent()
 
         val AGP_VERSION: String = checkNotNull(System.getProperty("mutkt.agpVersion")) { "mutkt.agpVersion is not set" }
+
+        // AGP 9 compiles Kotlin itself and rejects the Kotlin Android plugin; KGP on the classpath sets its version.
+        val BUILT_IN_KOTLIN = AGP_VERSION.substringBefore('.').toInt() >= 9
         val GRADLE_VERSION: String =
             checkNotNull(System.getProperty("mutkt.agpGradleVersion")) { "mutkt.agpGradleVersion is not set" }
 
