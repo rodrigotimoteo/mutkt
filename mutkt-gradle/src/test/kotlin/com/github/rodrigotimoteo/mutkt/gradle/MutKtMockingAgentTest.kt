@@ -57,25 +57,21 @@ class MutKtMockingAgentTest {
             }
             """.trimIndent()
 
-        // The KClass form: mockkStatic("demo.Prices") resolves the name through MockK's own class loader, which
-        // cannot see the project's classes in the mutant JVMs.
+        // The string form: MockK resolves the name through its own class loader, which must see the project's classes.
         val TEST =
             """
             package demo;
             import io.mockk.MockKKt;
-            import kotlin.jvm.JvmClassMappingKt;
-            import kotlin.reflect.KClass;
             import org.junit.jupiter.api.Assertions;
             import org.junit.jupiter.api.Test;
             public class PricesTest {
                 @Test void totalUsesTheMockedBase() {
-                    KClass<?>[] prices = {JvmClassMappingKt.getKotlinClass(Prices.class)};
-                    MockKKt.mockkStatic(prices);
+                    MockKKt.mockkStatic("demo.Prices");
                     try {
                         MockKKt.every(scope -> Prices.base()).returns(3);
                         Assertions.assertEquals(6, new Prices().total(2));
                     } finally {
-                        MockKKt.unmockkStatic(prices);
+                        MockKKt.unmockkStatic("demo.Prices");
                     }
                 }
             }

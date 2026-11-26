@@ -1,14 +1,13 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
-import java.net.URLClassLoader
 import java.nio.file.Path
 
-// Platform <- LauncherApiLoader <- URLClassLoader(classpath); the caller parents a MutantClassLoader on the result.
+// Platform <- LauncherApiLoader <- MutantClassLoader(classpath + classes). One loader defines the dependencies and the
+// project's classes, so a library's Class.forName and package scans see the project; a fresh one per run keeps
+// library statics from carrying a mutant's classes into the next run.
 internal fun projectLoader(
     classpath: List<Path>,
     pluginLoader: ClassLoader,
-): URLClassLoader =
-    URLClassLoader(
-        classpath.map { it.toUri().toURL() }.toTypedArray(),
-        LauncherApiLoader(ClassLoader.getPlatformClassLoader(), pluginLoader),
-    )
+    classes: Map<String, ByteArray>,
+): MutantClassLoader =
+    MutantClassLoader(LauncherApiLoader(ClassLoader.getPlatformClassLoader(), pluginLoader), classes, classpath)

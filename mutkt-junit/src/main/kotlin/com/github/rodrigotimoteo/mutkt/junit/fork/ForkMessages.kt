@@ -3,7 +3,7 @@ package com.github.rodrigotimoteo.mutkt.junit.fork
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 
-internal const val PROTOCOL_VERSION: Int = 5
+internal const val PROTOCOL_VERSION: Int = 6
 
 internal sealed interface ForkRequest {
     /** Run the tests with [bytes] replacing the mutant's class; the deadline is relative to the start of execution. */
@@ -54,9 +54,10 @@ internal sealed interface ForkReply {
     /** Sent once per run when the tests begin: classes are loaded and linked and the tests discovered. */
     data object Started : ForkReply
 
-    /** The outcome of a run and how long its tests ran, in milliseconds since Started. */
+    /** A run's outcome and how long its tests ran, in milliseconds since Started; [retire]: do not reuse the child. */
     data class Result(
         val outcome: Outcome,
         val elapsedMillis: Long,
+        val retire: Boolean = false,
     ) : ForkReply
 }
