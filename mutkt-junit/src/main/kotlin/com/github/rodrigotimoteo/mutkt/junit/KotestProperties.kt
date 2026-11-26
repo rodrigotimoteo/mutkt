@@ -13,7 +13,9 @@ private const val AUTO_SCAN = "Lio/kotest/core/annotation/AutoScan;"
 private const val CONFIG_SCAN_OFF = "kotest.framework.classpath.scanning.config.disable"
 private const val CONFIG_CLASS = "kotest.framework.config.fqn"
 private const val AUTO_SCAN_OFF = "kotest.framework.classpath.scanning.autoscan.disable"
-private val KOTEST_PACKAGES = listOf("io/kotest/core/", "io/kotest/engine/")
+
+// Any Kotest module (core, engine, runner, extensions) mentions its own config type without holding a user config.
+private const val KOTEST_PACKAGE = "io/kotest/"
 
 // Kotest scans the whole classpath for its project config and @AutoScan extensions in every run (each has a fresh
 // class loader), which on large classpaths outlasts the prepare limit. The project config of the test classes and of
@@ -60,7 +62,7 @@ private fun isJar(entry: Path) = Files.isRegularFile(entry) && entry.toString().
 private fun kotestMentions(jar: Path): Set<String> =
     ZipFile(jar.toFile()).use { zip ->
         val entries = zip.entries().toList()
-        if (entries.any { entry -> KOTEST_PACKAGES.any(entry.name::startsWith) }) return emptySet()
+        if (entries.any { it.name.startsWith(KOTEST_PACKAGE) }) return emptySet()
         entries
             .filter { it.name.endsWith(".class") }
             .flatMapTo(mutableSetOf()) { entry ->

@@ -115,6 +115,18 @@ class KotestPropertiesTest {
         assertEquals(listOf(configScanOff, autoScanOff), kotestProperties(listOf(own), tests("SomeTest"), emptyList()))
     }
 
+    @Test
+    fun `Kotest's runner jar is not searched`() {
+        val source =
+            "package io.kotest.runner.junit5\n" +
+                "class Runner { val type = io.kotest.core.config.AbstractProjectConfig::class }"
+        val runner = writeJar(dir.resolve("kotest-runner.jar"), compileKotlin(source, classpath = kotest()))
+        assertEquals(
+            listOf(configScanOff, autoScanOff),
+            kotestProperties(kotest() + listOf(runner), tests("SomeTest"), emptyList()),
+        )
+    }
+
     private fun autoScan() =
         compileKotlin("package io.kotest.core.annotation\nannotation class AutoScan\n@AutoScan class Listener")
 
