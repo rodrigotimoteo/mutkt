@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.gradle
 
 import org.gradle.testfixtures.ProjectBuilder
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -37,7 +38,20 @@ class UserDocsTest {
         tasks.forEach { assertNotNull(project.tasks.findByName(it), "./gradlew $it") }
     }
 
+    @Test
+    fun `dsl md lists every Android generated-class glob`() {
+        val section =
+            File(readme.parentFile, "docs/dsl.md")
+                .readText()
+                .substringAfter("### Android generated classes")
+                .substringBefore("\n#")
+
+        assertEquals(ANDROID_GENERATED_CLASSES.toSet(), ANDROID_GLOB.findAll(section).map { it.groupValues[1] }.toSet())
+    }
+
     private companion object {
+        val ANDROID_GLOB = Regex("`(\\*\\*\\.[^`]+)`")
+
         // The legacy id shares this prefix, so a stale id is caught too.
         val PLUGIN_ID = Regex("""id\("(io\.github\.rodrigotimoteo\.[^"]+)"\)""")
 

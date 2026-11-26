@@ -3,7 +3,7 @@
 ## Requirements
 
 - JDK 17 or 21, Gradle 8.10 or later, including 9.x.
-- The `java` or `kotlin("jvm")` plugin; MutKt fails the build without one. Android is not supported.
+- The `java`, `kotlin("jvm")` or an Android plugin (AGP 8.4 to 9.x, see [Android](#android)); MutKt fails the build without one.
 - Tests on the JUnit Platform. Jupiter runs by default; JUnit 4 tests need `engines` (see [dsl.md](dsl.md)).
 - A green test suite: MutKt runs it once on the original classes first and stops if anything fails.
 
@@ -74,6 +74,90 @@ All in `build/reports/mutkt/`, rewritten on every run (a run that fails before s
 | `mutkt.txt` | The summary printed in the build log |
 
 The task is up to date until classes, sources, the test classpath or the settings change; an up-to-date run prints nothing.
+
+## Android
+
+MutKt runs on Android application and library modules (`com.android.application`, `com.android.library`) with AGP 8.4 through 9.x and Gradle 8.10 or later, including 9.x (AGP 9 itself needs Gradle 9.1 or later). CI tests AGP 8.4.2, 8.13.2 and 9.5.3.
+
+It mutates the classes of one variant (Kotlin and Java, as AGP compiled them) and runs that variant's local unit tests (`src/test`) against each mutant. The test classes, classpath (Android library modules and AAR dependencies included) and JVM settings (`unitTests.all { }`) come from the variant's unit-test task, `test<Variant>UnitTest`; MutKt reads them without running that task.
+
+AGP 8.x, with the Kotlin Android plugin (`build.gradle.kts` of the module):
+
+```kotlin
+plugins {
+    id("com.android.library") version "<AGP 8 version>"
+    id("org.jetbrains.kotlin.android") version "<kotlin version>"
+    id("io.github.rodrigotimoteo.mutkt") version "<version>"
+}
+
+android {
+    namespace = "com.example.lib"
+    compileSdk = 34
+    testOptions { unitTests.all { it.useJUnitPlatform() } }
+}
+
+dependencies {
+    testImplementation(platform("org.junit:junit-bom:<junit version>"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+mutkt {
+    variant = "debug"
+}
+```
+
+AGP 9.x compiles Kotlin itself and rejects `org.jetbrains.kotlin.android`, so the plugins block drops it; the rest is the same:
+
+```kotlin
+plugins {
+    id("com.android.library") version "<AGP 9 version>"
+    id("io.github.rodrigotimoteo.mutkt") version "<version>"
+}
+```
+
+`com.android.application` works the same way. `variant` defaults to `debug`; a flavored build names the full variant, such as `freeDebug`. A variant that does not exist or has no unit tests fails the build with the names of the variants that have them. On AGP 9 only the tested build type (`debug`) has unit tests: to use `variant = "release"`, set `android.onlyEnableUnitTestForTheTestedBuildType=false` in `gradle.properties`.
+
+MutKt must see AGP's classes: declare the Android plugin in the same `plugins { }` block as MutKt, as above, or in a parent project's. In a multi-module build, declare both in the root with `apply false` and apply them in the modules:
+
+```kotlin
+// Root build.gradle.kts
+plugins {
+    id("com.android.application") version "<AGP version>" apply false
+    id("io.github.rodrigotimoteo.mutkt") version "<version>" apply false
+}
+```
+
+Each module that applies MutKt gets its own `mutkt` task, which mutates only that module's classes and writes its reports to the module's `build/reports/mutkt/` (`app/build/reports/mutkt/` for an `app` module). `./gradlew mutkt` runs every module's.
+
+Classes the Android build generates (R, BuildConfig, Hilt and Dagger, view and data binding, Compose singletons) are excluded by default; [dsl.md](dsl.md#android-generated-classes) lists the globs and how to extend or replace them.
+
+**Robolectric.** Robolectric tests run on JUnit 4, so they need the vintage engine on the test runtime classpath and `engines`:
+
+```kotlin
+android {
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { it.useJUnitPlatform() }
+    }
+}
+
+dependencies {
+    testImplementation("junit:junit:<junit 4 version>")
+    testImplementation("org.robolectric:robolectric:<robolectric version>")
+    testRuntimeOnly(platform("org.junit:junit-bom:<junit version>"))
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+mutkt {
+    engines = setOf("junit-vintage")
+}
+```
+
+The mutants then run with the unit-test task's classpath, which holds Robolectric's resource config when `isIncludeAndroidResources` is on. The [Android sample](../samples/android/README.md) is a working build with Robolectric tests on AGP 8 and 9.
+
+**Not supported:** instrumented tests (`src/androidTest`, `connectedAndroidTest`, devices and emulators), more than one variant per run, test fixtures, screenshot tests, and `com.android.dynamic-feature`, `com.android.test` and Kotlin Multiplatform Android modules.
 
 ## Configure
 

@@ -5,6 +5,12 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 ## [Unreleased]
 
 - Gradle 9 support: the plugin is tested on Gradle 8.10, 8.14.3 and 9.9.2. On Gradle 9, declare `testRuntimeOnly("org.junit.platform:junit-platform-launcher")`, because Gradle no longer adds it.
+- Android support, for local unit tests on AGP 8.4 through 9.x (tested on 8.4.2, 8.13.2 and 9.5.3; AGP 9 needs Gradle 9.1 or later). Setup in [docs/getting-started.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/getting-started.md#android).
+  - The plugin activates on `com.android.application` and `com.android.library`. `mutkt { variant = "debug" }` (the default) picks one variant; a variant that does not exist or has no unit tests fails the build with the names of those that have them. AGP must be declared in the same `plugins { }` block as MutKt or a parent project's.
+  - `mutkt` mutates the variant's Kotlin and Java classes as AGP compiled them, with AGP 8's Kotlin Android plugin or AGP 9's built-in Kotlin, and runs the tests with the classpath and JVM settings of its `test<Variant>UnitTest` task, without running that task. The configuration cache is supported.
+  - `excludedClasses` starts with globs for generated classes (R, BR, BuildConfig, Hilt, Dagger, view and data binding, Compose); `add` extends them, `=` replaces them.
+  - Multi-module apps: each module has its own `mutkt` task and reports, and an app's tests may use Android library modules and AAR dependencies.
+  - Instrumented tests (`src/androidTest`) are not supported.
 - Fixed: Robolectric tests no longer see a stale class. Robolectric caches the project classes it loaded in JVM-wide statics, so a reused test JVM gave later mutants the first class it loaded and counts changed from run to run. With Robolectric on the test classpath each mutant now gets its own test JVM.
 
 ## [0.4.0] - 2026-11-26

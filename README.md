@@ -1,12 +1,14 @@
 # MutKt
 
-Mutation testing for Kotlin/JVM. Add the Gradle plugin, run your existing JUnit tests against mutated bytecode, get a mutation score. No test changes.
+Mutation testing for Kotlin/JVM and Android. Add the Gradle plugin, run your existing JUnit tests against mutated bytecode, get a mutation score. No test changes.
 
 **Status:** 0.4.0, a full rebuild, is on Maven Central and the Gradle Plugin Portal. The previous implementation is tag `v0.3.3` (branch `old-master`); [docs/migration.md](docs/migration.md) lists what changed. See [getting started](docs/getting-started.md) to apply the plugin.
 
 ## Quick start
 
-In `build.gradle.kts` of a project that applies `kotlin("jvm")` or `java` and has JUnit 5 tests:
+Supported: JDK 17 and 21, Gradle 8.10 or later (including 9.x), and Android unit tests on AGP 8.4 through 9.x ([Android setup](docs/getting-started.md#android)). Instrumented Android tests are not supported.
+
+In `build.gradle.kts` of a project that applies `kotlin("jvm")`, `java` or an Android plugin and has JUnit 5 tests:
 
 ```kotlin
 plugins {
