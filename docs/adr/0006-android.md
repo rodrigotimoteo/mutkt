@@ -70,7 +70,7 @@ Other:
 | ROD-126 | Activation, `variant` DSL, classes via `toGet`, `Test` task inputs, sources, jar reading in the class source; TestKit on min and latest AGP mutating a library class killed by a unit test | Several variants, flavours matrix |
 | ROD-127 | TestKit: app module depending on an Android library module and an AAR; extractor only if that test fails with the `Test` classpath | Own AAR extraction by default |
 | ROD-128 | Default exclude globs (R, BuildConfig, Hilt/Dagger, ViewBinding/DataBinding, Compose singletons), applied only when an Android plugin is present, replaceable and extendable; one match and one non-match test per glob | Annotation-based detection |
-| ROD-129 | `samples/android` included build applying the plugin from source; Robolectric test with killed and surviving mutants; CI job; docs "Android" section | Published-artifact sample |
+| ROD-129 | `samples/android` on a local publication, not `includeBuild`: Gradle 9.6 can't build the repo from source with Kotlin 2.1; Robolectric test with killed and surviving mutants; CI job; docs "Android" section | |
 
 Instrumented tests (`connectedAndroidTest`, devices, emulators) are out of scope for P5 and have no planned task.
 

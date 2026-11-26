@@ -18,10 +18,15 @@ pluginPublish = "2.2.1"
 dokka = "2.1.0"
 # The minimum supported AGP (docs/adr/0006-android.md): compiled against, never a newer one.
 agp = "8.4.2"
+# Only the Android sample (samples/android).
+robolectric = "4.18.1"
+junit4 = "4.13.2"
 
 [plugins]
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
 pluginPublish = { id = "com.gradle.plugin-publish", version.ref = "pluginPublish" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 
 [libraries]
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -42,3 +47,6 @@ konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 kover-gradle-plugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", version.ref = "kover" }
 dokka-gradle-plugin = { module = "org.jetbrains.dokka:dokka-gradle-plugin", version.ref = "dokka" }
 agp-api = { module = "com.android.tools.build:gradle-api", version.ref = "agp" }
+junit-vintage-engine = { module = "org.junit.vintage:junit-vintage-engine" }
+junit4 = { module = "junit:junit", version.ref = "junit4" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
