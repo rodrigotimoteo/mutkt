@@ -254,7 +254,7 @@ class JUnitTestExecutorTest {
 
     @Test
     fun `an engine missing from the classpath fails the run`() {
-        val error = assertThrows<JUnitException> { filtered(engines = listOf("junit-vintage")).runMutant() }
+        val error = assertThrows<JUnitException> { filtered(engines = listOf("junit-platform-suite")).runMutant() }
         assertTrue("No TestEngine ID matched" in error.message.orEmpty(), error.message)
     }
 

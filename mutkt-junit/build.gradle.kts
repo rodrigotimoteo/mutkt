@@ -14,6 +14,8 @@ dependencies {
     implementation(project(":mutkt-core"))
     implementation(platform(libs.junit.bom))
     implementation(libs.junit.platform.launcher)
+    // Supplied to JUnit 4 projects that select the vintage engine but have none on their test runtime classpath.
+    runtimeOnly(libs.junit.vintage.engine)
 
     testImplementation(project(":mutkt-testing"))
 

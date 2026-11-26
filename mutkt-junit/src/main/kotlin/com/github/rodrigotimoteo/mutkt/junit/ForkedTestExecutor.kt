@@ -43,6 +43,9 @@ public class ForkedTestExecutor(
     private val failedStarts = AtomicInteger()
     private val lastStartFailure = AtomicReference<String>()
     private val startup = lazy { writeStartupFile() }
+
+    // Checked here so a missing engine fails before any child JVM starts.
+    private val projectClasspath = projectClasspathFor(settings.engines, settings.classpath)
     private val lock = Any()
 
     @Volatile private var closed = false
@@ -179,7 +182,7 @@ public class ForkedTestExecutor(
     private fun writeStartupFile(): Path {
         val lines =
             listOf("projectClassDir=${settings.projectClassDir}", "testClassDir=${settings.testClassDir}") +
-                settings.classpath.map { "classpath=$it" } +
+                projectClasspath.map { "classpath=$it" } +
                 settings.engines.map { "engine=$it" } +
                 settings.includeTags.map { "includeTag=$it" } +
                 settings.excludeTags.map { "excludeTag=$it" }

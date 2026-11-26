@@ -34,7 +34,7 @@ public abstract class MutKtExtension {
     /** Minimum mutation score in percent (0..100); the build fails below it. Unset means no gate. */
     public abstract val failBelowScore: Property<Int>
 
-    /** JUnit engine ids to run (`junit-jupiter`, `junit-vintage`); each must be on the test runtime classpath. */
+    /** JUnit engine ids to run (`junit-jupiter`, `junit-vintage`); MutKt supplies the vintage engine when missing. */
     public abstract val engines: SetProperty<String>
 
     /** Only run tests matching one of these JUnit tag expressions; empty means all. */

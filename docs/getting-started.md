@@ -132,22 +132,18 @@ Each module that applies MutKt gets its own `mutkt` task, which mutates only tha
 
 Classes the Android build generates (R, BuildConfig, Hilt and Dagger, view and data binding, Compose singletons) are excluded by default; [dsl.md](dsl.md#android-generated-classes) lists the globs and how to extend or replace them.
 
-**Robolectric.** Robolectric tests run on JUnit 4, so they need the vintage engine on the test runtime classpath and `engines`:
+**JUnit 4 and Robolectric.** JUnit 4 tests, Robolectric's included, run on the vintage engine, so they need `engines`. MutKt adds the vintage engine to its test JVMs when the project has none, so the unit-test task can stay on JUnit 4:
 
 ```kotlin
 android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
-        unitTests.all { it.useJUnitPlatform() }
     }
 }
 
 dependencies {
     testImplementation("junit:junit:<junit 4 version>")
     testImplementation("org.robolectric:robolectric:<robolectric version>")
-    testRuntimeOnly(platform("org.junit:junit-bom:<junit version>"))
-    testRuntimeOnly("org.junit.vintage:junit-vintage-engine")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 mutkt {

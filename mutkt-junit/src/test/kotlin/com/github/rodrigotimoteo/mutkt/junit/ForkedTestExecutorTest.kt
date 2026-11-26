@@ -268,8 +268,8 @@ class ForkedTestExecutorTest {
         assertEquals(Outcome.Survived, excluded.run(mutantBytes()))
         val included = executor(testSource = test) { it.copy(includeTags = listOf("fast")) }
         assertEquals(killed, included.run(mutantBytes()))
-        val vintage = executor(testSource = test) { it.copy(engines = listOf("junit-vintage")) }
-        val error = assertThrows<IllegalStateException> { vintage.run(mutantBytes()) }
+        val suite = executor(testSource = test) { it.copy(engines = listOf("junit-platform-suite")) }
+        val error = assertThrows<IllegalStateException> { suite.run(mutantBytes()) }
         assertTrue("No TestEngine ID matched" in error.message.orEmpty(), error.message)
     }
 
