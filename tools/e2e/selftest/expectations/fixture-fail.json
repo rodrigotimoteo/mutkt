@@ -1,0 +1,29 @@
+{
+  "mutants": {
+    "min": 100,
+    "max": 200
+  },
+  "score": {
+    "min": 0.99,
+    "max": 1
+  },
+  "maxError": 0,
+  "operators": [
+    "no-such-operator"
+  ],
+  "mustNotContain": [
+    "**.Discount"
+  ],
+  "files": [
+    {
+      "path": "lib/src/main/kotlin/com/example/e2e/Missing.kt",
+      "killedAtLeast": 1,
+      "survivedAtLeast": 0,
+      "noCoverageAtLeast": 0,
+      "note": "no such file"
+    }
+  ],
+  "risks": [
+    "Every expectation here is wrong on purpose."
+  ]
+}
