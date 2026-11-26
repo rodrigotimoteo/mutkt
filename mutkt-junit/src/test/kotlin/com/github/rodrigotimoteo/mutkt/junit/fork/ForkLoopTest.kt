@@ -8,6 +8,7 @@ import com.github.rodrigotimoteo.mutkt.junit.JUnitTestExecutor
 import com.github.rodrigotimoteo.mutkt.junit.executorFor
 import com.github.rodrigotimoteo.mutkt.junit.mutantBytes
 import com.github.rodrigotimoteo.mutkt.junit.mutantOf
+import com.github.rodrigotimoteo.mutkt.junit.withoutCause
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -44,7 +45,7 @@ class ForkLoopTest {
         val stream = DataInputStream(ByteArrayInputStream(buffer.toByteArray()))
         // Elapsed times vary; the baseline's own is checked through the executor.
         return generateSequence { readReply(stream) }
-            .map { (it as? ForkReply.Result)?.copy(elapsedMillis = 0) ?: it }
+            .map { if (it is ForkReply.Result) it.copy(outcome = it.outcome.withoutCause(), elapsedMillis = 0) else it }
             .toList()
     }
 

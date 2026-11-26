@@ -33,30 +33,32 @@ class ForkedSandboxCacheTest {
         val pool = ForkedTestExecutor(settings).also { executor = it }
         assertEquals(Outcome.Survived, pool.baseline(LONG).outcome)
         val outcomes = listOf(mutantBytes(), mutantBytes(CALC)).map { pool.run(mutantOf(), it, LONG) }
-        return outcomes to pool.startedChildren
+        return outcomes.map { it.withoutCause() } to pool.startedChildren
     }
 
     @Test
     fun `a Robolectric jar on the classpath gives every mutant a fresh child`() {
         val jar = writeJar(dir.resolve("robolectric.jar"), sandboxManager)
-        assertEquals(listOf(KILLED, Outcome.Survived) to 3, flow(SANDBOX_TEST, listOf(jar)))
+        assertEquals(listOf(Outcome.Killed("CalcTest.adds"), Outcome.Survived) to 3, flow(SANDBOX_TEST, listOf(jar)))
     }
 
     @Test
     fun `a Robolectric class directory on the classpath gives every mutant a fresh child`() {
         val classes = writeClasses(dir.resolve("robolectric"), sandboxManager.map { ClassFile(it.key, it.value) })
-        assertEquals(listOf(KILLED, Outcome.Survived) to 3, flow(SANDBOX_TEST, listOf(classes)))
+        assertEquals(
+            listOf(Outcome.Killed("CalcTest.adds"), Outcome.Survived) to 3,
+            flow(SANDBOX_TEST, listOf(classes)),
+        )
     }
 
     @Test
     fun `without Robolectric one child serves every mutant`() {
         val test = "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
-        assertEquals(listOf(KILLED, Outcome.Survived) to 1, flow(test))
+        assertEquals(listOf(Outcome.Killed("CalcTest.adds"), Outcome.Survived) to 1, flow(test))
     }
 
     private companion object {
         val LONG = 60.seconds
-        val KILLED = Outcome.Killed("CalcTest.adds")
 
         // Like Robolectric's sandbox: the first call keeps the class under test, read through the context loader.
         val sandboxManager =

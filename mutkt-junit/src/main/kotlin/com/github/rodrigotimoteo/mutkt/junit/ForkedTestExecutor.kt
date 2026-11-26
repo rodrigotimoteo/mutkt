@@ -43,6 +43,9 @@ public class ForkedTestExecutor(
     private val failedStarts = AtomicInteger()
     private val lastStartFailure = AtomicReference<String>()
     private val startup = lazy { writeStartupFile() }
+
+    // Checked here so a missing engine fails before any child JVM starts.
+    private val projectClasspath = projectClasspathFor(settings.engines, settings.classpath)
     private val lock = Any()
 
     @Volatile private var closed = false
@@ -105,16 +108,19 @@ public class ForkedTestExecutor(
     // Only idle children get a Shutdown frame: a busy child's stream belongs to its running thread, so it is killed.
     override fun close() {
         synchronized(lock) { closed = true }
-        val pooled = generateSequence { idle.poll() }.toList()
-        pooled.forEach(ChildProcess::requestShutdown)
-        val limit = System.nanoTime() + SHUTDOWN_WAIT_NANOS
-        pooled.forEach { it.process.waitFor(maxOf(0, limit - System.nanoTime()), TimeUnit.NANOSECONDS) }
-        children.toList().forEach(::discard)
-        synchronized(lock) {
-            if (startup.isInitialized()) {
-                startup.value.parent
-                    .toFile()
-                    .deleteRecursively()
+        try {
+            val pooled = generateSequence { idle.poll() }.toList()
+            pooled.forEach(ChildProcess::requestShutdown)
+            val limit = System.nanoTime() + SHUTDOWN_WAIT_NANOS
+            pooled.forEach { it.process.waitFor(maxOf(0, limit - System.nanoTime()), TimeUnit.NANOSECONDS) }
+            children.toList().forEach(::discard)
+        } finally {
+            synchronized(lock) {
+                if (startup.isInitialized()) {
+                    startup.value.parent
+                        .toFile()
+                        .deleteRecursively()
+                }
             }
         }
     }
@@ -176,7 +182,7 @@ public class ForkedTestExecutor(
     private fun writeStartupFile(): Path {
         val lines =
             listOf("projectClassDir=${settings.projectClassDir}", "testClassDir=${settings.testClassDir}") +
-                settings.classpath.map { "classpath=$it" } +
+                projectClasspath.map { "classpath=$it" } +
                 settings.engines.map { "engine=$it" } +
                 settings.includeTags.map { "includeTag=$it" } +
                 settings.excludeTags.map { "excludeTag=$it" }

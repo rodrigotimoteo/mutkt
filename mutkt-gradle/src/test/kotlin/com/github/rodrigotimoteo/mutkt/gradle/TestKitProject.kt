@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.gradle
 
 import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
+import org.junit.jupiter.api.Assertions.assertTrue
 import java.io.File
 
 /**
@@ -115,6 +116,33 @@ internal class TestKitProject(
                 }
             }
             """.trimIndent()
+
+        /** JUnit 4 and Hamcrest only: a `useJUnit()` build with no JUnit Platform engine. */
+        val JUNIT4_JARS = Regex("^(junit-4|hamcrest-core)")
+
+        const val GATE =
+            "package demo;\npublic class Gate {\n    public boolean isAdult(int age) { return age >= 18; }\n}\n"
+
+        // 30 and 10 miss the boundary at 18: the conditionals-boundary mutant survives, negate-conditionals is killed.
+        val JUNIT4_GATE_TEST =
+            """
+            package demo;
+            import org.junit.Assert;
+            import org.junit.Test;
+            public class GateTest {
+                @Test public void adult() { Assert.assertTrue(new Gate().isAdult(30)); }
+                @Test public void child() { Assert.assertFalse(new Gate().isAdult(10)); }
+            }
+            """.trimIndent()
+
+        /** Asserts that each of [expected] is a line of [summary], ignoring surrounding spaces. */
+        fun assertSummaryLines(
+            summary: String,
+            vararg expected: String,
+        ) {
+            val lines = summary.lines().map(String::trim)
+            assertTrue(expected.all { it in lines }, "Missing one of ${expected.toList()} in:\n$summary")
+        }
 
         fun calc(expression: String) =
             "package demo;\npublic class Calc {\n    public int add(int a, int b) { return $expression; }\n}\n"

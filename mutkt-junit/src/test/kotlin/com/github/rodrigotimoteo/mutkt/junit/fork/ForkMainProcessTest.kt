@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.junit.CALC
 import com.github.rodrigotimoteo.mutkt.junit.CALC_MUTANT
 import com.github.rodrigotimoteo.mutkt.junit.IMPORTS
+import com.github.rodrigotimoteo.mutkt.junit.assertKilledBy
 import com.github.rodrigotimoteo.mutkt.junit.mutantBytes
 import com.github.rodrigotimoteo.mutkt.junit.mutantOf
 import com.github.rodrigotimoteo.mutkt.junit.runtimeJars
@@ -77,7 +78,7 @@ class ForkMainProcessTest {
         writeRequest(out, ForkRequest.Run(mutantOf(), mutantBytes(CALC_MUTANT), 20_000))
         assertEquals(ForkReply.Started, readReply(input))
         val killed = readReply(input) as ForkReply.Result
-        assertEquals(Outcome.Killed("CalcTest.adds"), killed.outcome)
+        assertKilledBy("CalcTest.adds", killed.outcome)
         assertTrue(killed.elapsedMillis >= 0, "elapsed ${killed.elapsedMillis}")
         writeRequest(out, ForkRequest.Run(mutantOf(), mutantBytes(CALC), 20_000))
         assertEquals(ForkReply.Started, readReply(input))

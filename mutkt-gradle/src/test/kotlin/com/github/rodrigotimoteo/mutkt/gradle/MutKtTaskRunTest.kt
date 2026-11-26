@@ -85,7 +85,7 @@ class MutKtTaskRunTest {
     @Test
     fun `a wrong engine id fails the baseline with the cause and writes no report`() {
         val task = fixtureTask()
-        task.engines.set(setOf("junit-vintage"))
+        task.engines.set(setOf("junit-nope"))
 
         val error = assertThrows<IllegalStateException> { task.analyse() }
 

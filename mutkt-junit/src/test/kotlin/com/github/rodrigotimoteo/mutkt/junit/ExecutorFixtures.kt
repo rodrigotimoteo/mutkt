@@ -1,10 +1,12 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
+import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
+import org.junit.jupiter.api.Assertions.assertEquals
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -73,3 +75,12 @@ internal fun executorFor(
 
 internal const val IMPORTS =
     "import org.junit.jupiter.api.*\nimport org.junit.jupiter.api.Assertions.*\n"
+
+// Compares only the killing test: the cause is asserted where it is the point of the test.
+internal fun assertKilledBy(
+    by: String,
+    outcome: Outcome,
+) = assertEquals(by, (outcome as? Outcome.Killed)?.by, "$outcome")
+
+// Lists compare without the cause, which is asserted where it is the point of the test.
+internal fun Outcome.withoutCause(): Outcome = if (this is Outcome.Killed) copy(cause = null) else this

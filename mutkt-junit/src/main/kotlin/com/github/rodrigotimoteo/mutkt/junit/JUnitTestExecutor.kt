@@ -177,7 +177,7 @@ public class JUnitTestExecutor(
             val listener = OutcomeListener()
             launcher.execute(plan, listener)
             testsStarted += listener.started
-            listener.killedBy?.let { return Outcome.Killed(it) }
+            listener.killedBy?.let { return Outcome.Killed(it, listener.cause) }
         }
         return if (testsStarted == 0) Outcome.NoTests else Outcome.Survived
     }

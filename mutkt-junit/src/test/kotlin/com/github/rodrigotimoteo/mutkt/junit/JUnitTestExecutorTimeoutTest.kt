@@ -55,7 +55,7 @@ class JUnitTestExecutorTimeoutTest {
     @Test
     fun `executor keeps working after a timeout`() {
         assertEquals(Outcome.Timeout, run(SPIN))
-        assertEquals(Outcome.Killed("CalcTest.adds"), run(mutantBytes()))
+        assertKilledBy("CalcTest.adds", run(mutantBytes()))
         assertEquals(Outcome.Survived, run(mutantBytes(CALC)))
     }
 

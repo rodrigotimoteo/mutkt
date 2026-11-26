@@ -1,5 +1,9 @@
 package com.github.rodrigotimoteo.mutkt.gradle
 
+import com.github.rodrigotimoteo.mutkt.gradle.TestKitProject.Companion.GATE
+import com.github.rodrigotimoteo.mutkt.gradle.TestKitProject.Companion.JUNIT4_GATE_TEST
+import com.github.rodrigotimoteo.mutkt.gradle.TestKitProject.Companion.JUNIT4_JARS
+import com.github.rodrigotimoteo.mutkt.gradle.TestKitProject.Companion.assertSummaryLines
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -85,6 +89,23 @@ class MutKtAndroidVariantTest {
         assertTrue("\"demo/Calc.kt\"" in json && "\"demo/Gate.java\"" in json, json)
         assertEquals(TaskOutcome.UP_TO_DATE, second.task(":mutkt")?.outcome, second.output)
         assertTrue("Reusing configuration cache" in second.output, second.output)
+    }
+
+    @Test
+    fun `JUnit 4 unit tests run on the vintage engine MutKt supplies`() {
+        val junit4 = TestKitProject(File(".")).jars(JUNIT4_JARS)
+        val dsl =
+            "$REPOSITORIES\ndependencies { testImplementation files($junit4) }\n" +
+                "mutkt { engines = ['junit-vintage']; operators = ['conditionals-boundary', 'negate-conditionals'] }"
+        setUp(dsl)
+        write("src/main/java/demo/Gate.java", GATE)
+        write("src/test/java/demo/GateTest.java", JUNIT4_GATE_TEST)
+
+        val result = runner("mutkt").build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":mutkt")?.outcome, result.output)
+        val report = dir.resolve("build/reports/mutkt/mutkt.txt").readText()
+        assertSummaryLines(report, "Mutants: 2", "KILLED       1", "SURVIVED     1")
     }
 
     @Test
@@ -319,9 +340,6 @@ class MutKtAndroidVariantTest {
                 }
             }
             """.trimIndent()
-
-        const val GATE =
-            "package demo;\npublic class Gate {\n    public boolean isAdult(int age) { return age >= 18; }\n}\n"
 
         val CALC_TEST =
             """

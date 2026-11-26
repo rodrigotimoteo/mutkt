@@ -69,4 +69,39 @@ class EngineClasspathTest {
         val project = dir.resolve("classes")
         assertEquals(own + listOf(project) + bundled().drop(1), engineClasspathFor(own + bundled(), listOf(project)))
     }
+
+    @Test
+    fun `a vintage run of a project without the vintage engine gets the bundled one, last`() {
+        val project = listOf(jar("junit.jar", "junit/framework/Test.class"))
+        val result = projectClasspathFor(listOf("junit-jupiter", "junit-vintage"), project)
+        assertEquals(project, result.dropLast(1))
+        assertTrue(
+            result
+                .last()
+                .fileName
+                .toString()
+                .startsWith("junit-vintage-engine"),
+            result.toString(),
+        )
+    }
+
+    @Test
+    fun `a vintage run of a project with its own platform but no vintage engine fails naming the dependency`() {
+        val project = bundled("project") + jar("junit.jar", "junit/framework/Test.class")
+        val error =
+            assertThrows(IllegalArgumentException::class.java) { projectClasspathFor(listOf("junit-vintage"), project) }
+        assertTrue("org.junit.vintage:junit-vintage-engine" in error.message.orEmpty(), error.message)
+    }
+
+    @Test
+    fun `the project's own vintage engine is not doubled`() {
+        val project = listOf(jar("vintage.jar", "org/junit/vintage/engine/VintageTestEngine.class"))
+        assertEquals(project, projectClasspathFor(listOf("junit-vintage"), project))
+    }
+
+    @Test
+    fun `a run without the vintage engine keeps the project classpath`() {
+        val project = listOf(jar("app.jar", "App.class"))
+        assertEquals(project, projectClasspathFor(listOf("junit-jupiter"), project))
+    }
 }

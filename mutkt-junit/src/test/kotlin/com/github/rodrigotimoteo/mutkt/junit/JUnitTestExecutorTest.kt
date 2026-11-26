@@ -56,7 +56,7 @@ class JUnitTestExecutorTest {
         try {
             val outcome =
                 executor(tests).run(mutantOf(), mutantBytes(), deadline) { seen = System.getProperty(DISCOVERED) }
-            assertEquals(Outcome.Killed("CalcTest.adds"), outcome.outcome)
+            assertKilledBy("CalcTest.adds", outcome.outcome)
             assertEquals("yes", seen)
         } finally {
             System.clearProperty(DISCOVERED)
@@ -65,7 +65,7 @@ class JUnitTestExecutorTest {
 
     @Test
     fun `failing assertion kills the mutant and names the test`() {
-        assertEquals(Outcome.Killed("CalcTest.adds"), executor(addsTest).runMutant())
+        assertKilledBy("CalcTest.adds", executor(addsTest).runMutant())
     }
 
     @Test
@@ -98,7 +98,7 @@ class JUnitTestExecutorTest {
         val tests =
             "class CalcTest { companion object { " +
                 "@BeforeAll @JvmStatic fun setUp() { check(Calc().add(1, 1) == 2) } } @Test fun adds() {} }"
-        assertEquals(Outcome.Killed("CalcTest"), executor(tests).runMutant())
+        assertKilledBy("CalcTest", executor(tests).runMutant())
     }
 
     @Test
@@ -130,9 +130,9 @@ class JUnitTestExecutorTest {
     @Test
     fun `one executor serves different mutants in turn`() {
         val executor = executor(addsTest)
-        assertEquals(Outcome.Killed("CalcTest.adds"), executor.runMutant())
+        assertKilledBy("CalcTest.adds", executor.runMutant())
         assertEquals(Outcome.Survived, executor.runMutant(mutantBytes(CALC)))
-        assertEquals(Outcome.Killed("CalcTest.adds"), executor.runMutant())
+        assertKilledBy("CalcTest.adds", executor.runMutant())
     }
 
     @Test
@@ -152,7 +152,7 @@ class JUnitTestExecutorTest {
                 "class BSecondTest { @Test fun marks() { System.setProperty(\"$MARK\", \"ran\") } }"
         val executor = executor(tests)
         try {
-            assertEquals(Outcome.Killed("AFirstTest.adds"), executor.runMutant())
+            assertKilledBy("AFirstTest.adds", executor.runMutant())
             assertNull(System.getProperty(MARK))
             assertEquals(Outcome.Survived, executor.runMutant(mutantBytes(CALC)))
             assertEquals("ran", System.getProperty(MARK))
@@ -178,7 +178,7 @@ class JUnitTestExecutorTest {
     @Test
     fun `failing nested test kills by the nested class`() {
         val tests = "class CalcTest { @Nested inner class Deep { @Test fun deep() { fail<Unit>() } } }"
-        assertEquals(Outcome.Killed("CalcTest\$Deep.deep"), executor(tests).runMutant())
+        assertKilledBy("CalcTest\$Deep.deep", executor(tests).runMutant())
     }
 
     @Test
@@ -204,7 +204,7 @@ class JUnitTestExecutorTest {
         val executor = executorFor(source, setOf("a.b.Calc")).also { executors += it }
         val mutant = mutantOf("a.b.Calc")
         val mutated = mutantBytes("package a.b\n$CALC_MUTANT", "a.b.Calc")
-        assertEquals(Outcome.Killed("a.b.CalcTest.adds"), executor.run(mutant, mutated, deadline))
+        assertKilledBy("a.b.CalcTest.adds", executor.run(mutant, mutated, deadline))
         assertEquals(Outcome.Survived, executor.run(mutant, mutantBytes("package a.b\n$CALC", "a.b.Calc"), deadline))
     }
 
@@ -217,7 +217,7 @@ class JUnitTestExecutorTest {
             val killed = pool.submit<Outcome> { start.await().let { executor.runMutant() } }
             val survived = pool.submit<Outcome> { start.await().let { executor.runMutant(mutantBytes(CALC)) } }
             start.countDown()
-            assertEquals(Outcome.Killed("CalcTest.adds"), killed.get(60, TimeUnit.SECONDS))
+            assertKilledBy("CalcTest.adds", killed.get(60, TimeUnit.SECONDS))
             assertEquals(Outcome.Survived, survived.get(60, TimeUnit.SECONDS))
         } finally {
             pool.shutdownNow()
@@ -242,19 +242,19 @@ class JUnitTestExecutorTest {
 
     @Test
     fun `excluded tags skip the killing test, so the mutant survives`() {
-        assertEquals(Outcome.Killed("CalcTest.adds"), filtered().runMutant())
+        assertKilledBy("CalcTest.adds", filtered().runMutant())
         assertEquals(Outcome.Survived, filtered(exclude = listOf("fast")).runMutant())
     }
 
     @Test
     fun `included tags run only the matching tests`() {
-        assertEquals(Outcome.Killed("CalcTest.adds"), filtered(include = listOf("fast")).runMutant())
+        assertKilledBy("CalcTest.adds", filtered(include = listOf("fast")).runMutant())
         assertEquals(Outcome.NoTests, filtered(include = listOf("slow")).runMutant())
     }
 
     @Test
     fun `an engine missing from the classpath fails the run`() {
-        val error = assertThrows<JUnitException> { filtered(engines = listOf("junit-vintage")).runMutant() }
+        val error = assertThrows<JUnitException> { filtered(engines = listOf("junit-platform-suite")).runMutant() }
         assertTrue("No TestEngine ID matched" in error.message.orEmpty(), error.message)
     }
 
