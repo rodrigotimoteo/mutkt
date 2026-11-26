@@ -49,10 +49,19 @@ internal fun stallAgentJar(target: Path): Path {
             }
         }
         """.trimIndent()
+    return writeJar(target, compileKotlin(source), mapOf("Premain-Class" to "StallAgent"))
+}
+
+/** Writes [classes] (bytes by binary name) as a jar at [target] with [attributes] in its manifest. */
+internal fun writeJar(
+    target: Path,
+    classes: Map<String, ByteArray>,
+    attributes: Map<String, String> = emptyMap(),
+): Path {
     val manifest = Manifest().apply { mainAttributes[Attributes.Name.MANIFEST_VERSION] = "1.0" }
-    manifest.mainAttributes.putValue("Premain-Class", "StallAgent")
+    attributes.forEach(manifest.mainAttributes::putValue)
     JarOutputStream(Files.newOutputStream(target), manifest).use { jar ->
-        compileKotlin(source).forEach { (name, bytes) ->
+        classes.forEach { (name, bytes) ->
             jar.putNextEntry(JarEntry(name.replace('.', '/') + ".class"))
             jar.write(bytes)
             jar.closeEntry()

@@ -15,18 +15,22 @@ import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.zip.ZipFile
 import kotlin.time.Duration
 
 private const val FORK_MAIN = "com.github.rodrigotimoteo.mutkt.junit.fork.ForkMain"
 private const val MAX_START_FAILURES = 3
 private const val SHUTDOWN_WAIT_NANOS = 5_000_000_000L
 private const val CLOSED = "ForkedTestExecutor is closed"
+private const val ROBOLECTRIC_MARKER = "org/robolectric/internal/SandboxManager.class"
 
 /**
  * Runs mutants in a pool of child JVMs (ADR 0008), at most `parallelism` at a time; each child serves one mutant
  * at a time and is reused. A child that times out is killed and replaced, which is what stops an endless loop.
  * A child that dies once the tests started is a kill by the mutant and is replaced (ADR 0002); one that dies
  * before, or cannot start, makes [run] throw with its exit code and last stderr lines.
+ * With Robolectric on the classpath no child is reused: it caches its sandbox, and the instrumented project classes
+ * it read through the first run's class loader, in JVM-wide statics with no reset API, so later runs would test them.
  */
 public class ForkedTestExecutor(
     private val settings: ForkSettings,
@@ -89,7 +93,7 @@ public class ForkedTestExecutor(
         try {
             val outcome = child.exchange(request, context, timeoutMillis, settings.graceMillis, settings.prepareMillis)
             // A child that timed out may still be running the abandoned mutant thread; one that died is replaced.
-            reusable = outcome.outcome != Outcome.Timeout && child.isAlive
+            reusable = reuseChildren && outcome.outcome != Outcome.Timeout && child.isAlive
             return outcome
         } finally {
             if (reusable) idle.push(child)
@@ -162,6 +166,8 @@ public class ForkedTestExecutor(
                 listOf("-cp", classpath.joinToString(File.pathSeparator), FORK_MAIN, startup.value.toString())
         }
 
+    private val reuseChildren by lazy { settings.classpath.none(::hasRobolectric) }
+
     private val classpath by lazy {
         engineClasspathFor(settings.engineClasspath ?: derivedEngineClasspath(), settings.classpath)
     }
@@ -177,3 +183,12 @@ public class ForkedTestExecutor(
         return Files.write(Files.createTempDirectory("mutkt-fork").resolve("startup.properties"), lines)
     }
 }
+
+// Only jars and directories can hold classes; other entries (a missing directory, a stray file) are skipped.
+private fun hasRobolectric(entry: Path): Boolean =
+    when {
+        Files.isDirectory(entry) -> Files.isRegularFile(entry.resolve(ROBOLECTRIC_MARKER))
+        Files.isRegularFile(entry) && entry.toString().endsWith(".jar") ->
+            ZipFile(entry.toFile()).use { it.getEntry(ROBOLECTRIC_MARKER) != null }
+        else -> false
+    }

@@ -5,6 +5,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 ## [Unreleased]
 
 - Gradle 9 support: the plugin is tested on Gradle 8.10, 8.14.3 and 9.9.2. On Gradle 9, declare `testRuntimeOnly("org.junit.platform:junit-platform-launcher")`, because Gradle no longer adds it.
+- Fixed: Robolectric tests no longer see a stale class. Robolectric caches the project classes it loaded in JVM-wide statics, so a reused test JVM gave later mutants the first class it loaded and counts changed from run to run. With Robolectric on the test classpath each mutant now gets its own test JVM.
 
 ## [0.4.0] - 2026-11-26
 
