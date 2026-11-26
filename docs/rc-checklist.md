@@ -36,13 +36,13 @@ done
 
 | Item | How it is verified | State |
 |---|---|---|
-| Secrets `GPG_SIGNING_KEY`, `GPG_SIGNING_PASSWORD`, `SONATYPE_USERNAME`, `SONATYPE_PASSWORD` | Repository settings, Secrets (see [release.md](release.md#secrets-to-be-configured-by-the-owner)); Central namespace verified; public key on `keys.openpgp.org` | **OWNER** |
-| Secrets `GRADLE_PUBLISH_KEY`, `GRADLE_PUBLISH_SECRET` | Repository settings, Secrets | **OWNER** |
-| `release` environment with required reviewers | Settings, Environments | **OWNER** |
-| `v*` tag protection | Settings, Rules | **OWNER** |
-| GitHub private vulnerability reporting enabled (the channel `SECURITY.md` names) | Settings, Code security | **OWNER** |
-| Tag `v0.4.0-rc.1` pushed on a commit that passed CI; release run approved | `release.yml` run: Central, Plugin Portal, GitHub release | **OWNER** |
-| Public consumer verification | The local rehearsal repeated after publication: a clean external project, fresh dependency cache, the documented public repositories only, both scenarios. Keep the release run link, coordinates, build output and report summaries in `docs/rc-evidence/`; record any stage still unresolved after propagation | **OWNER** (after publication) |
+| Secrets `GPG_SIGNING_KEY`, `GPG_SIGNING_PASSWORD`, `SONATYPE_USERNAME`, `SONATYPE_PASSWORD` | Repository settings, Secrets (see [release.md](release.md#secrets-to-be-configured-by-the-owner)); Central namespace verified; public key on `keys.openpgp.org` | Done: the rc.1 release signed and published to Central |
+| Secrets `GRADLE_PUBLISH_KEY`, `GRADLE_PUBLISH_SECRET` | Repository settings, Secrets | Set; first used by the next tag (see ROD-206) |
+| `release` environment | Settings, Environments | Done: deployments limited to `v*` tags; no required reviewers (single maintainer) |
+| `v*` tag protection | Settings, Rules | Done: ruleset "Protect release tags" blocks deleting or moving `v*` tags |
+| GitHub private vulnerability reporting enabled (the channel `SECURITY.md` names) | Settings, Code security | Done |
+| Tag `v0.4.0-rc.1` pushed on a commit that passed CI; release run approved | `release.yml` run: Central, Plugin Portal, GitHub release | Done: [run 45780375244](https://github.com/rodrigotimoteo/mutkt/actions/runs/45780375244) on `6b39540`; Central and GitHub pre-release published. The Plugin Portal upload was skipped by a faulty check (ROD-206, fixed); the Portal still serves the plugin by redirecting to Central |
+| Public consumer verification | The local rehearsal repeated after publication: a clean external project, fresh dependency cache, the documented public repositories only, both scenarios. Keep the release run link, coordinates, build output and report summaries in `docs/rc-evidence/`; record any stage still unresolved after propagation | Green: [rc-evidence/public-consumer-check.md](rc-evidence/public-consumer-check.md), both scenarios match their predictions |
 
 ## Findings
 
