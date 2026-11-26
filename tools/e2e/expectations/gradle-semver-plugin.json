@@ -1,7 +1,7 @@
 {
   "mutants": {
-    "min": 60,
-    "max": 240
+    "min": 150,
+    "max": 400
   },
   "score": {
     "min": 0.05,
