@@ -1,0 +1,56 @@
+{
+  "repos": [
+    {
+      "name": "fixture-pass",
+      "url": "@FIXTURE_URL@",
+      "commit": "@FIXTURE_COMMIT@",
+      "type": "jvm-lib",
+      "module": ":lib",
+      "variant": null,
+      "jdk": 17,
+      "gradle": "8.10",
+      "agp": null,
+      "kotlin": "2.1.10",
+      "dsl": "kts",
+      "tests": [
+        "jupiter"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.example.**"
+        ],
+        "threads": 2,
+        "timeoutMs": null
+      },
+      "why": "Self-test: expectations that hold"
+    },
+    {
+      "name": "fixture-fail",
+      "url": "@FIXTURE_URL@",
+      "commit": "@FIXTURE_COMMIT@",
+      "type": "jvm-lib",
+      "module": ":lib",
+      "variant": null,
+      "jdk": 17,
+      "gradle": "8.10",
+      "agp": null,
+      "kotlin": "2.1.10",
+      "dsl": "kts",
+      "tests": [
+        "jupiter"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.example.**"
+        ],
+        "threads": 2,
+        "timeoutMs": null
+      },
+      "why": "Self-test: expectations that must fail"
+    }
+  ]
+}
