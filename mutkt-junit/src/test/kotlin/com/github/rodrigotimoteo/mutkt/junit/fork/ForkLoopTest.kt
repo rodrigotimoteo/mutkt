@@ -8,6 +8,7 @@ import com.github.rodrigotimoteo.mutkt.junit.JUnitTestExecutor
 import com.github.rodrigotimoteo.mutkt.junit.executorFor
 import com.github.rodrigotimoteo.mutkt.junit.mutantBytes
 import com.github.rodrigotimoteo.mutkt.junit.mutantOf
+import com.github.rodrigotimoteo.mutkt.junit.withoutCause
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -25,8 +26,6 @@ class ForkLoopTest {
     @AfterEach
     fun closeExecutors() = executors.forEach { it.close() }
 
-    private val killed =
-        Outcome.Killed("CalcTest.adds", "org.opentest4j.AssertionFailedError: expected: <5> but was: <-1>")
     private val addsTest = "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
 
     private fun executor() = executorFor("$IMPORTS$CALC\n$addsTest").also { executors += it }
@@ -46,14 +45,14 @@ class ForkLoopTest {
         val stream = DataInputStream(ByteArrayInputStream(buffer.toByteArray()))
         // Elapsed times vary; the baseline's own is checked through the executor.
         return generateSequence { readReply(stream) }
-            .map { (it as? ForkReply.Result)?.copy(elapsedMillis = 0) ?: it }
+            .map { if (it is ForkReply.Result) it.copy(outcome = it.outcome.withoutCause(), elapsedMillis = 0) else it }
             .toList()
     }
 
     @Test
     fun `announces readiness, then answers a killed mutant`() {
         assertEquals(
-            listOf(ForkReply.Ready(), ForkReply.Started, ForkReply.Result(killed, 0)),
+            listOf(ForkReply.Ready(), ForkReply.Started, ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0)),
             replies(run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )
     }
@@ -66,7 +65,7 @@ class ForkLoopTest {
                 ForkReply.Started,
                 ForkReply.Result(Outcome.Survived, 0),
                 ForkReply.Started,
-                ForkReply.Result(killed, 0),
+                ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0),
             ),
             replies(run(mutantBytes(CALC)), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )
@@ -80,7 +79,7 @@ class ForkLoopTest {
                 ForkReply.Started,
                 ForkReply.Result(Outcome.Survived, 0),
                 ForkReply.Started,
-                ForkReply.Result(killed, 0),
+                ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0),
             ),
             replies(ForkRequest.Baseline(10_000), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )

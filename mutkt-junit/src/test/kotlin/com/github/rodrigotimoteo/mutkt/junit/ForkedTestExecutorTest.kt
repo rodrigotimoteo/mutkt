@@ -84,7 +84,7 @@ class ForkedTestExecutorTest {
         assertTrue("no Started within $PREPARE ms" in error.message.orEmpty(), error.message)
         assertTrue(pool.liveProcesses.isEmpty())
 
-        assertEquals(KILLED, pool.run(mutantBytes()))
+        assertKilledBy("CalcTest.adds", pool.run(mutantBytes()))
         assertEquals(2, pool.startedChildren)
     }
 
@@ -109,7 +109,7 @@ class ForkedTestExecutorTest {
         assertEquals(Outcome.Timeout, pool.run(SPIN, (PREPARE + 1000).milliseconds))
         assertTrue(pool.liveProcesses.isEmpty())
 
-        assertEquals(KILLED, pool.run(mutantBytes()))
+        assertKilledBy("CalcTest.adds", pool.run(mutantBytes()))
         assertEquals(2, pool.startedChildren)
     }
 
@@ -192,7 +192,15 @@ class ForkedTestExecutorTest {
                 (0 until 4)
                     .map { i -> threads.submit(Callable { pool.run(if (i % 2 == 0) SLOW_SURVIVES else SLOW_KILLED) }) }
                     .map { it.get(90, TimeUnit.SECONDS) }
-            assertEquals(listOf(Outcome.Survived, KILLED, Outcome.Survived, KILLED), results)
+            assertEquals(
+                listOf(
+                    Outcome.Survived,
+                    Outcome.Killed("CalcTest.adds"),
+                    Outcome.Survived,
+                    Outcome.Killed("CalcTest.adds"),
+                ),
+                results.map { it.withoutCause() },
+            )
             assertEquals(2, peak.get())
             assertEquals(2, pool.startedChildren)
         } finally {
@@ -325,8 +333,6 @@ class ForkedTestExecutorTest {
             mutantBytes("class Calc { fun add(a: Int, b: Int): Int { Thread.sleep(500); return $body } }")
 
         val LONG = 60.seconds
-        val KILLED =
-            Outcome.Killed("CalcTest.adds", "org.opentest4j.AssertionFailedError: expected: <5> but was: <-1>")
         val javaBinary: Path = Path.of(System.getProperty("java.home"), "bin", "java")
         const val CALC_TEST = "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
 

@@ -80,4 +80,7 @@ internal const val IMPORTS =
 internal fun assertKilledBy(
     by: String,
     outcome: Outcome,
-) = assertEquals(by, (outcome as? Outcome.Killed)?.by)
+) = assertEquals(by, (outcome as? Outcome.Killed)?.by, "$outcome")
+
+// Lists compare without the cause, which is asserted where it is the point of the test.
+internal fun Outcome.withoutCause(): Outcome = if (this is Outcome.Killed) copy(cause = null) else this

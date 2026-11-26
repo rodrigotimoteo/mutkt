@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.junit
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -46,6 +47,7 @@ class JUnitTestExecutorBaselineTest {
         assertEquals(200, cause.length)
         assertTrue(cause.startsWith("java.lang.IllegalStateException: x x"), cause)
         assertTrue(cause.endsWith("…"), cause)
+        assertFalse('\n' in cause, cause)
     }
 
     @Test

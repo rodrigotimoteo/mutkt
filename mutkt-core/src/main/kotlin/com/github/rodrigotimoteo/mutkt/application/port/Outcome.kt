@@ -5,7 +5,7 @@ public sealed interface Outcome {
     /** A test failed; [by] names the first failure observed: class and method, plus the invocation when known. */
     public data class Killed(
         val by: String,
-        /** The first failure's `toString()` on one line, capped; null when no failure was observed. */
+        /** The first failure's `toString()` on one line, capped; null when a child process died. */
         val cause: String? = null,
     ) : Outcome
 
