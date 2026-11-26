@@ -129,10 +129,14 @@ class MutKtAndroidVariantTest {
         text: String,
     ) = dir.resolve(path).apply { parentFile.mkdirs() }.writeText(text)
 
+    private fun androidUserHome() = dir.resolve(".android").apply { resolve("cache").mkdirs() }
+
     private fun runner(task: String = "help") =
         GradleRunner
             .create()
             .withProjectDir(dir)
+            // AGP 8 creates its user home's cache in the first build, which the configuration cache sees as a change.
+            .withEnvironment(System.getenv() + ("ANDROID_USER_HOME" to androidUserHome().absolutePath))
             .withGradleVersion(GRADLE_VERSION)
             .withArguments(task, "--configuration-cache", "--console=plain", "--stacktrace", "--warning-mode=fail")
 
