@@ -42,6 +42,12 @@ internal class UnresolvedTypeException(
     type: String,
 ) : IllegalStateException("cannot resolve ${type.replace('/', '.')} to compute stack frames")
 
+/** The analysed [classes] (bytes by binary name) first, then [classpath] (by internal name). */
+internal fun hierarchyOf(
+    classes: Map<String, ByteArray>,
+    classpath: (String) -> ByteArray?,
+): Hierarchy = { type -> classes[type.replace('/', '.')] ?: classpath(type) }
+
 /** A hierarchy that knows no class, so only JDK types resolve. */
 internal val NoClasses: Hierarchy = { null }
 

@@ -1,6 +1,10 @@
 package com.github.rodrigotimoteo.mutkt.testing
 
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotSame
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.objectweb.asm.Opcodes.BIPUSH
@@ -38,7 +42,29 @@ class LoadedClassTest {
         assertThrows<NoSuchMethodException> { loadAndInvoke(classes, "p.SourceKt", "missing") }
     }
 
+    @Test
+    fun `calls and probe reads share one loader`() {
+        val loaded = IsolatedClasses(classes)
+
+        assertNull(loaded.probes("p.P", "hits"))
+        loaded.invoke("p.SourceKt", "mark")
+
+        assertArrayEquals(booleanArrayOf(true, false), loaded.probes("p.P", "hits"))
+        assertNull(IsolatedClasses(classes).probes("p.P", "hits"))
+        assertSame(loaded.type("p.P"), loaded.type("p.P"))
+        assertNotSame(loaded.type("p.P"), IsolatedClasses(classes).type("p.P"))
+    }
+
     private companion object {
-        val classes = compileKotlin("package p\nfun boom(): Int = error(\"boom\")\nfun one() = 1")
+        val classes =
+            compileKotlin(
+                """
+                package p
+                fun boom(): Int = error("boom")
+                fun one() = 1
+                object P { private var hits: BooleanArray? = null; fun mark() { hits = booleanArrayOf(true, false) } }
+                fun mark() = P.mark()
+                """.trimIndent(),
+            )
     }
 }
