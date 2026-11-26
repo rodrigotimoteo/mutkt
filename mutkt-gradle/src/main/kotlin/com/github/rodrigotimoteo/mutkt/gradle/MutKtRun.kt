@@ -114,33 +114,3 @@ private fun MutKtTask.projectClasses(production: Path): Path {
     checkNoSharedClasses(classesDirs.files, support)
     return stage(classesDirs.files + support, File(temporaryDir, "project-classes"))
 }
-
-// A support class would silently replace the main class of the same name in the child JVMs: a broken build.
-private fun checkNoSharedClasses(
-    main: Set<File>,
-    support: Set<File>,
-) {
-    val shared = classNames(main).intersect(classNames(support))
-    if (shared.isNotEmpty()) {
-        throw GradleException(
-            "Classes defined both in main and in another source set on the test classpath: " +
-                shared.sorted().joinToString(),
-        )
-    }
-}
-
-private fun classNames(dirs: Set<File>): Set<String> =
-    dirs.filter(File::isDirectory).flatMapTo(mutableSetOf()) { root ->
-        root.walk().filter { it.isFile && it.extension == "class" }.map { it.relativeTo(root).invariantSeparatorsPath }
-    }
-
-// Several class directories (Kotlin and Java output) become one, because the fork reads a single root per side.
-private fun stage(
-    dirs: Set<File>,
-    into: File,
-): Path {
-    into.deleteRecursively()
-    into.mkdirs()
-    dirs.filter(File::isDirectory).forEach { it.copyRecursively(into, overwrite = true) }
-    return into.toPath()
-}

@@ -88,6 +88,8 @@ val agpTest by tasks.registering(Test::class) {
     classpath = tasks.test.get().classpath
     useJUnitPlatform { includeTags("agp") }
     systemProperty("mutkt.agpVersion", libs.versions.agp.get())
+    // The Kotlin Android plugin of the scenario that mutates a Kotlin class.
+    systemProperty("mutkt.kotlinVersion", libs.versions.kotlin.get())
     // AGP 8.4's minimum Gradle.
     systemProperty("mutkt.agpGradleVersion", "8.6")
     // Run only on request, so a missing SDK is an error rather than a silent pass.
@@ -106,6 +108,14 @@ kover {
     currentProject {
         instrumentation {
             disabledForTestTasks.addAll("matrixTest", "agpTest")
+        }
+    }
+    reports {
+        filters {
+            excludes {
+                // Covered by agpTest, which needs an Android SDK and runs in its own CI job (ROD-217).
+                classes("com.github.rodrigotimoteo.mutkt.gradle.MutKtAndroid*")
+            }
         }
     }
 }
