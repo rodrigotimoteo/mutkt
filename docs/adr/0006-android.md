@@ -96,7 +96,7 @@ Instrumented tests (`connectedAndroidTest`, devices, emulators) are out of scope
 | latest 8.x | 8.13.2 | 8.14.3 | 17 |
 | latest | 9.5.3 | 9.6.0 | 17, 21 |
 
-A dedicated CI job installs the Android SDK and runs `agpTest` on these cells. ROD-129 runs the sample on `min` and `latest`. The `latest` row moves with each stable AGP; `min` moves only through a new ADR.
+A dedicated CI job (`android`) runs `agpTest` on these cells with the runner's Android SDK, passing `-Pmutkt.agp` and `-Pmutkt.agpGradle` (defaults: the `min` cell). ROD-129 runs the sample on `min` and `latest`. The `latest` row moves with each stable AGP; `min` moves only through a new ADR.
 
 ## Consequences
 

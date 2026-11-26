@@ -82,16 +82,17 @@ val matrixTest by tasks.registering(Test::class) {
 
 // Android builds on real AGP; needs ANDROID_HOME and the network (google()), so it is not in check.
 val agpTest by tasks.registering(Test::class) {
-    description = "Runs the Android TestKit scenarios on the minimum AGP and its minimum Gradle."
+    description = "Runs the Android TestKit scenarios on -Pmutkt.agp and -Pmutkt.agpGradle (default: minimum AGP)."
     group = "verification"
     testClassesDirs = tasks.test.get().testClassesDirs
     classpath = tasks.test.get().classpath
     useJUnitPlatform { includeTags("agp") }
-    systemProperty("mutkt.agpVersion", libs.versions.agp.get())
+    // Read at configuration, so a new cell is a new task input rather than an up-to-date skip.
+    systemProperty("mutkt.agpVersion", providers.gradleProperty("mutkt.agp").getOrElse(libs.versions.agp.get()))
     // The Kotlin Android plugin of the scenario that mutates a Kotlin class.
     systemProperty("mutkt.kotlinVersion", libs.versions.kotlin.get())
     // AGP 8.4's minimum Gradle.
-    systemProperty("mutkt.agpGradleVersion", "8.6")
+    systemProperty("mutkt.agpGradleVersion", providers.gradleProperty("mutkt.agpGradle").getOrElse("8.6"))
     // Run only on request, so a missing SDK is an error rather than a silent pass.
     val androidHome = providers.environmentVariable("ANDROID_HOME")
     doFirst {

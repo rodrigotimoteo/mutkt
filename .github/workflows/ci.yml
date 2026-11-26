@@ -142,6 +142,38 @@ jobs:
           name: test-reports-platform-compat
           path: mutkt-junit/build/reports/tests/platformCompatTest/
 
+  android:
+    name: Android (AGP ${{ matrix.agp }} on Gradle ${{ matrix.gradle }}, JDK ${{ matrix.java }})
+    needs: [lint]
+    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/rebuild/') || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      # The cells of docs/adr/0006-android.md; the runner image ships the Android SDK at ANDROID_HOME.
+      matrix:
+        include:
+          - { agp: 8.4.2, gradle: "8.6", java: 17 }
+          - { agp: 8.4.2, gradle: "8.6", java: 21 }
+          - { agp: 8.13.2, gradle: 8.14.3, java: 17 }
+          - { agp: 9.5.3, gradle: 9.6.0, java: 17 }
+          - { agp: 9.5.3, gradle: 9.6.0, java: 21 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+      - name: Android TestKit scenarios
+        run: ./gradlew :mutkt-gradle:agpTest -Pmutkt.agp=${{ matrix.agp }} -Pmutkt.agpGradle=${{ matrix.gradle }}
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: test-reports-android-agp${{ matrix.agp }}-jdk${{ matrix.java }}
+          path: mutkt-gradle/build/reports/tests/agpTest/
+
   dogfood:
     name: Mutation score of MutKt on itself
     needs: [lint]
