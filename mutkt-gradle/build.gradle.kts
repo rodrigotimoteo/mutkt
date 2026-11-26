@@ -75,9 +75,8 @@ val matrixTest by tasks.registering(Test::class) {
     testClassesDirs = tasks.test.get().testClassesDirs
     classpath = tasks.test.get().classpath
     useJUnitPlatform { includeTags("matrix") }
-    val versions = providers.gradleProperty("mutkt.gradleVersions").orElse("8.14.3")
-    // Test.systemProperty does not resolve providers, so the value is read when the JVM arguments are built.
-    jvmArgumentProviders.add(CommandLineArgumentProvider { listOf("-Dmutkt.gradleVersions=${versions.get()}") })
+    // Read at configuration, so a new version list is a new task input rather than an up-to-date skip.
+    systemProperty("mutkt.gradleVersions", providers.gradleProperty("mutkt.gradleVersions").getOrElse("8.14.3"))
 }
 
 // Android builds on real AGP; needs ANDROID_HOME and the network (google()), so it is not in check.
