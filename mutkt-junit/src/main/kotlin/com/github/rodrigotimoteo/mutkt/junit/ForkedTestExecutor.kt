@@ -105,16 +105,19 @@ public class ForkedTestExecutor(
     // Only idle children get a Shutdown frame: a busy child's stream belongs to its running thread, so it is killed.
     override fun close() {
         synchronized(lock) { closed = true }
-        val pooled = generateSequence { idle.poll() }.toList()
-        pooled.forEach(ChildProcess::requestShutdown)
-        val limit = System.nanoTime() + SHUTDOWN_WAIT_NANOS
-        pooled.forEach { it.process.waitFor(maxOf(0, limit - System.nanoTime()), TimeUnit.NANOSECONDS) }
-        children.toList().forEach(::discard)
-        synchronized(lock) {
-            if (startup.isInitialized()) {
-                startup.value.parent
-                    .toFile()
-                    .deleteRecursively()
+        try {
+            val pooled = generateSequence { idle.poll() }.toList()
+            pooled.forEach(ChildProcess::requestShutdown)
+            val limit = System.nanoTime() + SHUTDOWN_WAIT_NANOS
+            pooled.forEach { it.process.waitFor(maxOf(0, limit - System.nanoTime()), TimeUnit.NANOSECONDS) }
+            children.toList().forEach(::discard)
+        } finally {
+            synchronized(lock) {
+                if (startup.isInitialized()) {
+                    startup.value.parent
+                        .toFile()
+                        .deleteRecursively()
+                }
             }
         }
     }

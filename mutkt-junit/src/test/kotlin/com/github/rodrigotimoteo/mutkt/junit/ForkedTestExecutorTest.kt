@@ -27,11 +27,12 @@ class ForkedTestExecutorTest {
     @TempDir
     lateinit var dir: Path
 
-    private var executor: ForkedTestExecutor? = null
+    // Every executor a test makes, so none leaves its children or startup directory behind.
+    private val executors = mutableListOf<ForkedTestExecutor>()
 
     @AfterEach
-    fun closeExecutor() {
-        executor?.close()
+    fun closeExecutors() {
+        executors.forEach(ForkedTestExecutor::close)
     }
 
     private fun executor(
@@ -40,7 +41,7 @@ class ForkedTestExecutorTest {
         tweak: (ForkSettings) -> ForkSettings = { it },
     ): ForkedTestExecutor {
         val settings = forkSettingsFor(dir, testSource, parallelism = parallelism)
-        return ForkedTestExecutor(tweak(settings)).also { executor = it }
+        return ForkedTestExecutor(tweak(settings)).also { executors += it }
     }
 
     private fun ForkedTestExecutor.run(
