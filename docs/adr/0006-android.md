@@ -61,7 +61,7 @@ Other:
 - The JVM rule "needs java or kotlin-jvm" accepts Android projects, because AGP's `BasePlugin` applies `JavaBasePlugin` (checked in 9.5.3). Its message must name Android.
 - `Test` values are read through `providers.provider { tasks.named(name, Test).get() }`, never `TaskProvider.map`, which would make `mutkt` run the unit tests.
 - The task holds only file collections, providers and plain values. No `Project`, `Variant` or AGP object reaches a task action, so configuration-cache entries store resolved files like the JVM path. ROD-126 runs its TestKit test with `--configuration-cache` twice (store, then reuse).
-- Class swapping: the variant's classes reach the unit-test classpath as AGP-chosen dirs or jars, not always the `toGet` entries. The staged production directory stays first on the child classpath, so a mutant shadows the original. ROD-126 tests a library variant, whose classes reach the test classpath as a jar.
+- Class swapping: the variant's classes reach the unit-test classpath as AGP-chosen dirs or jars, not always the `toGet` entries. The staged production directory stays first on the child classpath, so a mutant shadows the original. ROD-126 tests a library variant, whose classes reach the test classpath as a jar; ROD-127 tests an app variant, whose classes reach it as a jar too (`runtime_app_classes_jar`), next to an Android library module and an AAR from google().
 
 ## Scope of P5
 

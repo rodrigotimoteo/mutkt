@@ -101,6 +101,32 @@ class MutKtAndroidVariantTest {
     }
 
     @Test
+    fun `an app mutant is killed by tests that need an Android library module and an AAR, and the library runs too`() {
+        write("settings.gradle", "rootProject.name = 'sample'\ninclude 'app', 'lib'\n")
+        write("gradle.properties", "android.useAndroidX=true\n")
+        val plugins = "dependencies {\n${mutktClasspath()}\n${agpClasspath()}\n}"
+        write("build.gradle", "buildscript {\n$REPOSITORIES\n$plugins\n}\n")
+        write("lib/build.gradle", library("", MODULE_DSL, namespace = "demo.lib"))
+        write("lib/src/main/java/demo/lib/Base.java", BASE)
+        write("lib/src/test/java/demo/lib/BaseTest.java", BASE_TEST)
+        write("app/build.gradle", library("", APP_DSL, "com.android.application", "demo.app"))
+        write("app/src/main/AndroidManifest.xml", "<manifest />\n")
+        write("app/src/main/java/demo/app/Score.java", SCORE)
+        write("app/src/test/java/demo/app/ScoreTest.java", SCORE_TEST)
+
+        val result = runner("mutkt").build()
+
+        // The app's original classes are on its unit-test classpath as a jar, so the kill also shows the mutant wins.
+        assertEquals(TaskOutcome.SUCCESS, result.task(":app:mutkt")?.outcome, result.output)
+        val app = dir.resolve("app/build/reports/mutkt/mutkt.txt").readText()
+        assertTrue("Mutants: 1" in app && "KILLED       1" in app, app)
+        val appJson = dir.resolve("app/build/reports/mutkt/mutation-report.json").readText()
+        assertTrue("\"demo/app/Score.java\"" in appJson && "demo/lib" !in appJson, appJson)
+        val lib = dir.resolve("lib/build/reports/mutkt/mutkt.txt").readText()
+        assertTrue("Mutants: 1" in lib && "KILLED       1" in lib, lib)
+    }
+
+    @Test
     fun `AGP in a child scope of MutKt fails with where to declare it`() {
         write("settings.gradle", "rootProject.name = 'sample'\ninclude 'lib'\n")
         write("build.gradle", "buildscript { dependencies { ${mutktClasspath()} } }\n")
@@ -122,6 +148,8 @@ class MutKtAndroidVariantTest {
     private fun library(
         classpath: String,
         dsl: String,
+        plugin: String = "com.android.library",
+        namespace: String = "demo",
     ) = """
         |buildscript {
         |    repositories {
@@ -132,11 +160,11 @@ class MutKtAndroidVariantTest {
         |        $classpath
         |    }
         |}
-        |apply plugin: 'com.android.library'
+        |apply plugin: '$plugin'
         |${if (KGP in classpath && !BUILT_IN_KOTLIN) "apply plugin: 'org.jetbrains.kotlin.android'" else ""}
         |apply plugin: 'io.github.rodrigotimoteo.mutkt'
         |android {
-        |    namespace = 'demo'
+        |    namespace = '$namespace'
         |    compileSdk = 34
         |}
         |$dsl
@@ -186,6 +214,67 @@ class MutKtAndroidVariantTest {
             dependencies { testImplementation files(${TestKitProject(File(".")).jars(JUNIT_JARS)}) }
             mutkt { operators = ['arithmetic', 'conditionals-boundary'] }
             """.trimIndent()
+
+        const val REPOSITORIES = "repositories {\n    google()\n    mavenCentral()\n}"
+
+        // Jupiter from this JVM's jars and the arithmetic operator only, so each module has one mutant.
+        val MODULE_DSL =
+            """
+            $REPOSITORIES
+            android { testOptions { unitTests.all { useJUnitPlatform() } } }
+            dependencies { testImplementation files(${TestKitProject(File(".")).jars(JUNIT_JARS)}) }
+            mutkt { operators = ['arithmetic'] }
+            """.trimIndent()
+
+        // A published AAR from google() (minSdk 19, so the app's default minSdk 1 would fail the manifest merge).
+        val APP_DSL =
+            """
+            $MODULE_DSL
+            android { defaultConfig { minSdk = 21 } }
+            dependencies {
+                implementation project(':lib')
+                implementation 'androidx.annotation:annotation-experimental:1.4.1'
+            }
+            """.trimIndent()
+
+        const val BASE =
+            "package demo.lib;\npublic class Base {\n    public static int times10(int n) { return n * 10; }\n}\n"
+
+        // Score calls the library module and a class from the AAR's classes.jar.
+        val SCORE =
+            """
+            package demo.app;
+
+            import androidx.annotation.RequiresOptIn;
+            import demo.lib.Base;
+
+            public class Score {
+                public String score(int n) { return RequiresOptIn.Level.ERROR.name() + (Base.times10(1) + n); }
+            }
+            """.trimIndent()
+
+        val SCORE_TEST =
+            junitTest("demo.app", "ScoreTest", "Assertions.assertEquals(\"ERROR12\", new Score().score(2));")
+
+        val BASE_TEST = junitTest("demo.lib", "BaseTest", "Assertions.assertEquals(20, Base.times10(2));")
+
+        fun junitTest(
+            pkg: String,
+            name: String,
+            assertion: String,
+        ) = """
+            |package $pkg;
+            |
+            |import org.junit.jupiter.api.Assertions;
+            |import org.junit.jupiter.api.Test;
+            |
+            |public class $name {
+            |    @Test
+            |    void runs() {
+            |        $assertion
+            |    }
+            |}
+            """.trimMargin()
 
         // View binding generates demo.databinding.ActivityMainBinding, whose bind() and getRoot() have mutants.
         val BINDING_DSL =
