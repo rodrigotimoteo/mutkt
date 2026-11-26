@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+- Gradle 9 support: the plugin is tested on Gradle 8.10, 8.14.3 and 9.9.2. On Gradle 9, declare `testRuntimeOnly("org.junit.platform:junit-platform-launcher")`, because Gradle no longer adds it.
+
 ## [0.4.0] - 2026-11-26
 
 MutKt 0.4.0 is a full rebuild: it mutates the compiled `main` bytecode of a Kotlin/JVM or Java project and runs your existing JUnit tests against each mutant, with no test changes. It needs JDK 17 or 21, Gradle 8.10 or a later 8.x, and tests on the JUnit Platform (Jupiter by default, JUnit 4 through the vintage engine). The plugin id is `io.github.rodrigotimoteo.mutkt`, the Maven group `io.github.rodrigotimoteo`, and this is the first version on the Gradle Plugin Portal.

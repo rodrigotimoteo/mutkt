@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- JDK 17 or 21, Gradle 8.10 or a later 8.x.
+- JDK 17 or 21, Gradle 8.10 or later, including 9.x.
 - The `java` or `kotlin("jvm")` plugin; MutKt fails the build without one. Android is not supported.
 - Tests on the JUnit Platform. Jupiter runs by default; JUnit 4 tests need `engines` (see [dsl.md](dsl.md)).
 - A green test suite: MutKt runs it once on the original classes first and stops if anything fails.
@@ -30,7 +30,7 @@ includeBuild("../mutkt")
 
 Then apply `id("io.github.rodrigotimoteo.mutkt")` without a version.
 
-Recommended: put the project's own JUnit Platform launcher on the test runtime classpath, so the mutants run on the same Platform version as your tests:
+Put the project's own JUnit Platform launcher on the test runtime classpath, so the mutants run on the same Platform version as your tests. Gradle 8 adds it to the `test` task only; Gradle 9 does not add it, so a Jupiter project on Gradle 9 must declare it:
 
 ```kotlin
 dependencies {

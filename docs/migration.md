@@ -80,4 +80,4 @@ ADR 0004: no JUnit extension API and no runner module. Existing tests run unchan
 - **Java agents.** As in 0.3.x, the `test` task's `-javaagent` arguments reach the test runs, so mocking agents (MockK, Mockito inline) keep working; coverage agents (JaCoCo, Kover) are now dropped. MockK's `mockkStatic("name")` string form cannot find project classes; use `mockkStatic(Type::class)`. See the [FAQ](faq.md#do-mocking-libraries-work).
 - **Baseline run.** The selected tests run once on the original classes first; a red baseline fails the task before any mutant is scored.
 - **Reports.** Console summary, `mutkt.txt`, `mutation-report.html` and Stryker-schema `mutation-report.json` in `build/reports/mutkt/` (ADR 0003); the CSV, XML and graph formats are gone.
-- **Gradle.** The task is up to date when nothing changed and supports the configuration cache. Requires JDK 17 or 21 and Gradle 8.x.
+- **Gradle.** The task is up to date when nothing changed and supports the configuration cache. Requires JDK 17 or 21 and Gradle 8.10 or later, including 9.x.
