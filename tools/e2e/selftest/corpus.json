@@ -1,6 +1,32 @@
 {
   "repos": [
     {
+      "name": "fixture-broken",
+      "url": "@FIXTURE_URL@",
+      "commit": "@FIXTURE_COMMIT@",
+      "type": "jvm-lib",
+      "module": ":lib",
+      "variant": null,
+      "jdk": 17,
+      "gradle": "8.10",
+      "agp": null,
+      "kotlin": "2.1.10",
+      "dsl": "kts",
+      "tests": [
+        "jupiter"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.example.**"
+        ],
+        "threads": 2,
+        "timeoutMs": null
+      },
+      "why": "Self-test: a build that fails (no gradleArgs) must not stop the next repo"
+    },
+    {
       "name": "fixture-pass",
       "url": "@FIXTURE_URL@",
       "commit": "@FIXTURE_COMMIT@",
@@ -57,6 +83,36 @@
         "timeoutMs": null
       },
       "why": "Self-test: expectations that must fail"
+    },
+    {
+      "name": "fixture-leak",
+      "url": "@FIXTURE_URL@",
+      "commit": "@FIXTURE_COMMIT@",
+      "type": "jvm-lib",
+      "module": ":lib",
+      "variant": null,
+      "jdk": 17,
+      "gradle": "8.10",
+      "agp": null,
+      "kotlin": "2.1.10",
+      "dsl": "kts",
+      "tests": [
+        "jupiter"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "gradleArgs": [
+        "-Pe2eSelftest=unused",
+        "-Pe2eScanLeak=true"
+      ],
+      "mutkt": {
+        "targetClasses": [
+          "com.example.**"
+        ],
+        "threads": 2,
+        "timeoutMs": null
+      },
+      "why": "Self-test: a log that shows a build scan upload must fail"
     }
   ]
 }

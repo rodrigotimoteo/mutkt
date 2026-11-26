@@ -50,9 +50,17 @@ run_repo() {
   args_text=$(json gradle-args "$corpus" "$name" 2>&1) || { echo "FAIL $args_text"; return; }
   [[ -z $args_text ]] || while IFS= read -r arg; do gradle_args+=("$arg"); done <<<"$args_text"
   java_home=$(/usr/libexec/java_home -v "$jdk" 2>/dev/null) || { echo "FAIL no JDK $jdk installed"; return; }
-  if ! JAVA_HOME=$java_home "$dir/gradlew" -p "$dir" --init-script "$e2e/mutkt-e2e.init.gradle" \
+  # --no-scan is the only switch that beats a build's own publishing.onlyIf { true }: Develocity ORs every onlyIf.
+  local built=true
+  JAVA_HOME=$java_home "$dir/gradlew" -p "$dir" --no-scan --init-script "$e2e/mutkt-e2e.init.gradle" \
     "-Dmutkt.e2e.repo=file://$local_repo" "-Dmutkt.e2e.entry=$cache/logs/$name.entry.json" \
-    ${gradle_args[@]+"${gradle_args[@]}"} "$task" >>"$log" 2>&1; then
+    ${gradle_args[@]+"${gradle_args[@]}"} "$task" >>"$log" 2>&1 || built=false
+  # Scans carry the user name, host name and paths: one that got out anyway must not go unnoticed.
+  if grep -Eq 'Publishing build scan|gradle\.com/s/' "$log"; then
+    echo "FAIL build scan published: delete it at the URL in the log (log: $log)"
+    return
+  fi
+  if [[ $built == false ]]; then
     echo "FAIL $task failed (log: $log)"
     grep -q 'MutKt cannot load the Android Gradle plugin' "$log" && echo "  AGP is not visible to MutKt: use patch mode"
     return
@@ -65,7 +73,11 @@ run_repo() {
 results=()
 while IFS=$'\t' read -r name url commit module jdk apply patch; do
   echo "Running $name ($module at ${commit:0:12})"
-  results+=("$name"$'\t'"$(run_repo "$name" "$url" "$commit" "$module" "$jdk" "$apply" "$patch")")
+  # A repo that fails, even with a non-zero status, is a FAIL row: the loop goes on to the next repo.
+  if ! outcome=$(run_repo "$name" "$url" "$commit" "$module" "$jdk" "$apply" "$patch"); then
+    [[ $outcome == FAIL* ]] || outcome="FAIL runner stopped: ${outcome:-no output}"
+  fi
+  results+=("$name"$'\t'"$outcome")
 done <<<"$fields"
 
 status=0

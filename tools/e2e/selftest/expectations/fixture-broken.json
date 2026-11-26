@@ -1,0 +1,29 @@
+{
+  "mutants": {
+    "min": 3,
+    "max": 6
+  },
+  "score": {
+    "min": 0.7,
+    "max": 0.8
+  },
+  "maxError": 0,
+  "operators": [
+    "conditionals-boundary",
+    "arithmetic"
+  ],
+  "mustNotContain": [
+    "**.R",
+    "**.BuildConfig"
+  ],
+  "files": [
+    {
+      "path": "lib/src/main/kotlin/com/example/e2e/Discount.kt",
+      "killedAtLeast": 3,
+      "survivedAtLeast": 1,
+      "noCoverageAtLeast": 0,
+      "note": "no test uses a total of exactly 100"
+    }
+  ],
+  "risks": []
+}
