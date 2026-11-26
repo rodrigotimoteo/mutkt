@@ -86,7 +86,7 @@ Instrumented tests (`connectedAndroidTest`, devices, emulators) are out of scope
 - Incubating APIs: `compileClasspath`, `configureTestTask` and `withTestTaskProvider` may change. Only `compileClasspath` is called; the `latest` CI cell catches breakage.
 - The task name `test<Variant>UnitTest` is a convention, not API.
 - Gradle 9: the plugin's TestKit suite runs on Gradle 9 since ROD-210; the build itself still uses an 8.x wrapper.
-- Android TestKit tests need an Android SDK (`ANDROID_HOME`, preinstalled on GitHub's Ubuntu runners) and network access to google(). They run in their own `agpTest` task in `mutkt-gradle`, like `matrixTest`, excluded from `build` and Kover.
+- Android TestKit tests need an Android SDK (`ANDROID_HOME`, preinstalled on GitHub's Ubuntu runners) and network access to google(). They run in their own `agpTest` task in `mutkt-gradle`, like `matrixTest`, excluded from `build` and Kover. They resolve into a fixed TestKit dir, `mutkt-gradle/build/testkit`, whose dependency cache CI keeps between runs.
 
 ## CI (AGP versions tested)
 
