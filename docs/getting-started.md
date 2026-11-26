@@ -9,7 +9,7 @@
 
 ## Apply the plugin
 
-From the Gradle Plugin Portal (the latest version is in the [CHANGELOG](../CHANGELOG.md)):
+From the Gradle Plugin Portal (the latest version is in the [changelog](changelog.md)):
 
 ```kotlin
 plugins {
@@ -18,7 +18,7 @@ plugins {
 }
 ```
 
-To try an unreleased change, clone this repository and include it in `settings.gradle.kts` (the setup [dogfood.md](dogfood.md) uses):
+To try an unreleased change, clone this repository and include it in `settings.gradle.kts` (the setup [dogfood.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/dogfood.md) uses):
 
 ```kotlin
 pluginManagement {
@@ -151,7 +151,7 @@ mutkt {
 }
 ```
 
-The mutants then run with the unit-test task's classpath, which holds Robolectric's resource config when `isIncludeAndroidResources` is on. The [Android sample](../samples/android/README.md) is a working build with Robolectric tests on AGP 8 and 9.
+The mutants then run with the unit-test task's classpath, which holds Robolectric's resource config when `isIncludeAndroidResources` is on. The [Android sample](https://github.com/rodrigotimoteo/mutkt/tree/master/samples/android) is a working build with Robolectric tests on AGP 8 and 9.
 
 **Not supported:** instrumented tests (`src/androidTest`, `connectedAndroidTest`, devices and emulators), more than one variant per run, test fixtures, screenshot tests, and `com.android.dynamic-feature`, `com.android.test` and Kotlin Multiplatform Android modules.
 
