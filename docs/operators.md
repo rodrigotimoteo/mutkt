@@ -21,7 +21,7 @@ Operators run when `operators` is empty (the default) are marked default-on; the
 | `data-class-copy` | no | Replaces a data class `copy` call by null |
 | `coroutine` | no | Replaces a coroutine builder or suspend call by its default value |
 
-Opt-in operators have sites in most Kotlin code and several yield mostly equivalent mutants (calls with no observable effect, parameter checks), so enabling them is a deliberate choice. Parity with the legacy engine is checked for every operator, default or not ([parity.md](parity.md)).
+Opt-in operators have sites in most Kotlin code and several yield mostly equivalent mutants (calls with no observable effect, parameter checks), so enabling them is a deliberate choice. Parity with the legacy engine is checked for every operator, default or not ([parity.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/parity.md)).
 
 ## Reference
 
@@ -168,4 +168,4 @@ Class and function suppression are unioned. Nested, inner, companion and anonymo
 A function's lambda bodies (`f$lambda$N`) are suppressed with it; they match by name, so every overload named `f` covers them. A function's own annotation matches name and descriptor.
 Limits: inline function bodies are never mutated (see Noise filters), so suppressing one has no effect. Property accessors are suppressed only through their class.
 
-See also: [Parity with legacy 0.3.3](parity.md)
+See also: [Parity with legacy 0.3.3](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/parity.md)
