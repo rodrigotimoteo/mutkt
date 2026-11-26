@@ -16,7 +16,7 @@ description: Use when implementing any MutKt Linear task (ROD-n) in this repo. D
    ./gradlew build        # before reporting
    ```
 7. **Review.** Run agent `mutkt-reviewer` on the diff for anything beyond a trivial change.
-8. **Commit and push as you go.** Small commits that build and pass, message explains why + `ROD-n`; push after each. Work on a branch named after the issue, off `rebuild/v1`. A second concurrent task gets its own worktree (`git worktree add ../mutkt-rod-NN -b <branch> rebuild/v1`). Merge via PR into `rebuild/v1` only.
+8. **Commit and push as you go.** Small commits that build and pass, message explains why + `ROD-n`; push after each. Work on a branch named after the issue, off `master`. A second concurrent task gets its own worktree (`git worktree add ../mutkt-rod-NN -b <branch> master`). Merge via PR into `master` only.
 9. **Close the loop.** Update the Linear issue: status and one comment (changed / verified / not verified). Subagents never commit or push; the main session does after reading the diff.
 
 ## Guardrails
