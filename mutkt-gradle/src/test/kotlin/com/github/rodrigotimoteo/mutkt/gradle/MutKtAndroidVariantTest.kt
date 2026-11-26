@@ -78,6 +78,29 @@ class MutKtAndroidVariantTest {
     }
 
     @Test
+    fun `skips generated classes by default, and excludedClasses extends or replaces the defaults`() {
+        write("settings.gradle", "rootProject.name = 'sample'\n")
+        write("gradle.properties", "android.useAndroidX=true\n")
+        write("src/main/res/layout/activity_main.xml", LAYOUT)
+        write("src/main/java/demo/Gate.java", GATE)
+        write("src/main/java/demo/Old.java", GATE.replace("Gate", "Old"))
+        write("src/test/java/demo/GateTest.java", GATE_TEST)
+        val classpath = mutktClasspath() + "\n" + agpClasspath()
+        val json = dir.resolve("build/reports/mutkt/mutation-report.json")
+
+        write("build.gradle", library(classpath, BINDING_DSL + "\nmutkt { excludedClasses.add('demo.Old') }"))
+        runner("mutkt").build()
+        val extended = json.readText()
+        write("build.gradle", library(classpath, BINDING_DSL + "\nmutkt { excludedClasses = [] }"))
+        runner("mutkt").build()
+        val replaced = json.readText()
+
+        assertTrue("\"demo/Gate.java\"" in extended, extended)
+        assertTrue("ActivityMainBinding" !in extended && "\"demo/Old.java\"" !in extended, extended)
+        assertTrue("ActivityMainBinding" in replaced && "\"demo/Old.java\"" in replaced, replaced)
+    }
+
+    @Test
     fun `AGP in a child scope of MutKt fails with where to declare it`() {
         write("settings.gradle", "rootProject.name = 'sample'\ninclude 'lib'\n")
         write("build.gradle", "buildscript { dependencies { ${mutktClasspath()} } }\n")
@@ -156,6 +179,39 @@ class MutKtAndroidVariantTest {
             kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
             dependencies { testImplementation files(${TestKitProject(File(".")).jars(JUNIT_JARS)}) }
             mutkt { operators = ['arithmetic', 'conditionals-boundary'] }
+            """.trimIndent()
+
+        // View binding generates demo.databinding.ActivityMainBinding, whose bind() and getRoot() have mutants.
+        val BINDING_DSL =
+            """
+            repositories {
+                google()
+                mavenCentral()
+            }
+            android {
+                buildFeatures { viewBinding = true }
+                testOptions { unitTests.all { useJUnitPlatform() } }
+            }
+            dependencies { testImplementation files(${TestKitProject(File(".")).jars(JUNIT_JARS)}) }
+            """.trimIndent()
+
+        const val LAYOUT =
+            "<LinearLayout xmlns:android=\"http://schemas.android.com/apk/res/android\" " +
+                "android:layout_width=\"match_parent\" android:layout_height=\"match_parent\" />\n"
+
+        val GATE_TEST =
+            """
+            package demo;
+
+            import org.junit.jupiter.api.Assertions;
+            import org.junit.jupiter.api.Test;
+
+            public class GateTest {
+                @Test
+                void adult() {
+                    Assertions.assertTrue(new Gate().isAdult(30));
+                }
+            }
             """.trimIndent()
 
         const val GATE =

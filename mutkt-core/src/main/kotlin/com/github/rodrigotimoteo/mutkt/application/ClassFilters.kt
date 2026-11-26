@@ -8,7 +8,7 @@ import com.github.rodrigotimoteo.mutkt.domain.Mutant
  */
 public data class ClassFilters(
     val includes: List<Glob> = emptyList(),
-    // Empty on purpose: the one place for default excludes; generated-class excludes arrive with P5.
+    // Empty on purpose: the Gradle plugin puts Android's generated-class globs into the DSL value instead.
     val excludes: List<Glob> = emptyList(),
     val excludedMethods: Set<String> = emptySet(),
     val maxMutantsPerClass: Int? = null,

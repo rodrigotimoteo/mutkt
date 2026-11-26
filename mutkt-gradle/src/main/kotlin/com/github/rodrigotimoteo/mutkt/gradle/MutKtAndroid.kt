@@ -14,6 +14,8 @@ import org.gradle.api.tasks.testing.Test
  * variant's unit-test task; fails the build, once AGP created its variants, unless that variant has unit tests.
  */
 internal fun Project.wireAndroid(extension: MutKtExtension) {
+    // A value rather than a convention, so add() extends the defaults and set() replaces them.
+    extension.excludedClasses.addAll(ANDROID_GENERATED_CLASSES)
     val components = extensions.getByType(AndroidComponentsExtension::class.java)
     // Variant name to whether it has a unit-test component.
     val variants = mutableMapOf<String, Boolean>()

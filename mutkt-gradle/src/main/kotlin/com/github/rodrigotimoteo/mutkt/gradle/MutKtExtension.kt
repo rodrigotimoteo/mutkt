@@ -13,7 +13,7 @@ public abstract class MutKtExtension {
     /** Class globs to mutate; empty means all. */
     public abstract val targetClasses: ListProperty<String>
 
-    /** Class globs that are never mutated. */
+    /** Class globs that are never mutated; on Android it starts with the generated classes (R, Hilt, bindings...). */
     public abstract val excludedClasses: ListProperty<String>
 
     /** Method names or `pkg.Class#method` entries to skip. */
