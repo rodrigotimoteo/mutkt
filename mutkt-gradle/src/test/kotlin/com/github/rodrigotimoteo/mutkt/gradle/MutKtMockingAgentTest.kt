@@ -34,6 +34,7 @@ class MutKtMockingAgentTest {
 
         val plain = project.build("test")
         assertEquals(TaskOutcome.SUCCESS, plain.task(":test")?.outcome, plain.output)
+        assertTrue(project.ranTests("demo.PricesTest"), plain.output)
 
         val result = project.build()
         assertEquals(TaskOutcome.SUCCESS, result.task(":mutkt")?.outcome, result.output)

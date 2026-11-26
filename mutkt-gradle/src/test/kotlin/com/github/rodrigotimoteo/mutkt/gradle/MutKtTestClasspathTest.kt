@@ -33,6 +33,7 @@ class MutKtTestClasspathTest {
 
         val plain = project.build("test")
         assertEquals(TaskOutcome.SUCCESS, plain.task(":test")?.outcome, plain.output)
+        assertTrue(project.ranTests("demo.CalcTest"), plain.output)
 
         val first = project.build()
         assertEquals(TaskOutcome.SUCCESS, first.task(":mutkt")?.outcome, first.output)
