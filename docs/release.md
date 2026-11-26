@@ -9,7 +9,7 @@ One workflow publishes: [release.yml](../.github/workflows/release.yml), trigger
 3. The `verify` job runs the full CI. The `publish` job then waits for approval of the `release` environment.
 4. After approval the job runs these stages in order. Each one first asks the target repository whether it already has the version and skips itself if so:
    1. Maven Central: `./gradlew publish` signs and uploads annotations, core, asm, junit, report, gradle and the plugin marker to the Central Portal staging API, then `tools/release/central-release.sh` hands the upload over for automatic publishing. The job waits up to 45 minutes until Central serves all POMs.
-   2. Gradle Plugin Portal: `./gradlew :mutkt-gradle:publishPlugins`, then waits up to 15 minutes for the marker.
+   2. Gradle Plugin Portal: `./gradlew :mutkt-gradle:publishPlugins`, then waits up to 15 minutes for the marker. Only a 200 from the Portal, or a 303 to its CDN `plugins-artifacts.gradle.org`, counts: it answers 303 to Central for artifacts it does not host, and Central has the marker after stage one. `tools/release/published-test.sh` checks this against a local server.
    3. GitHub release: `gh release create --generate-notes` (notes are the merged PRs and commits since the previous release; `-` in the version marks it a pre-release).
 
 The `publish` job rebuilds from the tagged commit with the tag version; the artifacts are not the ones `verify` tested, only the same sources at a different version. Keep tags on commits that passed CI.

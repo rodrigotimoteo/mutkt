@@ -91,6 +91,8 @@ jobs:
       # Throwaway key, local repository: checks signing, sources and javadoc jars and the POM metadata Central requires.
       - name: Sign and publish to a local repository
         run: tools/release/dry-run.sh 0.4.0-rc.1
+      - name: Check the published-version probe
+        run: tools/release/published-test.sh
 
   testkit-matrix:
     name: TestKit on Gradle 8.14.3
