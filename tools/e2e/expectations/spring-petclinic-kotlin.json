@@ -1,0 +1,46 @@
+{
+  "mutants": {
+    "min": 45,
+    "max": 180
+  },
+  "score": {
+    "min": 0.4,
+    "max": 0.9
+  },
+  "maxError": 0,
+  "operators": [
+    "negate-conditionals",
+    "null-returns",
+    "return-vals",
+    "empty-returns"
+  ],
+  "mustNotContain": [],
+  "files": [
+    {
+      "path": "src/main/kotlin/org/springframework/samples/petclinic/owner/PetValidator.kt",
+      "killedAtLeast": 1,
+      "survivedAtLeast": 0,
+      "noCoverageAtLeast": 0,
+      "note": "field checks are exercised through the pet form tests; boolean supports() may survive"
+    },
+    {
+      "path": "src/main/kotlin/org/springframework/samples/petclinic/owner/PetTypeFormatter.kt",
+      "killedAtLeast": 1,
+      "survivedAtLeast": 0,
+      "noCoverageAtLeast": 0,
+      "note": "PetTypeFormatterTest covers parse and print of known and unknown types"
+    },
+    {
+      "path": "src/main/kotlin/org/springframework/samples/petclinic/vet/Vets.kt",
+      "killedAtLeast": 0,
+      "survivedAtLeast": 0,
+      "noCoverageAtLeast": 0,
+      "note": "weakly tested: data class generated members are only partly exercised"
+    }
+  ],
+  "risks": [
+    "Counts come from javap site counts (negate 29, null-returns 50, empty-returns 6, return-vals 5), not from a run; the real count may differ by the Kotlin compiler's synthetic code.",
+    "Spring context and @WebMvcTest/@DataJpaTest slices run per mutant; slow runs may hit timeouts (TIMEOUT counts toward score).",
+    "H2 in-memory database and sortedBy/Kotlin-generated lambda classes may produce extra or no-coverage mutants."
+  ]
+}

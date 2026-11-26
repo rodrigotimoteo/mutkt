@@ -1,0 +1,50 @@
+{
+  "mutants": {
+    "min": 40,
+    "max": 240
+  },
+  "score": {
+    "min": 0.4,
+    "max": 0.9
+  },
+  "maxError": 0,
+  "operators": [
+    "negate-conditionals",
+    "arithmetic",
+    "conditionals-boundary",
+    "null-returns",
+    "return-vals",
+    "empty-returns"
+  ],
+  "mustNotContain": [
+    "**.R",
+    "**.BuildConfig",
+    "**.Hilt_*",
+    "**.*_Factory",
+    "**.databinding.*",
+    "**.ComposableSingletons$*"
+  ],
+  "files": [
+    {
+      "path": "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/OfflineFirstNewsRepository.kt",
+      "killedAtLeast": 5,
+      "note": "sync and bookmark branches; covered by repository tests"
+    },
+    {
+      "path": "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/OfflineFirstUserDataRepository.kt",
+      "killedAtLeast": 1,
+      "note": "user data flows covered by tests"
+    },
+    {
+      "path": "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/util/ConnectivityManagerNetworkMonitor.kt",
+      "noCoverageAtLeast": 1,
+      "note": "Android network APIs without unit tests, so mutants stay uncovered"
+    }
+  ],
+  "risks": [
+    "mutant count is an estimate from source reading, not a run",
+    "arithmetic has only one IADD site in core:data main code, so the operator check depends on it",
+    "null-returns depends on nullable returns in core:data main code",
+    "NoCoverage for ConnectivityManagerNetworkMonitor depends on no test touching it"
+  ]
+}
