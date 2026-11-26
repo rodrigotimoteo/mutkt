@@ -15,6 +15,8 @@ internal class OutcomeListener : TestExecutionListener {
         private set
     var killedBy: String? = null
         private set
+    var cause: String? = null
+        private set
 
     override fun executionStarted(id: TestIdentifier) {
         if (id.isTest) started++
@@ -24,7 +26,10 @@ internal class OutcomeListener : TestExecutionListener {
         id: TestIdentifier,
         result: TestExecutionResult,
     ) {
-        if (result.status == TestExecutionResult.Status.FAILED && killedBy == null) killedBy = label(name(id))
+        if (result.status == TestExecutionResult.Status.FAILED && killedBy == null) {
+            killedBy = label(name(id))
+            cause = result.throwable.map { describe(it) }.orElse(null)
+        }
     }
 
     private fun name(id: TestIdentifier): String =
@@ -43,6 +48,12 @@ internal class OutcomeListener : TestExecutionListener {
 
     // The label ends up in reports: one line, bounded.
     private fun label(name: String) = name.replace(WHITESPACE, " ").trim().take(MAX_LABEL)
+
+    // The cause is shown in a baseline error: one line, and the ellipsis marks a cut.
+    private fun describe(throwable: Throwable): String {
+        val line = throwable.toString().replace(WHITESPACE, " ").trim()
+        return if (line.length <= MAX_CAUSE) line else line.take(MAX_CAUSE - 1) + "…"
+    }
 }
 
 private val INVOCATION_SEGMENTS = setOf("test-template-invocation", "dynamic-test")
@@ -50,3 +61,5 @@ private val INVOCATION_SEGMENTS = setOf("test-template-invocation", "dynamic-tes
 private val WHITESPACE = Regex("\\s+")
 
 private const val MAX_LABEL = 200
+
+private const val MAX_CAUSE = 200

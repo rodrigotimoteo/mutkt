@@ -56,7 +56,8 @@ class ForkedSandboxCacheTest {
 
     private companion object {
         val LONG = 60.seconds
-        val KILLED = Outcome.Killed("CalcTest.adds")
+        val KILLED =
+            Outcome.Killed("CalcTest.adds", "org.opentest4j.AssertionFailedError: expected: <5> but was: <-1>")
 
         // Like Robolectric's sandbox: the first call keeps the class under test, read through the context loader.
         val sandboxManager =

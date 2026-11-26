@@ -35,7 +35,17 @@ class JUnitTestExecutorBaselineTest {
 
     @Test
     fun `an unrelated failing assertion is reported by name`() {
-        assertEquals(Outcome.Killed("CalcTest.unrelated"), executor(tests).baseline(deadline).outcome)
+        val killed = Outcome.Killed("CalcTest.unrelated", "org.opentest4j.AssertionFailedError: red")
+        assertEquals(killed, executor(tests).baseline(deadline).outcome)
+    }
+
+    @Test
+    fun `the cause of a red baseline is one line and capped`() {
+        val long = "class CalcTest { @Test fun long() { throw IllegalStateException(\"x\\n\".repeat(100)) } }"
+        val cause = (executor(long).baseline(deadline).outcome as Outcome.Killed).cause.orEmpty()
+        assertEquals(200, cause.length)
+        assertTrue(cause.startsWith("java.lang.IllegalStateException: x x"), cause)
+        assertTrue(cause.endsWith("…"), cause)
     }
 
     @Test
@@ -48,7 +58,7 @@ class JUnitTestExecutorBaselineTest {
         val failing =
             "class CalcTest { companion object { " +
                 "@BeforeAll @JvmStatic fun setUp() { error(\"boom\") } } @Test fun a() {} }"
-        assertEquals(Outcome.Killed("CalcTest"), executor(failing).baseline(deadline).outcome)
+        assertKilledBy("CalcTest", executor(failing).baseline(deadline).outcome)
     }
 
     @Test

@@ -60,7 +60,7 @@ public class RunMutationAnalysis(
             try {
                 val baseline = executor.baseline(deadline)
                 when (val outcome = baseline.outcome) {
-                    is Outcome.Killed -> "the first failure is ${outcome.by}"
+                    is Outcome.Killed -> "the first failure is ${outcome.by}${outcome.cause?.let { ": $it" }.orEmpty()}"
                     is Outcome.LoadError -> "they cannot run: ${outcome.message}"
                     Outcome.Timeout -> "they did not finish within $deadline; raise timeoutMs"
                     Outcome.Survived, Outcome.NoTests -> return baseline.elapsed

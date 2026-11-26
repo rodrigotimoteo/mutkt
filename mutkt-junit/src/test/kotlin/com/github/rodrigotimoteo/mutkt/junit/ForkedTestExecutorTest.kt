@@ -51,7 +51,7 @@ class ForkedTestExecutorTest {
     @Test
     fun `kills and survives through the pool, reusing one child`() {
         val pool = executor()
-        assertEquals(Outcome.Killed("CalcTest.adds"), pool.run(mutantBytes()))
+        assertKilledBy("CalcTest.adds", pool.run(mutantBytes()))
         assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
         assertEquals(1, pool.startedChildren)
         assertNotEquals(ProcessHandle.current().pid(), pool.liveProcesses.single().pid())
@@ -67,7 +67,7 @@ class ForkedTestExecutorTest {
         assertFalse(first.isAlive)
         assertTrue(pool.liveProcesses.isEmpty())
 
-        assertEquals(Outcome.Killed("CalcTest.adds"), pool.run(mutantBytes()))
+        assertKilledBy("CalcTest.adds", pool.run(mutantBytes()))
         assertEquals(2, pool.startedChildren)
     }
 
@@ -115,7 +115,7 @@ class ForkedTestExecutorTest {
     @Test
     fun `a mutant that exits its JVM once the tests started is killed, and the pool replaces the child`() {
         val pool = executor()
-        assertEquals(Outcome.Killed("JVM exit 7"), pool.run(EXIT))
+        assertKilledBy("JVM exit 7", pool.run(EXIT))
         assertTrue(pool.liveProcesses.isEmpty())
 
         assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
@@ -166,11 +166,11 @@ class ForkedTestExecutorTest {
     fun `an OutOfMemoryError escaping JUnit kills the mutant, a StackOverflowError is a test failure`() {
         val pool = executor()
         val huge = mutantBytes("class Calc { fun add(a: Int, b: Int): Int = LongArray(Int.MAX_VALUE - 8).size }")
-        assertEquals(Outcome.Killed("OutOfMemoryError"), pool.run(huge))
+        assertKilledBy("OutOfMemoryError", pool.run(huge))
         assertTrue(pool.liveProcesses.isEmpty())
 
         val deep = mutantBytes("class Calc { fun add(a: Int, b: Int): Int = add(a, b) }")
-        assertEquals(KILLED, pool.run(deep))
+        assertKilledBy("CalcTest.adds", pool.run(deep))
         assertEquals(2, pool.startedChildren)
     }
 
@@ -260,13 +260,12 @@ class ForkedTestExecutorTest {
     fun `tag and engine settings reach the child`() {
         val test =
             "class CalcTest { @Tag(\"fast\") @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } @Test fun ok() {} }"
-        val killed = Outcome.Killed("CalcTest.adds")
-        assertEquals(killed, executor(testSource = test).run(mutantBytes()))
+        assertKilledBy("CalcTest.adds", executor(testSource = test).run(mutantBytes()))
 
         val excluded = executor(testSource = test) { it.copy(excludeTags = listOf("fast")) }
         assertEquals(Outcome.Survived, excluded.run(mutantBytes()))
         val included = executor(testSource = test) { it.copy(includeTags = listOf("fast")) }
-        assertEquals(killed, included.run(mutantBytes()))
+        assertKilledBy("CalcTest.adds", included.run(mutantBytes()))
         val vintage = executor(testSource = test) { it.copy(engines = listOf("junit-vintage")) }
         val error = assertThrows<IllegalStateException> { vintage.run(mutantBytes()) }
         assertTrue("No TestEngine ID matched" in error.message.orEmpty(), error.message)
@@ -279,7 +278,7 @@ class ForkedTestExecutorTest {
                 "@Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
         val pool = executor(testSource = test) { it.copy(environment = mapOf("MUTKT_FORK_VAR" to "v1")) }
         assertEquals(Outcome.Survived, pool.baseline(LONG).outcome)
-        assertEquals(Outcome.Killed("CalcTest.adds"), pool.run(mutantBytes()))
+        assertKilledBy("CalcTest.adds", pool.run(mutantBytes()))
         assertEquals(1, pool.startedChildren)
     }
 
@@ -288,7 +287,10 @@ class ForkedTestExecutorTest {
         val test =
             "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } " +
                 "@Tag(\"slow\") @Test fun unrelated() { fail<Unit>(\"red\") } }"
-        assertEquals(Outcome.Killed("CalcTest.unrelated"), executor(testSource = test).baseline(LONG).outcome)
+        assertEquals(
+            Outcome.Killed("CalcTest.unrelated", "org.opentest4j.AssertionFailedError: red"),
+            executor(testSource = test).baseline(LONG).outcome,
+        )
         val excluded = executor(testSource = test) { it.copy(excludeTags = listOf("slow")) }
         assertEquals(Outcome.Survived, excluded.baseline(LONG).outcome)
     }
@@ -322,7 +324,8 @@ class ForkedTestExecutorTest {
             mutantBytes("class Calc { fun add(a: Int, b: Int): Int { Thread.sleep(500); return $body } }")
 
         val LONG = 60.seconds
-        val KILLED = Outcome.Killed("CalcTest.adds")
+        val KILLED =
+            Outcome.Killed("CalcTest.adds", "org.opentest4j.AssertionFailedError: expected: <5> but was: <-1>")
         val javaBinary: Path = Path.of(System.getProperty("java.home"), "bin", "java")
         const val CALC_TEST = "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
 

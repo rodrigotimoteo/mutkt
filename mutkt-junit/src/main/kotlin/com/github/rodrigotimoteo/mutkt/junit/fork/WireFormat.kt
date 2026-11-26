@@ -66,6 +66,8 @@ internal fun DataOutputStream.writeOutcome(outcome: Outcome) {
         is Outcome.Killed -> {
             writeByte(OUTCOME_KILLED)
             writeString(outcome.by)
+            writeBoolean(outcome.cause != null)
+            outcome.cause?.let(::writeString)
         }
         Outcome.Survived -> writeByte(OUTCOME_SURVIVED)
         Outcome.NoTests -> writeByte(OUTCOME_NO_TESTS)
@@ -79,7 +81,7 @@ internal fun DataOutputStream.writeOutcome(outcome: Outcome) {
 
 internal fun DataInputStream.readOutcome(): Outcome =
     when (val tag = readUnsignedByte()) {
-        OUTCOME_KILLED -> Outcome.Killed(readString())
+        OUTCOME_KILLED -> Outcome.Killed(readString(), if (readBoolean()) readString() else null)
         OUTCOME_SURVIVED -> Outcome.Survived
         OUTCOME_NO_TESTS -> Outcome.NoTests
         OUTCOME_LOAD_ERROR -> Outcome.LoadError(readString())
