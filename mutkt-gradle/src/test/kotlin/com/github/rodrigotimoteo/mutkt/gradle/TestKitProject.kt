@@ -37,7 +37,9 @@ internal class TestKitProject(
             dependencies {
                 compileOnly files(${jars(ANNOTATIONS_JAR)})
                 testImplementation files(${jars(TEST_JARS)})
+                testRuntimeOnly files(${jars(LAUNCHER_JAR)})
             }
+            tasks.named('test') { useJUnitPlatform() }
             $pin
             $dsl
             """.trimIndent(),
@@ -51,6 +53,9 @@ internal class TestKitProject(
         text: String,
     ) = dir.resolve(path).apply { parentFile.mkdirs() }.writeText(text)
 
+    /** Whether the `test` task wrote a result for [testClass], that is, it ran its tests. */
+    fun ranTests(testClass: String): Boolean = dir.resolve("build/test-results/test/TEST-$testClass.xml").isFile
+
     fun build(task: String = "mutkt"): BuildResult = runner(task).build()
 
     fun buildAndFail(): BuildResult = runner("mutkt").buildAndFail()
@@ -62,6 +67,7 @@ internal class TestKitProject(
             .withPluginClasspath()
             // File system watching lets a loaded daemon start the next build before the event for a just-rewritten
             // build.gradle arrives, so the configuration cache is reused stale; without it every build rehashes.
+            // Deprecation warnings fail the build: the next major Gradle turns them into errors.
             .withArguments(
                 task,
                 "--configuration-cache",
@@ -69,6 +75,7 @@ internal class TestKitProject(
                 "--console=plain",
                 "--offline",
                 "--stacktrace",
+                "--warning-mode=fail",
             ).also { runner -> version?.let(runner::withGradleVersion) }
 
     /** The jars of this JVM's classpath whose file name matches [pattern], as quoted Groovy strings. */
@@ -88,6 +95,9 @@ internal class TestKitProject(
                 "'return-vals', 'null-returns', 'empty-returns']"
 
         private val ANNOTATIONS_JAR = Regex("^mutkt-annotations")
+
+        // Gradle 9 no longer adds the launcher to the test task, so it is declared as in a real Jupiter build.
+        private val LAUNCHER_JAR = Regex("^junit-platform-launcher")
         private val TEST_JARS =
             Regex("^(junit-jupiter|junit-platform-(engine|commons)|opentest4j|apiguardian|kotlin-stdlib)")
 
