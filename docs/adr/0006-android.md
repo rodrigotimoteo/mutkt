@@ -17,7 +17,7 @@ P5 adds Android unit-test support (ROD-125, ROD-126..129). The owner fixed the s
 - **Test classes, test runtime classpath and test JVM settings:** read from the variant's AGP unit-test `Test` task, looked up lazily by AGP's task name `test<Variant>UnitTest`, the same way the JVM path reads `test`. If the task is missing, the build fails with one message that names the variant.
 - **Compile classpath** (frame computation only): `variant.compileClasspath`. **Sources** (survivor snippets): `variant.sources.java?.all` and `variant.sources.kotlin?.all`.
 - **Not used:** `sdkComponents.bootClasspath`, artifact-type strings, AAR extraction. The `Test` classpath already holds what AGP's own unit-test run uses (see below).
-- **Out of scope:** instrumented (device) tests and the `src/agpTest` source set, test fixtures, screenshot tests, more than one variant per run, `com.android.dynamic-feature` and `com.android.test` modules.
+- **Out of scope:** instrumented (device) tests and the `src/androidTest` source set, test fixtures, screenshot tests, more than one variant per run, `com.android.dynamic-feature` and `com.android.test` modules.
 
 ## API facts (checked)
 
