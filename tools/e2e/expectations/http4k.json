@@ -1,0 +1,26 @@
+{
+  "mutants": {
+    "min": 60,
+    "max": 240
+  },
+  "score": {
+    "min": 0.35,
+    "max": 0.9
+  },
+  "maxError": 0,
+  "operators": [
+    "negate-conditionals",
+    "arithmetic",
+    "null-returns",
+    "empty-returns"
+  ],
+  "mustNotContain": [],
+  "files": [
+    {
+      "path": "core/security/digest/src/main/kotlin/org/http4k/security/digest/DigestEncoder.kt",
+      "killedAtLeast": 1
+    }
+  ],
+  "risks": "Estimate only, not measured. Data-class generated members (equals, hashCode, toString, copy) have no direct tests and may add survivors. The arithmetic operator has one real site (nonceCount++ in DigestAuthReceiver.kt); if the operator finds none, the operators check fails. Qop.kt (Qop.from) has no direct test and is the likeliest survivor, but no survivor count is asserted.",
+  "note": "Jupiter tests, JDK 21, init-script apply. Predicted from source and test names; the bounds are wide on purpose until a real run calibrates them."
+}

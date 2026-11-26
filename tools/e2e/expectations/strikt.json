@@ -1,0 +1,42 @@
+{
+  "note": "Predicted from reading strikt-core main sources and tests at the pinned commit, not from a run. Most of the ~240 functions return Builder or Result, so null-returns dominates the count.",
+  "mutants": {
+    "min": 250,
+    "max": 1000
+  },
+  "score": {
+    "min": 0.35,
+    "max": 0.85
+  },
+  "maxError": 0,
+  "operators": [
+    "negate-conditionals",
+    "arithmetic",
+    "conditionals-boundary",
+    "null-returns",
+    "return-vals",
+    "empty-returns"
+  ],
+  "mustNotContain": [],
+  "files": [
+    {
+      "path": "src/main/kotlin/strikt/assertions/Iterable.kt",
+      "killedAtLeast": 1,
+      "note": "Well tested by IterableAssertions.kt (about 200 assertion lines); int comparisons such as passedCount >= count and size == 1."
+    },
+    {
+      "path": "src/main/kotlin/strikt/assertions/Any.kt",
+      "killedAtLeast": 1,
+      "note": "Well tested by AnyAssertions.kt; isA and isEqualTo branch on is-checks and equality."
+    },
+    {
+      "path": "src/main/kotlin/strikt/internal/reporting/AnsiColorResultWriter.kt",
+      "noCoverageAtLeast": 1,
+      "note": "Internal object with no test and no main caller, so its when-branch mutants are never executed."
+    }
+  ],
+  "risks": [
+    "Jupiter only; minutest and failgood suites run through the JUnit platform, run time not measured",
+    "Mutant count and score are estimates, wide ranges on purpose"
+  ]
+}

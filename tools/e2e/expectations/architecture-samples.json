@@ -1,0 +1,53 @@
+{
+  "mutants": {
+    "min": 100,
+    "max": 700
+  },
+  "score": {
+    "min": 0.3,
+    "max": 0.9
+  },
+  "maxError": 0,
+  "operators": [
+    "negate-conditionals",
+    "conditionals-boundary",
+    "arithmetic"
+  ],
+  "mustNotContain": [
+    "**.R",
+    "**.R$*",
+    "**.BuildConfig",
+    "**.Hilt_*",
+    "**.*_HiltModules*",
+    "**.*_Factory"
+  ],
+  "files": [
+    {
+      "path": "app/src/main/java/com/example/android/architecture/blueprints/todoapp/statistics/StatisticsUtils.kt",
+      "killedAtLeast": 1,
+      "survivedAtLeast": 0,
+      "noCoverageAtLeast": 0,
+      "note": "four unit tests cover empty and non-empty task lists and the percentage"
+    },
+    {
+      "path": "app/src/main/java/com/example/android/architecture/blueprints/todoapp/data/DefaultTaskRepository.kt",
+      "killedAtLeast": 1,
+      "survivedAtLeast": 0,
+      "noCoverageAtLeast": 0,
+      "note": "DefaultTaskRepositoryTest has 16 tests, including forceUpdate and network save paths"
+    },
+    {
+      "path": "app/src/main/java/com/example/android/architecture/blueprints/todoapp/util/SimpleCountingIdlingResource.kt",
+      "killedAtLeast": 0,
+      "survivedAtLeast": 0,
+      "noCoverageAtLeast": 1,
+      "note": "no unit test loads this class; its counter branches stay uncovered"
+    }
+  ],
+  "risks": [
+    "mutant count is estimated from source sites, not measured; the range is deliberately wide",
+    "Compose screens and navigation have no unit tests, so their mutants are NoCoverage and pull the score down",
+    "maxError 0 assumes Android stubs do not raise RuntimeError under JVM unit tests",
+    "NoCoverage for SimpleCountingIdlingResource assumes no test indirectly loads it"
+  ]
+}
