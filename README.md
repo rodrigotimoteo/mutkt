@@ -29,5 +29,6 @@ The score and the surviving mutants are printed in the build log. Reports land i
 - [Operators](docs/operators.md)
 - [FAQ](docs/faq.md)
 - [Migrating from 0.3.x](docs/migration.md)
+- [API docs](https://rodrigotimoteo.github.io/mutkt/)
 
 Contributor and agent rules: [AGENTS.md](AGENTS.md). License: [LICENSE](LICENSE).

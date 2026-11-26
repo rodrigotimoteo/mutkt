@@ -17,6 +17,8 @@ The `publish` job rebuilds from the tagged commit with the tag version; the arti
 
 Plugin id `io.github.rodrigotimoteo.mutkt`, group `io.github.rodrigotimoteo` (ADR 0001).
 
+Tags also deploy the API docs to GitHub Pages ([docs.yml](../.github/workflows/docs.yml)); to redeploy one by hand, run `gh workflow run docs.yml -f ref=vX.Y.Z`.
+
 ## Secrets (TO BE CONFIGURED BY THE OWNER)
 
 Repository secrets only; no value ever goes in a file. All are read by the `publish` job and exposed per step, never to the verify job. `GPG_SIGNING_KEY`, `GPG_SIGNING_PASSWORD`, `SONATYPE_USERNAME` and `SONATYPE_PASSWORD` already exist in the repo (used by 0.3.3).
