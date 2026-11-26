@@ -9,7 +9,8 @@ import java.nio.file.Paths
  * [classpath] is the project's test runtime classpath without class directories.
  * [engineClasspath] is the child's own classpath (null means [derivedEngineClasspath]); its Platform jars are
  * replaced by the project's own when [classpath] has the launcher.
- * [engines] are JUnit Platform engine ids (`junit-jupiter`, `junit-vintage`); [includeTags] and [excludeTags] are
+ * [engines] are JUnit Platform engine ids (`junit-jupiter`, `junit-vintage`); `junit-vintage` adds the bundled vintage
+ * engine to [classpath] when it has none. [includeTags] and [excludeTags] are
  * JUnit tag expressions, applied to every run (no include tags means all tests).
  * A child gets [prepareMillis] to load and link classes and discover all test classes (their plans are held
  * until the run ends); silence for longer fails the run
@@ -59,10 +60,11 @@ private val engineClassNames =
         platformClassNames
 
 /** The jars or class directories a forked child needs, taken from where this plugin itself was loaded. */
-public fun derivedEngineClasspath(): List<Path> =
-    engineClassNames
-        .map { name ->
-            val source = Class.forName(name).protectionDomain.codeSource
-            val location = checkNotNull(source?.location) { "No code source for $name" }
-            Paths.get(location.toURI())
-        }.distinct()
+public fun derivedEngineClasspath(): List<Path> = engineClassNames.map(::codeSourceOf).distinct()
+
+// Not initialized: the vintage engine's class must not need JUnit 4, which only the project has.
+internal fun codeSourceOf(className: String): Path {
+    val type = Class.forName(className, false, ForkSettings::class.java.classLoader)
+    val location = checkNotNull(type.protectionDomain.codeSource?.location) { "No code source for $className" }
+    return Paths.get(location.toURI())
+}

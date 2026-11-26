@@ -34,6 +34,27 @@ internal fun engineClasspathFor(
     return engine.filterNot { entry -> platformMarkers.any(entry::holds) } + platform
 }
 
+private const val VINTAGE_ENGINE = "junit-vintage"
+private const val VINTAGE_ENGINE_CLASS = "org.junit.vintage.engine.VintageTestEngine"
+private val VINTAGE_MARKER = VINTAGE_ENGINE_CLASS.replace('.', '/') + ".class"
+
+// JUnit 4 builds (Android's included) usually have no Platform engine, so the vintage engine is supplied project-side,
+// where JUnit 4 is. A project's own copy wins: two engines with one id fail discovery. The bundled engine matches only
+// the bundled Platform, which the child runs unless the project has its own launcher (see engineClasspathFor).
+internal fun projectClasspathFor(
+    engines: List<String>,
+    project: List<Path>,
+): List<Path> {
+    if (VINTAGE_ENGINE !in engines || project.any { it.holds(VINTAGE_MARKER) }) return project
+    require(project.none { it.holds(LAUNCHER) }) {
+        "The 'junit-vintage' engine is selected but the test runtime classpath has its own JUnit Platform and no " +
+            "vintage engine: add org.junit.vintage:junit-vintage-engine matching your JUnit Platform version to " +
+            "testRuntimeOnly"
+    }
+    // A Path is Iterable<Path>, so plus(element) would add its name parts.
+    return project + listOf(codeSourceOf(VINTAGE_ENGINE_CLASS))
+}
+
 private fun Path.holds(resource: String): Boolean =
     when {
         Files.isDirectory(this) -> Files.exists(resolve(resource))
