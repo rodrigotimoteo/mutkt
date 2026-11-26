@@ -1,0 +1,49 @@
+{
+  "mutants": {
+    "min": 150,
+    "max": 600
+  },
+  "score": {
+    "min": 0.05,
+    "max": 0.35
+  },
+  "maxError": 0,
+  "operators": [
+    "negate-conditionals",
+    "arithmetic",
+    "conditionals-boundary",
+    "null-returns",
+    "return-vals",
+    "empty-returns"
+  ],
+  "mustNotContain": [
+    "**.R",
+    "**.R$*",
+    "**.BuildConfig",
+    "**.databinding.*Binding",
+    "**.databinding.*Binding*Impl"
+  ],
+  "files": [
+    {
+      "path": "src/main/java/com/pluto/core/applifecycle/AppLifecycle.kt",
+      "killedAtLeast": 1,
+      "note": "activityCount == 1 and == 0 checks in onActivityStarted/Stopped are covered by AppLifecycleTest"
+    },
+    {
+      "path": "src/main/java/com/pluto/plugin/PluginManager.kt",
+      "noCoverageAtLeast": 1,
+      "note": "no direct test; mocked in PlutoTest"
+    },
+    {
+      "path": "src/main/java/com/pluto/Pluto.kt",
+      "killedAtLeast": 1,
+      "note": "open() with a null identifier is asserted to start SelectorActivity in PlutoTest"
+    }
+  ],
+  "risks": [
+    "Estimate from site counts (about 300 mutants), not a measured run; the range is wide on purpose.",
+    "Score range is a guess: most of the library is untested, so the score is expected to be low.",
+    "Pluto is an object with reflection-driven tests; mutants in Pluto.kt may be killed or survive depending on the reflection setup."
+  ],
+  "note": "Predicted for the pluto corpus entry (:pluto:lib, debug, vintage and robolectric). Written before any run."
+}

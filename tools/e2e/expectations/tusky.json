@@ -1,0 +1,47 @@
+{
+  "note": "Predicted from source reading. util is ~55 Kotlin/Java files; only 8 have unit tests, so most mutants should be NoCoverage.",
+  "mutants": {
+    "min": 400,
+    "max": 1600
+  },
+  "score": {
+    "min": 0.05,
+    "max": 0.4
+  },
+  "maxError": 0,
+  "operators": [
+    "negate-conditionals",
+    "arithmetic",
+    "conditionals-boundary",
+    "null-returns",
+    "return-vals",
+    "empty-returns"
+  ],
+  "mustNotContain": [
+    "**.R",
+    "**.BuildConfig",
+    "**.Hilt_*"
+  ],
+  "files": [
+    {
+      "path": "src/main/java/com/keylesspalace/tusky/util/HttpHeaderLink.kt",
+      "killedAtLeast": 5,
+      "note": "Well tested by HttpHeaderLinkTest (RFC 8288 examples); parser has many comparisons and returns."
+    },
+    {
+      "path": "src/main/java/com/keylesspalace/tusky/util/NumberUtils.kt",
+      "killedAtLeast": 1,
+      "note": "Small and tested by NumberUtilsTest; the min threshold comparison and the scaling arithmetic should be killed."
+    },
+    {
+      "path": "src/main/java/com/keylesspalace/tusky/util/BlurHashDecoder.kt",
+      "noCoverageAtLeast": 1,
+      "note": "No unit test calls the decoder directly (other tests only hold blurhash strings); its arithmetic should report NoCoverage."
+    }
+  ],
+  "risks": [
+    "Most util classes have no unit test, so NoCoverage dominates and keeps the score low",
+    "TldLists.java is a large static initializer; mutants there are not expected to be meaningful",
+    "Robolectric tests (6 files) are slow; the default timeout may be hit by some mutants"
+  ]
+}

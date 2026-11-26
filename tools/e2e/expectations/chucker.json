@@ -1,0 +1,54 @@
+{
+  "note": "Predicted from source reading, not run. Android library with viewBinding and Room (KSP); about 80 main files, 46 test files. Expect roughly 600 mutants, mostly null-returns and return-vals on the UI and data layers.",
+  "mutants": {
+    "min": 300,
+    "max": 1200
+  },
+  "score": {
+    "min": 0.3,
+    "max": 0.75
+  },
+  "maxError": 0,
+  "operators": [
+    "negate-conditionals",
+    "arithmetic",
+    "conditionals-boundary",
+    "null-returns",
+    "return-vals",
+    "empty-returns"
+  ],
+  "mustNotContain": [
+    "**.R",
+    "**.R$*",
+    "**.BR",
+    "**.BuildConfig",
+    "**.databinding.*Binding",
+    "**.databinding.*Binding*Impl",
+    "**.databinding.*Binding*Impl$*",
+    "**.DataBinderMapperImpl",
+    "**.generated.callback.*"
+  ],
+  "files": [
+    {
+      "path": "library/src/main/kotlin/com/chuckerteam/chucker/internal/support/FormatUtils.kt",
+      "killedAtLeast": 1,
+      "note": "Tested by FormatUtilsTest; its comparisons and size arithmetic should be killed."
+    },
+    {
+      "path": "library/src/main/kotlin/com/chuckerteam/chucker/api/RetentionManager.kt",
+      "survivedAtLeast": 1,
+      "note": "No direct unit test; cleanup-frequency comparison and period arithmetic should survive without coverage tests."
+    },
+    {
+      "path": "library/src/main/kotlin/com/chuckerteam/chucker/internal/support/SpanTextUtil.kt",
+      "survivedAtLeast": 1,
+      "note": "No direct unit test; the token index arithmetic should survive."
+    }
+  ],
+  "risks": [
+    "Mutant count is an estimate from source reading; not verified with a Gradle run",
+    "Robolectric and mockk tests are slow; some mutants may hit the default timeout (Timeout counts toward score)",
+    "Room _Impl classes and other generated code are not auto-excluded and may add mutants",
+    "Android UI classes (fragments, activities) have few unit tests, so their mutants should mostly survive and keep the score low"
+  ]
+}
