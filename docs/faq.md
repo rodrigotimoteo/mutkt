@@ -55,7 +55,9 @@ Yes, including inline mocking. Measured on JDK 17 and 21 with MockK 1.14 mocking
 - Without a `-javaagent`, MockK attaches its agent at runtime in the child JVMs as in the `test` task (JDK 21 prints a dynamic agent loading warning).
 - With the agent set on the `test` task and dynamic loading turned off (`jvmArgs '-XX:-EnableDynamicAgentLoading', '-javaagent:<byte-buddy-agent jar>'`), the agent is forwarded and the tests pass in both tasks. Mockito 5's `-javaagent:<mockito-core jar>` setup is forwarded the same way (not measured).
 
-One limitation: MockK's string form `mockkStatic("com.example.Prices")` fails with `ClassNotFoundException` in the child JVMs, because MockK resolves the name through its own class loader, which does not see the project's classes there. Use the class form, `mockkStatic(Prices::class)`.
+## Does Kotest work?
+
+Yes. Every run gets a fresh class loader, so Kotest would scan the whole classpath for its project config and `@AutoScan` extensions in every run, which on a large classpath takes longer than the preparation limit. When Kotest is on the test runtime classpath, MutKt turns those scans off in its child JVMs (`kotest.framework.classpath.scanning.config.disable`, `kotest.framework.classpath.scanning.autoscan.disable`) and names the project config it finds among the test classes and the class directories of the test runtime classpath in `kotest.framework.config.fqn`. The config scan stays on when there are several project configs or a dependency jar has a class that refers to `AbstractProjectConfig` (a project config held by a dependency, such as a shared test-fixtures jar, cannot be named), and the `@AutoScan` scan stays on when a test class, class directory or dependency jar has an `@AutoScan` class. Kotest's own jars are not searched. A value the `test` task sets for one of these properties is kept.
 
 ## JUnit 4: "Cannot create Launcher without at least one TestEngine"
 

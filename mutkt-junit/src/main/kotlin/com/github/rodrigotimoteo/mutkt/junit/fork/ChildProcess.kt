@@ -40,6 +40,10 @@ internal class ChildProcess private constructor(
 
     val isAlive: Boolean get() = process.isAlive
 
+    /** True once a result asked not to reuse this child: its memory is past the limits. */
+    @Volatile var retiring: Boolean = false
+        private set
+
     /**
      * Sends [request]. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
      * detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout] of [timeoutMillis].
@@ -134,6 +138,7 @@ internal class ChildProcess private constructor(
                     replies.put(Event.Closed(null))
                     return
                 }
+                if (reply is ForkReply.Result && reply.retire) retiring = true
                 replies.put(Event.Reply(reply))
             }
         } catch (e: IOException) {

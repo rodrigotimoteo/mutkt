@@ -29,8 +29,10 @@ private const val ROBOLECTRIC_MARKER = "org/robolectric/internal/SandboxManager.
  * at a time and is reused. A child that times out is killed and replaced, which is what stops an endless loop.
  * A child that dies once the tests started is a kill by the mutant and is replaced (ADR 0002); one that dies
  * before, or cannot start, makes [run] throw with its exit code and last stderr lines.
- * With Robolectric on the classpath no child is reused: it caches its sandbox, and the instrumented project classes
- * it read through the first run's class loader, in JVM-wide statics with no reset API, so later runs would test them.
+ * A child whose memory is past its limits after a run (a run's class loader stays reachable while a library thread or
+ * static holds it) is replaced too. With Robolectric on the classpath no child is reused: it caches its sandbox and the
+ * instrumented project classes in statics with no reset API, and that a fresh class loader per run resets all of them
+ * is not shown on a real Robolectric project.
  */
 public class ForkedTestExecutor(
     private val settings: ForkSettings,
@@ -96,7 +98,7 @@ public class ForkedTestExecutor(
         try {
             val outcome = child.exchange(request, context, timeoutMillis, settings.graceMillis, settings.prepareMillis)
             // A child that timed out may still be running the abandoned mutant thread; one that died is replaced.
-            reusable = reuseChildren && outcome.outcome != Outcome.Timeout && child.isAlive
+            reusable = reuseChildren && outcome.outcome != Outcome.Timeout && child.isAlive && !child.retiring
             return outcome
         } finally {
             if (reusable) idle.push(child)
@@ -169,10 +171,13 @@ public class ForkedTestExecutor(
             check(!closed) { CLOSED }
             listOf(settings.javaExecutable.toString()) +
                 settings.jvmArgs +
+                kotestArgs +
                 listOf("-cp", classpath.joinToString(File.pathSeparator), FORK_MAIN, startup.value.toString())
         }
 
     private val reuseChildren by lazy { settings.classpath.none(::hasRobolectric) }
+
+    private val kotestArgs by lazy { kotestProperties(projectClasspath, settings.testClassDir, settings.jvmArgs) }
 
     private val classpath by lazy {
         engineClasspathFor(settings.engineClasspath ?: derivedEngineClasspath(), settings.classpath)

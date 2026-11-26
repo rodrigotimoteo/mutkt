@@ -61,6 +61,7 @@ internal fun writeReply(
             writeByte(REPLY_RESULT)
             writeOutcome(reply.outcome)
             writeLong(reply.elapsedMillis)
+            writeBoolean(reply.retire)
         }
     }
 }
@@ -70,7 +71,7 @@ internal fun readReply(input: DataInputStream): ForkReply? =
     readFrame(input) {
         when (val tag = readUnsignedByte()) {
             REPLY_READY -> ForkReply.Ready(readInt())
-            REPLY_RESULT -> ForkReply.Result(readOutcome(), readLong())
+            REPLY_RESULT -> ForkReply.Result(readOutcome(), readLong(), readBoolean())
             REPLY_STARTED -> ForkReply.Started
             else -> throw ForkProtocolException("Unknown reply tag $tag")
         }

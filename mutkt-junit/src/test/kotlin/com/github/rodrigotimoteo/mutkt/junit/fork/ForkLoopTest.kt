@@ -39,9 +39,12 @@ class ForkLoopTest {
         return DataInputStream(ByteArrayInputStream(buffer.toByteArray()))
     }
 
-    private fun replies(vararg requests: ForkRequest): List<ForkReply> {
+    private fun replies(
+        vararg requests: ForkRequest,
+        retire: Boolean = false,
+    ): List<ForkReply> {
         val buffer = ByteArrayOutputStream()
-        runForkLoop(input(*requests), DataOutputStream(buffer), executor())
+        runForkLoop(input(*requests), DataOutputStream(buffer), executor()) { retire }
         val stream = DataInputStream(ByteArrayInputStream(buffer.toByteArray()))
         // Elapsed times vary; the baseline's own is checked through the executor.
         return generateSequence { readReply(stream) }
@@ -82,6 +85,14 @@ class ForkLoopTest {
                 ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0),
             ),
             replies(ForkRequest.Baseline(10_000), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
+        )
+    }
+
+    @Test
+    fun `a child past its memory limit asks to be retired with its result`() {
+        assertEquals(
+            listOf(ForkReply.Ready(), ForkReply.Started, ForkReply.Result(Outcome.Survived, 0, retire = true)),
+            replies(run(mutantBytes(CALC)), ForkRequest.Shutdown, retire = true),
         )
     }
 

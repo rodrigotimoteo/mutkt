@@ -58,7 +58,8 @@ private fun serve(
     JUnitTestExecutor(
         readClassFiles(startup.projectClassDir),
         readClassFiles(startup.testClassDir),
-        startup.classpath,
+        // The class directories answer package scans (getResources("a/b/")); their classes still come from memory.
+        listOf(startup.projectClassDir, startup.testClassDir) + startup.classpath,
         startup.engines,
         startup.includeTags,
         startup.excludeTags,
@@ -69,11 +70,15 @@ private fun serve(
 @Suppress("PrintStackTrace")
 private fun report(e: Throwable) = e.printStackTrace()
 
-/** Announces readiness, then answers each run request until shutdown or a clean end of input. */
+/**
+ * Announces readiness, then answers each run request until shutdown or a clean end of input; a result asks the parent
+ * to retire this child when [retire] says so after the run.
+ */
 internal fun runForkLoop(
     input: DataInputStream,
     output: DataOutputStream,
     executor: JUnitTestExecutor,
+    retire: () -> Boolean = ::needsRetirement,
 ) {
     writeReply(output, ForkReply.Ready())
     while (true) {
@@ -81,11 +86,11 @@ internal fun runForkLoop(
             is ForkRequest.Run -> {
                 val deadline = request.timeoutMillis.milliseconds
                 val started = { writeReply(output, ForkReply.Started) }
-                writeResult(output, executor.run(request.mutant, request.bytes, deadline, started))
+                writeResult(output, executor.run(request.mutant, request.bytes, deadline, started), retire())
             }
             is ForkRequest.Baseline -> {
                 val started = { writeReply(output, ForkReply.Started) }
-                writeResult(output, executor.baseline(request.timeoutMillis.milliseconds, started))
+                writeResult(output, executor.baseline(request.timeoutMillis.milliseconds, started), retire())
             }
             ForkRequest.Shutdown, null -> return
         }
@@ -95,4 +100,5 @@ internal fun runForkLoop(
 private fun writeResult(
     output: DataOutputStream,
     result: TimedOutcome,
-) = writeReply(output, ForkReply.Result(result.outcome, result.elapsed.inWholeMilliseconds))
+    retire: Boolean,
+) = writeReply(output, ForkReply.Result(result.outcome, result.elapsed.inWholeMilliseconds, retire))

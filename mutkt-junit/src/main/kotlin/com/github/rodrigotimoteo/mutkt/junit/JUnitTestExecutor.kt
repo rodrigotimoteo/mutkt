@@ -25,7 +25,8 @@ internal const val JUPITER_ENGINE = "junit-jupiter"
 
 /**
  * Runs the project's tests of the selected [engines] (JUnit tag expressions in [includeTags] and [excludeTags]
- * narrow them; no include tags means all) in isolated class loaders, one fresh set per mutant.
+ * narrow them; no include tags means all) in a fresh class loader per run that defines the project's classes (from
+ * memory, the mutant included) and the [classpath], so dependencies resolve project classes but nothing outlives a run.
  *
  * Each run executes on its own daemon thread and the deadline starts once the tests are discovered.
  * Loading, linking and discovery are unbounded here: only a forked child limits them (ForkSettings.prepareMillis).
@@ -55,9 +56,7 @@ public class JUnitTestExecutor(
                 excludeTags.takeIf { it.isNotEmpty() }?.let(TagFilter::excludeTags),
             )
 
-    // Dependency jars are shared by concurrent mutants through this loader (library statics included);
-    // mutated and test classes are defined per run.
-    private val base = projectLoader(classpath, JUnitTestExecutor::class.java.classLoader)
+    private val classpath = classpath.toList()
 
     @Volatile private var closed = false
 
@@ -96,7 +95,7 @@ public class JUnitTestExecutor(
     ): TimedOutcome {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { "JUnitTestExecutor is closed, cannot run $label" }
-        return MutantClassLoader(base, loaded).use { loader ->
+        return projectLoader(classpath, JUnitTestExecutor::class.java.classLoader, loaded).use { loader ->
             val started = CountDownLatch(1)
             val task =
                 FutureTask {
@@ -136,7 +135,6 @@ public class JUnitTestExecutor(
 
     override fun close() {
         closed = true
-        base.close()
     }
 
     private fun execute(
