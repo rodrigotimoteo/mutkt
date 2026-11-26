@@ -57,6 +57,10 @@ Yes, including inline mocking. Measured on JDK 17 and 21 with MockK 1.14 mocking
 
 One limitation: MockK's string form `mockkStatic("com.example.Prices")` fails with `ClassNotFoundException` in the child JVMs, because MockK resolves the name through its own class loader, which does not see the project's classes there. Use the class form, `mockkStatic(Prices::class)`.
 
+## Does Robolectric work?
+
+Yes, at the cost of one child JVM per mutant. A child JVM normally runs mutant after mutant, but Robolectric caches its sandbox, with the copy of each project class it instrumented, in JVM-wide statics it never resets, so a reused JVM would test the class it loaded first and give wrong counts. When the test runtime classpath has Robolectric (`org/robolectric/internal/SandboxManager.class`), every run gets a fresh child JVM, which pays the JVM and sandbox start-up each time.
+
 ## Why was a class skipped?
 
 MutKt recomputes the stack frames of every class it mutates, which needs the supertypes of the types its branches join. It finds them in the test runtime classpath, the main compile classpath (so `compileOnly` types resolve) and the JDK running Gradle. A type missing from all of them, such as a JDK class newer than the Gradle JVM, makes MutKt skip that class: the build log shows `Skipped <class>: cannot resolve <type> to compute stack frames`, and the class has no mutants in the reports. Every other class is still analysed. Running Gradle on the same JDK as the tests avoids this.
