@@ -55,10 +55,10 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 | `enableWeakMutation` | removed | No weak-mutation pass |
 | `enableInlinedFinally` | removed | No inlined-finally filter |
 | `enableTestOrdering` | removed | No test ordering |
-| `isAndroid` | removed | Android is not supported in 0.4.0 (decision D6: Android deferred) |
-| `androidPluginType` | removed | As above |
-| `androidVariant` | removed | As above |
-| `androidContext` | removed | As above |
+| `isAndroid` | removed | From 0.5.0, MutKt activates when `com.android.application` or `com.android.library` is applied (AGP 8.4 to 9.x, see [getting-started.md](getting-started.md#android)) |
+| `androidPluginType` | removed | Read from the applied Android plugin |
+| `androidVariant` | `variant` (0.5.0) | Default `debug`; one variant per run |
+| `androidContext` | removed | MutKt reads the variant's classes and unit-test task from AGP |
 
 New in 0.4.0 with no old counterpart: `engines`, `includeTags`, `excludeTags` (they were constructor arguments of the old engine, not DSL), and `reports.console`. See [dsl.md](dsl.md).
 

@@ -65,9 +65,25 @@ Yes, at the cost of one child JVM per mutant. A child JVM normally runs mutant a
 
 MutKt recomputes the stack frames of every class it mutates, which needs the supertypes of the types its branches join. It finds them in the test runtime classpath, the main compile classpath (so `compileOnly` types resolve) and the JDK running Gradle. A type missing from all of them, such as a JDK class newer than the Gradle JVM, makes MutKt skip that class: the build log shows `Skipped <class>: cannot resolve <type> to compute stack frames`, and the class has no mutants in the reports. Every other class is still analysed. Running Gradle on the same JDK as the tests avoids this.
 
+## Android: "MutKt cannot load the Android Gradle plugin's classes"
+
+MutKt compiles against AGP but does not ship it, so its class loader must see the one your build uses. That holds when AGP is declared in the same `plugins { }` block as MutKt or in a parent project's, for example both in the root with `apply false` (see [getting-started.md](getting-started.md#android)). AGP declared only in a module below the one that declares MutKt fails with this message.
+
+## Android: "variant 'release' has no unit tests"
+
+AGP 9 turns on `android.onlyEnableUnitTestForTheTestedBuildType` by default, so only the tested build type (`debug`) has unit tests. To mutate against another build type's tests, add `android.onlyEnableUnitTestForTheTestedBuildType=false` to `gradle.properties`. The message lists the variants that have unit tests; a variant disabled with `enableUnitTest = false` is left out of it too.
+
+## Android: can MutKt run instrumented tests?
+
+No. MutKt runs a variant's local unit tests (`src/test`, on the JVM, Robolectric included). Instrumented tests (`src/androidTest`, `connectedAndroidTest`) need a device or an emulator and are not supported.
+
+## Android: why are R, BuildConfig or binding classes not mutated?
+
+An Android module starts `excludedClasses` with globs for the classes the build generates (R, BR, BuildConfig, Hilt, Dagger, view and data binding, Compose). The globs go by name, so a class of yours that fits one is skipped too: `**.R`, `**.BR` and `**.BuildConfig` match any class with that simple name, `**.*_*Factory` any class with an underscore that ends in `Factory`, and `**.databinding.*Binding*Impl` such a class in any `databinding` package. `excludedClasses = [...]` replaces the globs; [dsl.md](dsl.md#android-generated-classes) lists them all.
+
 ## Where are the reports, and why is there no output?
 
-`build/reports/mutkt/` holds `mutation-report.html`, `mutation-report.json` (Stryker schema) and `mutkt.txt`. An up-to-date run prints nothing: the reports from the last run are still there. `reports.console = false` keeps the summary out of the build log; the files are written on every run that gets past the baseline.
+`build/reports/mutkt/` of the project (of each module, on Android too) holds `mutation-report.html`, `mutation-report.json` (Stryker schema) and `mutkt.txt`. An up-to-date run prints nothing: the reports from the last run are still there. `reports.console = false` keeps the summary out of the build log; the files are written on every run that gets past the baseline.
 
 ## Why doesn't `check` run it?
 
