@@ -48,8 +48,11 @@ for pom in poms:
         if node is None or not (node.text or "").strip():
             failures.append(f"{pom}: missing {path.replace('m:', '')}")
 descriptor = "META-INF/gradle-plugins/io.github.rodrigotimoteo.mutkt.properties"
-if descriptor not in zipfile.ZipFile(sys.argv[1]).namelist():
+plugin_jar = zipfile.ZipFile(sys.argv[1])
+if descriptor not in plugin_jar.namelist():
     failures.append(f"{sys.argv[1]}: missing {descriptor}")
+elif "compatibility.feature.configuration-cache=DECLARED_SUPPORTED" not in plugin_jar.read(descriptor).decode().splitlines():
+    failures.append(f"{sys.argv[1]}: {descriptor} does not declare configuration cache support")
 for jar in docs:
     if "index.html" not in zipfile.ZipFile(jar).namelist():
         failures.append(f"{jar}: no Dokka index.html")
