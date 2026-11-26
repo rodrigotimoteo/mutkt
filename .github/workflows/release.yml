@@ -77,8 +77,7 @@ jobs:
           if tools/release/published.sh plugin-portal "$VERSION"; then
             echo "The Plugin Portal already has $VERSION, skipping the upload"
           else
-            ./gradlew :mutkt-gradle:publishPlugins "-Pmutkt.version=$VERSION"
-            tools/release/published.sh plugin-portal "$VERSION" 900
+            tools/release/publish-plugin.sh "$VERSION" 900 ./gradlew :mutkt-gradle:publishPlugins "-Pmutkt.version=$VERSION"
           fi
       - name: GitHub release
         env:

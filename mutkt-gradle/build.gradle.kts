@@ -1,3 +1,4 @@
+import org.gradle.plugin.compatibility.compatibility
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
@@ -19,6 +20,12 @@ gradlePlugin {
             displayName = "MutKt mutation testing"
             description = "Mutates compiled Kotlin bytecode and runs your existing JUnit tests against each mutant."
             tags = listOf("mutation-testing", "kotlin", "testing", "junit")
+            // Every TestKit scenario runs with --configuration-cache.
+            compatibility {
+                features {
+                    configurationCache = true
+                }
+            }
         }
     }
 }
