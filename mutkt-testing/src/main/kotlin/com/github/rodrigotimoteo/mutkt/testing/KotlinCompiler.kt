@@ -17,13 +17,15 @@ private fun binaryName(
 
 /**
  * Compiles [source] (as file [fileName]) with the real Kotlin compiler; returns class bytes by binary name.
- * With [inheritClassPath] the caller's classpath is visible to the source (e.g. Jupiter annotations).
+ * With [inheritClassPath] the caller's classpath is visible to the source (e.g. Jupiter annotations);
+ * [kotlincArguments] go to kotlinc as written (e.g. `-Xjvm-default=all`).
  */
 @OptIn(ExperimentalCompilerApi::class)
 fun compileKotlin(
     source: String,
     inheritClassPath: Boolean = false,
     fileName: String = "Source.kt",
+    kotlincArguments: List<String> = emptyList(),
 ): Map<String, ByteArray> {
     val workDir = Files.createTempDirectory("mutkt-kotlin")
     try {
@@ -35,6 +37,7 @@ fun compileKotlin(
                     jvmTarget = "17"
                     verbose = false
                     this.inheritClassPath = inheritClassPath
+                    this.kotlincArguments = kotlincArguments
                 }.compile()
         check(result.exitCode == KotlinCompilation.ExitCode.OK) { "Kotlin compilation failed: ${result.messages}" }
         val root = result.outputDirectory.toPath()

@@ -42,6 +42,16 @@ class KotlinCompilerTest {
     }
 
     @Test
+    fun `compiler arguments reach kotlinc`() {
+        val source = "package p\ninterface I { fun one() = 1 }"
+
+        val compiled = { mode: String -> compileKotlin(source, kotlincArguments = listOf("-Xjvm-default=$mode")).keys }
+
+        assertEquals(setOf("p.I", "p.I\$DefaultImpls"), compiled("disable"))
+        assertEquals(setOf("p.I"), compiled("all"))
+    }
+
+    @Test
     fun `invalid source fails fast`() {
         assertThrows<IllegalStateException> { compileKotlin("fun broken( =") }
     }
