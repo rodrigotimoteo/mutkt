@@ -150,6 +150,8 @@ jobs:
     timeout-minutes: 25
     strategy:
       fail-fast: false
+      # Fewer cells resolving AGP at once, so Maven Central does not rate-limit the run (HTTP 429).
+      max-parallel: 3
       # The cells of docs/adr/0006-android.md; the runner image ships the Android SDK at ANDROID_HOME.
       matrix:
         include:
@@ -165,6 +167,12 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+      # The scenarios resolve AGP and its dependencies into their own Gradle user home, which setup-gradle does not cache.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: mutkt-gradle/build/testkit/caches/modules-2
+          key: agp-testkit-${{ matrix.agp }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: agp-testkit-${{ matrix.agp }}-
       - name: Android TestKit scenarios
         run: ./gradlew :mutkt-gradle:agpTest -Pmutkt.agp=${{ matrix.agp }} -Pmutkt.agpGradle=${{ matrix.gradle }}
       - name: Upload test reports

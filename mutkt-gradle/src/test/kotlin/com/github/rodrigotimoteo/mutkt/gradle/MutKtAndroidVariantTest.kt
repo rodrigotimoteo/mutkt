@@ -24,6 +24,16 @@ class MutKtAndroidVariantTest {
     }
 
     @Test
+    fun `resolves AGP into the TestKit dir that CI caches`() {
+        setUp("")
+
+        runner().build()
+
+        val agp = TEST_KIT_DIR.resolve("caches/modules-2/files-2.1/com.android.tools.build/gradle/$AGP_VERSION")
+        assertTrue(agp.isDirectory, "$agp is missing")
+    }
+
+    @Test
     fun `another variant with unit tests passes configuration`() {
         setUp(
             """
@@ -186,6 +196,7 @@ class MutKtAndroidVariantTest {
         GradleRunner
             .create()
             .withProjectDir(dir)
+            .withTestKitDir(TEST_KIT_DIR)
             // AGP 8 creates its user home's cache in the first build, which the configuration cache sees as a change.
             .withEnvironment(System.getenv() + ("ANDROID_USER_HOME" to androidUserHome().absolutePath))
             .withGradleVersion(GRADLE_VERSION)
@@ -338,6 +349,8 @@ class MutKtAndroidVariantTest {
         val BUILT_IN_KOTLIN = AGP_VERSION.substringBefore('.').toInt() >= 9
         val GRADLE_VERSION: String =
             checkNotNull(System.getProperty("mutkt.agpGradleVersion")) { "mutkt.agpGradleVersion is not set" }
+
+        val TEST_KIT_DIR = File(checkNotNull(System.getProperty("mutkt.testKitDir")) { "mutkt.testKitDir is not set" })
 
         // What withPluginClasspath() would inject: the plugin and its runtime dependencies.
         val MUTKT_CLASSPATH: List<File> =

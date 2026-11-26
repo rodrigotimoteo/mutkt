@@ -92,6 +92,13 @@ val agpTest by tasks.registering(Test::class) {
     systemProperty("mutkt.kotlinVersion", libs.versions.kotlin.get())
     // AGP 8.4's minimum Gradle.
     systemProperty("mutkt.agpGradleVersion", providers.gradleProperty("mutkt.agpGradle").getOrElse("8.6"))
+    // A fixed Gradle user home for the scenarios, so CI can cache what they download (AGP, Kotlin) between runs.
+    val testKitDir =
+        layout.buildDirectory
+            .dir("testkit")
+            .get()
+            .asFile
+    systemProperty("mutkt.testKitDir", testKitDir.absolutePath)
     // Run only on request, so a missing SDK is an error rather than a silent pass.
     val androidHome = providers.environmentVariable("ANDROID_HOME")
     doFirst {
