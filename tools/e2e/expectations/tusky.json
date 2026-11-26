@@ -32,11 +32,6 @@
       "path": "src/main/java/com/keylesspalace/tusky/util/NumberUtils.kt",
       "killedAtLeast": 1,
       "note": "Small and tested by NumberUtilsTest; the min threshold comparison and the scaling arithmetic should be killed."
-    },
-    {
-      "path": "src/main/java/com/keylesspalace/tusky/util/BlurHashDecoder.kt",
-      "noCoverageAtLeast": 1,
-      "note": "No unit test calls the decoder directly (other tests only hold blurhash strings); its arithmetic should report NoCoverage."
     }
   ],
   "risks": [

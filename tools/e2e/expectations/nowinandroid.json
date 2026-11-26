@@ -34,11 +34,6 @@
       "path": "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/OfflineFirstUserDataRepository.kt",
       "killedAtLeast": 1,
       "note": "user data flows covered by tests"
-    },
-    {
-      "path": "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/util/ConnectivityManagerNetworkMonitor.kt",
-      "noCoverageAtLeast": 1,
-      "note": "Android network APIs without unit tests, so mutants stay uncovered"
     }
   ],
   "risks": [

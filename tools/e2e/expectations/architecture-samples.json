@@ -26,21 +26,18 @@
       "path": "app/src/main/java/com/example/android/architecture/blueprints/todoapp/statistics/StatisticsUtils.kt",
       "killedAtLeast": 1,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 0,
       "note": "four unit tests cover empty and non-empty task lists and the percentage"
     },
     {
       "path": "app/src/main/java/com/example/android/architecture/blueprints/todoapp/data/DefaultTaskRepository.kt",
       "killedAtLeast": 1,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 0,
       "note": "DefaultTaskRepositoryTest has 16 tests, including forceUpdate and network save paths"
     },
     {
       "path": "app/src/main/java/com/example/android/architecture/blueprints/todoapp/util/SimpleCountingIdlingResource.kt",
       "killedAtLeast": 0,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 1,
       "note": "no unit test loads this class; its counter branches stay uncovered"
     }
   ],
