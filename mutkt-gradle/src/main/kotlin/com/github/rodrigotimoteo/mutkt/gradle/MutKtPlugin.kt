@@ -4,7 +4,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 
-/** Registers the `mutkt` extension and, with the java plugin, the `mutkt` task; checks the variant on Android. */
+/** Registers the `mutkt` extension and the `mutkt` task, for the java plugin or for one Android variant. */
 public class MutKtPlugin : Plugin<Project> {
     override fun apply(project: Project) {
         val mutkt = project.extensions.create("mutkt", MutKtExtension::class.java)
@@ -34,7 +34,7 @@ public class MutKtPlugin : Plugin<Project> {
     // them only when AGP is declared in the same or a parent plugins { } scope.
     private fun Project.activateAndroid(mutkt: MutKtExtension) =
         try {
-            checkAndroidVariant(mutkt)
+            wireAndroid(mutkt)
         } catch (missing: NoClassDefFoundError) {
             throw GradleException(
                 "MutKt cannot load the Android Gradle plugin's classes: declare the Android Gradle plugin in " +

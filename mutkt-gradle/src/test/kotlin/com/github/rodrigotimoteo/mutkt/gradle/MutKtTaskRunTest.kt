@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.util.jar.JarEntry
+import java.util.jar.JarOutputStream
 
 /** Runs the task action in this JVM against real compiler output and a real child JVM pool. */
 @Tag("e2e")
@@ -164,6 +166,68 @@ class MutKtTaskRunTest {
         assertTrue("both in main and in another source set" in failure.message.orEmpty(), failure.message)
         assertTrue("demo/Calc.class" in failure.message.orEmpty(), failure.message)
     }
+
+    @Test
+    fun `main classes in a jar are unpacked and the mutants shadow the originals on the test classpath`() {
+        val task = fixtureTask()
+        val original = dir.resolve("original").also { dir.resolve("main").copyRecursively(it) }
+        val calc = original.resolve("demo/Calc.class").readBytes()
+        task.classesDirs.setFrom(mainJar(mapOf("META-INF/versions/11/demo/Calc.class" to calc)))
+        task.testRuntimeClasspath.setFrom(original, dir.resolve("test"), runtimeJars())
+
+        val summary = task.runAnalysis().summary
+
+        assertTrue("KILLED       2" in summary, summary)
+        assertFalse(task.temporaryDir.resolve("classes/META-INF/versions").exists(), "multi-release entries staged")
+    }
+
+    @Test
+    fun `a class in both a jar and a directory fails the run with both sources`() {
+        val task = fixtureTask()
+        task.classesDirs.setFrom(mainJar(), dir.resolve("main"))
+
+        val failure = assertThrows<GradleException> { task.runAnalysis() }
+
+        assertTrue(Regex("Class demo/Calc.class is in both .*main.jar and .*main$").matches(failure.message.orEmpty()))
+    }
+
+    @Test
+    fun `a class file root that is neither a directory nor a jar fails the run`() {
+        val task = fixtureTask()
+        val notes = dir.resolve("notes.txt").apply { writeText("") }
+        task.classesDirs.setFrom(dir.resolve("main"), notes)
+
+        val failure = assertThrows<GradleException> { task.runAnalysis() }
+
+        assertEquals("MutKt reads classes from directories and jars only, not $notes", failure.message)
+    }
+
+    @Test
+    fun `a jar entry outside the staging directory fails the run`() {
+        val task = fixtureTask()
+        task.classesDirs.setFrom(mainJar(mapOf("../escaped.class" to ByteArray(0))))
+
+        val failure = assertThrows<GradleException> { task.runAnalysis() }
+
+        assertTrue("Unsafe jar entry ../escaped.class" in failure.message.orEmpty(), failure.message)
+    }
+
+    // The fixture's main classes plus [extra] entries.
+    private fun mainJar(extra: Map<String, ByteArray> = emptyMap()): File =
+        dir.resolve("main.jar").also { jar ->
+            val main = dir.resolve("main")
+            val classes =
+                main.walk().filter(File::isFile).associate {
+                    it.relativeTo(main).invariantSeparatorsPath to
+                        it.readBytes()
+                }
+            JarOutputStream(jar.outputStream()).use { out ->
+                (classes + extra).forEach { (name, bytes) ->
+                    out.putNextEntry(JarEntry(name))
+                    out.write(bytes)
+                }
+            }
+        }
 
     private fun fixtureTask(source: String = FIXTURE): MutKtTask {
         val compiled = compileKotlin(source, inheritClassPath = true)
