@@ -46,10 +46,13 @@ run_repo() {
   fi
   json entry "$corpus" "$name" >"$cache/logs/$name.entry.json"
   local task=${module%:}:mutkt module_dir=${module#:}
-  local java_home
+  local java_home gradle_args=() arg args_text
+  args_text=$(json gradle-args "$corpus" "$name" 2>&1) || { echo "FAIL $args_text"; return; }
+  [[ -z $args_text ]] || while IFS= read -r arg; do gradle_args+=("$arg"); done <<<"$args_text"
   java_home=$(/usr/libexec/java_home -v "$jdk" 2>/dev/null) || { echo "FAIL no JDK $jdk installed"; return; }
   if ! JAVA_HOME=$java_home "$dir/gradlew" -p "$dir" --init-script "$e2e/mutkt-e2e.init.gradle" \
-    "-Dmutkt.e2e.repo=file://$local_repo" "-Dmutkt.e2e.entry=$cache/logs/$name.entry.json" "$task" >>"$log" 2>&1; then
+    "-Dmutkt.e2e.repo=file://$local_repo" "-Dmutkt.e2e.entry=$cache/logs/$name.entry.json" \
+    ${gradle_args[@]+"${gradle_args[@]}"} "$task" >>"$log" 2>&1; then
     echo "FAIL $task failed (log: $log)"
     grep -q 'MutKt cannot load the Android Gradle plugin' "$log" && echo "  AGP is not visible to MutKt: use patch mode"
     return

@@ -1,0 +1,278 @@
+{
+  "repos": [
+    {
+      "name": "nowinandroid",
+      "url": "https://github.com/android/nowinandroid",
+      "commit": "a49ed253d75e61a2b6ab80a8da677b57437b08eb",
+      "type": "android-app",
+      "module": ":core:data",
+      "variant": "demoDebug",
+      "jdk": 21,
+      "gradle": "9.7.1",
+      "agp": "9.3.2",
+      "kotlin": "2.3.0",
+      "dsl": "kts",
+      "tests": [
+        "vintage",
+        "coroutines"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.google.samples.apps.nowinandroid.core.data.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Multi-module app on AGP 9 built-in Kotlin with flavors, Hilt and convention plugins; tests use doubles from other projects (core:testing). Pinned to the last commit with green CI unit tests."
+    },
+    {
+      "name": "architecture-samples",
+      "url": "https://github.com/android/architecture-samples",
+      "commit": "ee66e1526b84c026615df032c705842b7d2a521f",
+      "type": "android-app",
+      "module": ":app",
+      "variant": "debug",
+      "jdk": 17,
+      "gradle": "8.11.1",
+      "agp": "8.7.3",
+      "kotlin": "2.1.10",
+      "dsl": "kts",
+      "tests": [
+        "vintage",
+        "coroutines"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.example.android.architecture.blueprints.todoapp.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Single-module app on AGP 8 with Compose, Hilt and ViewModel tests on coroutines-test."
+    },
+    {
+      "name": "tusky",
+      "url": "https://github.com/tuskyapp/Tusky",
+      "commit": "43ae0bb4556392393a3d759ce42a93f3a003e83a",
+      "type": "android-app",
+      "module": ":app",
+      "variant": "blueDebug",
+      "jdk": 21,
+      "gradle": "8.14",
+      "agp": "8.10.0",
+      "kotlin": "2.1.21",
+      "dsl": "groovy",
+      "tests": [
+        "vintage",
+        "robolectric",
+        "coroutines"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.keylesspalace.tusky.util.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Large Groovy-DSL app on AGP 8 with flavors, JDK 21 toolchain, Robolectric and Mockito; targets util, where most unit tests are."
+    },
+    {
+      "name": "chucker",
+      "url": "https://github.com/ChuckerTeam/chucker",
+      "commit": "6edb7999a647d4225b5eb9aa18d2bf3e745d7774",
+      "type": "android-lib",
+      "module": ":library",
+      "variant": "debug",
+      "jdk": 21,
+      "gradle": "9.9.1",
+      "agp": "9.5.1",
+      "kotlin": "2.4.21",
+      "dsl": "kts",
+      "tests": [
+        "jupiter",
+        "vintage",
+        "robolectric",
+        "mockk",
+        "coroutines"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.chuckerteam.chucker.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Android library on AGP 9 with the Kotlin plugin (builtInKotlin=false), JDK 21 toolchain, and Jupiter plus vintage Robolectric tests in one suite."
+    },
+    {
+      "name": "pluto",
+      "url": "https://github.com/androidPluto/pluto",
+      "commit": "aed741de8d2672e1b316ffa93389593b38387970",
+      "type": "android-lib",
+      "module": ":pluto:lib",
+      "variant": "debug",
+      "jdk": 17,
+      "gradle": "8.12.1",
+      "agp": "8.6.0",
+      "kotlin": "1.9.22",
+      "dsl": "kts",
+      "tests": [
+        "vintage",
+        "robolectric"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.pluto.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Android library on Kotlin 1.9 and AGP 8.6 with a nested project path, Groovy settings and Robolectric tests."
+    },
+    {
+      "name": "strikt",
+      "url": "https://github.com/robfletcher/strikt",
+      "commit": "a245ed90bc9a1d4da005f2442b8fcc92e15d86c7",
+      "type": "jvm-lib",
+      "module": ":strikt-core",
+      "variant": null,
+      "jdk": 17,
+      "gradle": "8.10",
+      "agp": null,
+      "kotlin": "2.0.10",
+      "dsl": "kts",
+      "tests": [
+        "jupiter"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "gradleArgs": [
+        "-PossrhToken=unused",
+        "-PossrhTokenPassword=unused"
+      ],
+      "mutkt": {
+        "targetClasses": [
+          "strikt.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Assertion library on the oldest supported Gradle (8.10), buildSrc conventions, Jupiter only; its publishing script needs two properties set to configure."
+    },
+    {
+      "name": "spring-petclinic-kotlin",
+      "url": "https://github.com/spring-petclinic/spring-petclinic-kotlin",
+      "commit": "9823b3aa97988854668e608750db88502775caa7",
+      "type": "jvm-app",
+      "module": ":",
+      "variant": null,
+      "jdk": 17,
+      "gradle": "9.9.2",
+      "agp": null,
+      "kotlin": "2.4.21",
+      "dsl": "kts",
+      "tests": [
+        "jupiter",
+        "mockk"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "org.springframework.samples.petclinic.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Spring Boot 4 app on Gradle 9: Spring context tests, springmockk and an in-memory H2 database."
+    },
+    {
+      "name": "gradle-semver-plugin",
+      "url": "https://github.com/FigureTechnologies/gradle-semver-plugin",
+      "commit": "2901f42e7ad39275f210588b0ee748109cbb0713",
+      "type": "jvm-lib",
+      "module": ":",
+      "variant": null,
+      "jdk": 17,
+      "gradle": "8.11.1",
+      "agp": null,
+      "kotlin": "1.9.24",
+      "dsl": "kts",
+      "tests": [
+        "kotest"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.figure.gradle.semver.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Gradle plugin on Kotlin 1.9 with Kotest specs, a functionalTest source set and --add-opens test JVM arguments."
+    },
+    {
+      "name": "http4k",
+      "url": "https://github.com/http4k/http4k",
+      "commit": "bdd7764c1e8ac5022bfc57b40e7d39759d81b2d3",
+      "type": "jvm-lib",
+      "module": ":http4k-security-digest",
+      "variant": null,
+      "jdk": 21,
+      "gradle": "9.8.2",
+      "agp": null,
+      "kotlin": "2.4.0",
+      "dsl": "kts",
+      "tests": [
+        "jupiter"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "org.http4k.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "JDK 21 multi-module library; the digest module mixes its own packages with core's org.http4k.filter and its tests use core's testFixtures, which depend on sibling projects."
+    },
+    {
+      "name": "diffuse",
+      "url": "https://github.com/JakeWharton/diffuse",
+      "commit": "2750152a40174c8ae6ac64278e862468c2671f12",
+      "type": "jvm-app",
+      "module": ":formats",
+      "variant": null,
+      "jdk": 17,
+      "gradle": "9.9.1",
+      "agp": null,
+      "kotlin": "2.4.21",
+      "dsl": "groovy",
+      "tests": [
+        "vintage"
+      ],
+      "apply": "init-script",
+      "patch": null,
+      "mutkt": {
+        "targetClasses": [
+          "com.jakewharton.diffuse.format.**"
+        ],
+        "threads": null,
+        "timeoutMs": null
+      },
+      "why": "Groovy-DSL JVM app on Gradle 9 with JUnit 4 tests, bytecode release 11 and the configuration cache enabled."
+    }
+  ]
+}

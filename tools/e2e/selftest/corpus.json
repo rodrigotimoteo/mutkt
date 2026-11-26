@@ -17,6 +17,9 @@
       ],
       "apply": "init-script",
       "patch": null,
+      "gradleArgs": [
+        "-Pe2eSelftest=unused"
+      ],
       "mutkt": {
         "targetClasses": [
           "com.example.**"
@@ -43,6 +46,9 @@
       ],
       "apply": "init-script",
       "patch": null,
+      "gradleArgs": [
+        "-Pe2eSelftest=unused"
+      ],
       "mutkt": {
         "targetClasses": [
           "com.example.**"
