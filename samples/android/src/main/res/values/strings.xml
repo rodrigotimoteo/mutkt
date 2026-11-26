@@ -1,0 +1,4 @@
+<resources>
+    <string name="greeting">Hello, %1$s!</string>
+    <string name="greeting_anonymous">Hello, stranger!</string>
+</resources>
