@@ -5,7 +5,7 @@ plugins { id("io.github.rodrigotimoteo.mutkt") }
 mutkt { targetClasses.add("com.example.*") }
 ```
 
-Requires the Java or Kotlin JVM plugin. A test fails when this table drifts from the extension.
+Requires the Java, Kotlin JVM or Android plugin. A test fails when this table drifts from the extension.
 
 | Property | Type | Default | Meaning |
 |---|---|---|---|
@@ -20,6 +20,7 @@ Requires the Java or Kotlin JVM plugin. A test fails when this table drifts from
 | `engines` | Set<String> | `junit-jupiter` | JUnit Platform engine ids to run (`junit-jupiter`, `junit-vintage`); every id must be on the test runtime classpath, otherwise the baseline run fails with the engine error |
 | `includeTags` | Set<String> | empty | Only run tests matching one of these JUnit tag expressions (`fast`, `a & b`) |
 | `excludeTags` | Set<String> | empty | Skip tests matching one of these JUnit tag expressions (`slow`, `!fast`) |
+| `variant` | String | `debug` | Android only: the variant whose unit tests will run against the mutants (Android runs arrive in 0.5.0); a variant that does not exist or has no unit tests already fails the build with the names of those that have them |
 
 `reports { }`:
 

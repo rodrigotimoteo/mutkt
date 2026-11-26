@@ -48,7 +48,7 @@ tasks.withType<Test>().configureEach {
 }
 
 tasks.test {
-    useJUnitPlatform { excludeTags("e2e") }
+    useJUnitPlatform { excludeTags("e2e", "agp") }
 }
 
 // Own JVM: the end-to-end timeout mutant leaves a spinning thread that must not outlive its test JVM's other tests.
@@ -73,6 +73,23 @@ val matrixTest by tasks.registering(Test::class) {
     jvmArgumentProviders.add(CommandLineArgumentProvider { listOf("-Dmutkt.gradleVersions=${versions.get()}") })
 }
 
+// Android builds on real AGP; needs ANDROID_HOME and the network (google()), so it is not in check.
+val agpTest by tasks.registering(Test::class) {
+    description = "Runs the Android TestKit scenarios on the minimum AGP and its minimum Gradle."
+    group = "verification"
+    testClassesDirs = tasks.test.get().testClassesDirs
+    classpath = tasks.test.get().classpath
+    useJUnitPlatform { includeTags("agp") }
+    systemProperty("mutkt.agpVersion", libs.versions.agp.get())
+    // AGP 8.4's minimum Gradle.
+    systemProperty("mutkt.agpGradleVersion", "8.6")
+    // Run only on request, so a missing SDK is an error rather than a silent pass.
+    val androidHome = providers.environmentVariable("ANDROID_HOME")
+    doFirst {
+        if (!androidHome.isPresent) throw GradleException("agpTest needs an Android SDK: set ANDROID_HOME")
+    }
+}
+
 tasks.check {
     dependsOn(e2eTest)
 }
@@ -81,7 +98,7 @@ tasks.check {
 kover {
     currentProject {
         instrumentation {
-            disabledForTestTasks.add("matrixTest")
+            disabledForTestTasks.addAll("matrixTest", "agpTest")
         }
     }
 }
@@ -92,6 +109,7 @@ dependencies {
     implementation(project(":mutkt-asm"))
     implementation(project(":mutkt-junit"))
     implementation(project(":mutkt-report"))
+    compileOnly(libs.agp.api)
 
     testImplementation(project(":mutkt-testing"))
     testImplementation(gradleTestKit())

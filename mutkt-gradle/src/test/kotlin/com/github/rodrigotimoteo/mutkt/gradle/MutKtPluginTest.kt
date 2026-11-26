@@ -32,6 +32,7 @@ class MutKtPluginTest {
         assertTrue(mutkt.operators.get().isEmpty())
         assertFalse(mutkt.maxMutantsPerClass.isPresent)
         assertFalse(mutkt.failBelowScore.isPresent)
+        assertEquals("debug", mutkt.variant.get())
         project.evaluate()
     }
 
@@ -46,10 +47,10 @@ class MutKtPluginTest {
     }
 
     @Test
-    fun `fails without a Java or Kotlin plugin`() {
+    fun `fails without a Java, Kotlin JVM or Android plugin`() {
         val failure = assertThrows<GradleException> { project().evaluate() }
         val messages = generateSequence<Throwable>(failure) { it.cause }.map { it.message.orEmpty() }
-        assertTrue(messages.any { "MutKt requires the Java or Kotlin JVM plugin" in it })
+        assertTrue(messages.any { "MutKt requires the Java, Kotlin JVM or Android plugin" in it })
     }
 
     @Test
