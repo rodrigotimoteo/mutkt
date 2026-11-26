@@ -9,7 +9,7 @@ P5 adds Android unit-test support (ROD-125, ROD-126..129). The owner fixed the s
 ## Decision
 
 - **Activation.** `io.github.rodrigotimoteo.mutkt` reacts to `com.android.application` and `com.android.library` through `pluginManager.withPlugin`. The task stays `mutkt`; the JVM wiring is unchanged.
-- **One variant.** DSL `mutkt { variant = "debug" }` (convention `debug`). The value is read inside the `onVariants` callback, after the build script ran. If no variant has that name, or it has no unit-test component (`(variant as? HasUnitTest)?.unitTest == null`), the build fails with one message that lists the variant names.
+- **One variant.** DSL `mutkt { variant = "debug" }` (convention `debug`). The `onVariants` callback records each variant; the name check runs in an `afterEvaluate`, after the build script ran. If no variant has that name, or it has no unit-test component (`(variant as? HasUnitTest)?.unitTest == null`), the build fails with one message that lists the variant names.
 - **Supported range: AGP 8.4.0 through the latest 9.x**, on Gradle 8.x and 9.x and JDK 17+. AGP 8.4 needs Gradle 8.6+.
 - **Gradle 9 first.** AGP 9 needs Gradle 9.1+. Gradle 9 support for the JVM plugin is a separate 0.5.0 task, done before the Android work, and that task amends [0005](0005-support-matrix.md).
 - **Dependency.** `compileOnly` `com.android.tools.build:gradle-api:8.4.2` (the minimum, catalog entry `agp-api`) in `mutkt-gradle` only; the build adds the `google()` repository. We never compile against a newer AGP than the floor.
@@ -57,6 +57,7 @@ Other:
 
 - `withPlugin` gets `AndroidComponentsExtension` by type and calls `onVariants(selector().all())`. The callback compares `variant.name` with the DSL value, registers `mutkt` with `tasks.register` and calls `toGet` on it. Nothing is resolved at configuration time.
 - The name check runs in an `afterEvaluate` registered inside `withPlugin`, so it runs after AGP's own variant creation.
+- MutKt compiles against AGP but does not ship it, so its class loader must see AGP's: AGP is declared in the same `plugins {}` block as MutKt or in a parent project's (for example in the root with `apply false`). With AGP only in a child scope, applying an Android plugin fails with one message that says so.
 - The JVM rule "needs java or kotlin-jvm" accepts Android projects, because AGP's `BasePlugin` applies `JavaBasePlugin` (checked in 9.5.3). Its message must name Android.
 - `Test` values are read through `providers.provider { tasks.named(name, Test).get() }`, never `TaskProvider.map`, which would make `mutkt` run the unit tests.
 - The task holds only file collections, providers and plain values. No `Project`, `Variant` or AGP object reaches a task action, so configuration-cache entries store resolved files like the JVM path. ROD-126 runs its TestKit test with `--configuration-cache` twice (store, then reuse).

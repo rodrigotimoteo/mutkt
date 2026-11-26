@@ -43,6 +43,9 @@ public abstract class MutKtExtension {
     /** Skip tests matching one of these JUnit tag expressions. */
     public abstract val excludeTags: SetProperty<String>
 
+    /** Android only: the variant whose unit tests run against the mutants. */
+    public abstract val variant: Property<String>
+
     /** The `reports { }` block. */
     @get:Nested
     public abstract val reports: ReportsSpec
