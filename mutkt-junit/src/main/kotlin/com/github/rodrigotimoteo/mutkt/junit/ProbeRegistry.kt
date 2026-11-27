@@ -21,8 +21,16 @@ public fun probes(
 ): BooleanArray =
     checkNotNull(arrays.compute(className) { _, old -> old?.takeIf { it.size == size } ?: BooleanArray(size) })
 
-/** The indexes of [className]'s probes hit since the last call, which are then cleared. */
-internal fun drainProbes(className: String): List<Int> {
-    val probes = arrays[className] ?: return emptyList()
-    return probes.indices.filter { probes[it] }.onEach { probes[it] = false }
+/** What a probed class hit: the indexes of its site probes, and whether its entry slot (the last) was set. */
+internal class ClassHits(
+    val sites: List<Int>,
+    val reached: Boolean,
+)
+
+/** What [className] hit since the last call, which is then cleared. */
+internal fun drainProbes(className: String): ClassHits {
+    val probes = arrays[className]?.takeIf { it.isNotEmpty() } ?: return ClassHits(emptyList(), false)
+    val entry = probes.lastIndex
+    val reached = probes[entry].also { probes[entry] = false }
+    return ClassHits((0 until entry).filter { probes[it] }.onEach { probes[it] = false }, reached)
 }

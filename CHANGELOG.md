@@ -7,8 +7,10 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 ### Changed
 
 - Breaking: Gradle 8.10 is no longer supported; the minimum is Gradle 8.11. MutKt is now built with Kotlin 2.4, which compiles for Kotlin 2.0 at the oldest, and Gradle 8.11 is the first Gradle with Kotlin 2.0 ([ADR 0005](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/adr/0005-support-matrix.md)).
+- Fewer mutants in code kotlinc generates: the coroutine state machine (`COROUTINE_SUSPENDED` checks and returns, the `Unit` result of a Unit suspend function, the continuation prologue and re-entry), enum `values`/`valueOf`/`getEntries`, and SAM adapter classes. On the ten release-check projects this removes 437 of 4891 mutants, including 49 of the 77 timeouts ([operators](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md#generated-code-on-the-e2e-corpus)).
 ### Added
 
+- Opt-in `when-switch` operator: a `when` over Int, Char or String constants sends one case to the else branch, or the else branch to the first case ([docs/operators.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md)).
 - Opt-in operator `remove-negation`: removes a unary minus (`INEG`/`LNEG`/`FNEG`/`DNEG`), so `-x` becomes `x`, as PIT's negation mutator does.
 ### Fixed
 

@@ -35,6 +35,7 @@ import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
 private const val SOURCE_KT = "SourceKt"
+private const val PLAIN = "Plain"
 private val ARITHMETIC = OperatorId("arithmetic")
 
 class AsmCoverageInstrumenterTest {
@@ -50,6 +51,8 @@ class AsmCoverageInstrumenterTest {
             }
             fun failing(a: Int, b: Int): Int = try { fin(a, b, true) } catch (e: IllegalStateException) { -1 }
             interface Shape { fun area(a: Int, b: Int): Int = if (a > 0) a + b else a - b }
+            fun noop() {}
+            class Plain { fun noop() {} }
             """.trimIndent(),
             kotlincArguments = listOf("-Xjvm-default=all"),
         )
@@ -97,9 +100,12 @@ class AsmCoverageInstrumenterTest {
         assertTrue(hit(mutant("fin", ARITHMETIC)))
     }
 
+    // Every method sets the last slot on entry.
+    private fun reached(className: String) = loaded.probes(className, PROBE_FIELD)?.last() == true
+
     @Test
     fun `instrumented classes verify and behave like the originals`() {
-        assertEquals(setOf(SOURCE_KT), probedBytes.keys)
+        assertEquals(setOf(SOURCE_KT, PLAIN), probedBytes.keys)
         probedBytes.values.forEach { assertEquals("", verifyLog(it)) }
         val original = IsolatedClasses(classes)
         listOf(1, -1).forEach { a ->
@@ -136,6 +142,54 @@ class AsmCoverageInstrumenterTest {
 
         assertTrue(inShape.isNotEmpty())
         assertEquals(others.map { it.id }.toSet(), instrumented.probes.keys)
+    }
+
+    @Test
+    fun `a method without mutation sites reaches its class`() {
+        assertTrue(mutants.none { it.methodName == "noop" })
+
+        loaded.invoke(SOURCE_KT, "noop")
+
+        assertTrue(reached(SOURCE_KT))
+        assertTrue(mutants.filter { it.id in instrumented.probes }.none(::hit))
+    }
+
+    @Test
+    fun `a class without mutants is probed and reached through its constructor`() {
+        assertTrue(mutants.none { it.className == PLAIN })
+        assertFalse(reached(PLAIN))
+
+        loaded.type(PLAIN).getDeclaredConstructor().newInstance()
+
+        assertTrue(reached(PLAIN))
+    }
+
+    @Test
+    fun `interfaces are listed as unprobed`() {
+        assertEquals(setOf("Shape"), instrumented.unprobed)
+    }
+
+    @Test
+    fun `a class whose frames need an unknown type is listed as unprobed`() {
+        // The branches join B with String, so computing the frame needs B's supertypes, which no lookup knows.
+        val source =
+            "open class A\nclass B : A()\nclass Pick { fun p(f: Boolean, a: B, b: String): Any = if (f) a else b }"
+        val pick = ClassFile("Pick", compileKotlin(source).getValue("Pick"))
+
+        val result = AsmCoverageInstrumenter(TEST_PROBE_REGISTRY) { null }.instrument(listOf(pick), emptyList())
+
+        assertEquals(setOf("Pick"), result.unprobed)
+    }
+
+    @Test
+    fun `a class without mutants that fails to rewrite keeps its original bytes and is unprobed`() {
+        // A class that already has the probe accessor cannot get probes.
+        val odd = ClassFile("Odd", compileKotlin("class Odd { fun `\$mutktInit`() = 1 }").getValue("Odd"))
+
+        val result = AsmCoverageInstrumenter(TEST_PROBE_REGISTRY) { null }.instrument(files + odd, mutants)
+
+        assertEquals(setOf("Shape", "Odd"), result.unprobed)
+        assertEquals(instrumented.probes, result.probes)
     }
 
     @Test
@@ -192,7 +246,8 @@ class AsmCoverageInstrumenterTest {
         val result = AsmCoverageInstrumenter(TEST_PROBE_REGISTRY) { null }.instrument(all, mutants + hugeMutants)
 
         assertTrue(hugeMutants.isNotEmpty())
-        assertEquals(setOf(SOURCE_KT), result.classes.map { it.name }.toSet())
+        assertEquals(setOf(SOURCE_KT, PLAIN), result.classes.map { it.name }.toSet())
         assertEquals(instrumented.probes, result.probes)
+        assertEquals(setOf("Shape", "Huge"), result.unprobed)
     }
 }

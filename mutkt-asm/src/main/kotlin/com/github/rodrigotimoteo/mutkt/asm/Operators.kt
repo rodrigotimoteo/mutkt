@@ -17,6 +17,7 @@ import com.github.rodrigotimoteo.mutkt.asm.operators.ReturnValsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.SealedWhenOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.TrueReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.VoidMethodCallsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.WhenSwitchOperator
 
 internal object Operators {
     /** Enabled when no ids are given; the other operators are opt-in until proven on real projects. */
@@ -42,6 +43,7 @@ internal object Operators {
             NullSafetyOperator,
             DataClassCopyOperator,
             CoroutineOperator,
+            WhenSwitchOperator,
             RemoveNegationOperator,
         )
 

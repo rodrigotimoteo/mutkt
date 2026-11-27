@@ -23,10 +23,12 @@ internal fun Coverage.fitting(limit: Int = MAX_FRAME_BYTES - RESULT_HEADROOM): C
     return takeIf { counter.size() <= limit }
 }
 
-// Class names go once into a table and each test's hits are a bitset per class, so even a suite of a thousand test
-// classes over a thousand probed classes stays far under MAX_FRAME_BYTES.
+// Class names go once into a table, each test's hits are a bitset per class and its reached classes are indexes into
+// the table, so even a suite of a thousand test classes reaching a thousand probed classes stays far under
+// MAX_FRAME_BYTES.
 internal fun DataOutputStream.writeCoverage(coverage: Coverage) {
-    val names = (coverage.global + coverage.tests.flatMap { it.hits }).map { it.className }.distinct()
+    val hit = (coverage.global + coverage.tests.flatMap { it.hits }).map { it.className }
+    val names = (hit + coverage.tests.flatMap { it.reached }).distinct()
     val index = names.withIndex().associate { it.value to it.index }
     writeList(names) { writeString(it) }
     writeHits(coverage.global, index)
@@ -34,6 +36,7 @@ internal fun DataOutputStream.writeCoverage(coverage: Coverage) {
         writeString(it.test.className)
         writeLong(it.elapsed.inWholeNanoseconds)
         writeHits(it.hits, index)
+        writeList(it.reached) { name -> writeInt(index.getValue(name)) }
     }
 }
 
@@ -44,7 +47,8 @@ internal fun DataInputStream.readCoverage(): Coverage {
         readList {
             val test = TestId(readString())
             val elapsed = readLong().nanoseconds
-            TestCoverage(test, readHits(names), elapsed)
+            val hits = readHits(names)
+            TestCoverage(test, hits, elapsed, readList { names.className(readInt()) }.toSet())
         }
     return Coverage(tests, global)
 }
@@ -59,7 +63,10 @@ private fun DataOutputStream.writeHits(
 
 private fun DataInputStream.readHits(names: List<String>): Set<Probe> =
     readList {
-        val name = names.getOrNull(readInt()) ?: throw ForkProtocolException("Class index outside the coverage table")
+        val name = names.className(readInt())
         val bits = BitSet.valueOf(readByteArray())
         bits.stream().toArray().map { Probe(name, it) }
     }.flatten().toSet()
+
+private fun List<String>.className(index: Int): String =
+    getOrNull(index) ?: throw ForkProtocolException("Class index outside the coverage table")
