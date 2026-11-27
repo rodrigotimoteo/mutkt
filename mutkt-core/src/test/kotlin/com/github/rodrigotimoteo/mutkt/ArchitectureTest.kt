@@ -101,6 +101,8 @@ class ArchitectureTest {
             "java.util.concurrent.Executors",
             "java.util.concurrent.Future",
             "java.util.concurrent.TimeUnit",
+            // Content hashes that key the result history.
+            "java.security.MessageDigest",
         )
 
     @Test
