@@ -1,4 +1,4 @@
-name: API docs
+name: Docs
 
 on:
   push:
@@ -22,7 +22,7 @@ env:
 
 jobs:
   build:
-    name: Build the Dokka HTML
+    name: Build the site
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,15 +35,29 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+      # Tags before the guides site (v0.4.0) have no mkdocs.yml: they publish the API reference only.
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: hashFiles('mkdocs.yml') != ''
+        with:
+          python-version: "3.13"
+      - name: Build the guides
+        if: hashFiles('mkdocs.yml') != ''
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: |
+          pip install -r docs/requirements.txt
+          mkdocs build --strict
       # Dokka runs per module: the tags predate a root aggregation. Only these two modules apply mutkt.dokka.
       - name: Generate Dokka HTML
         run: ./gradlew :mutkt-annotations:dokkaGeneratePublicationHtml :mutkt-gradle:dokkaGeneratePublicationHtml
-      - name: Assemble the site
+      # After MkDocs, which empties its output directory.
+      - name: Add the API reference
         run: |
-          mkdir -p site
-          cp -r mutkt-gradle/build/dokka/html site/gradle
-          cp -r mutkt-annotations/build/dokka/html site/annotations
-          cat > site/index.html <<'EOF'
+          mkdir -p site/api
+          cp -r mutkt-gradle/build/dokka/html site/api/gradle
+          cp -r mutkt-annotations/build/dokka/html site/api/annotations
+          [ -f site/index.html ] || echo '<meta http-equiv="refresh" content="0; url=api/">' > site/index.html
+          cat > site/api/index.html <<'EOF'
           <!doctype html>
           <meta charset="utf-8">
           <title>MutKt API docs</title>

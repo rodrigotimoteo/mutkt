@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.application
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
@@ -346,6 +347,17 @@ class RunMutationAnalysisTest {
         assertTrue("no mutant was scored" in error.message.orEmpty() && "exit code 1" in error.message.orEmpty())
         assertTrue(executor.received.isEmpty())
         assertTrue(writer.written.isEmpty())
+    }
+
+    @Test
+    fun `an executor that cannot continue stops the analysis with its message and writes no report`() {
+        val mutants = (0 until 4).map { mutant(ordinal = it) }
+        val executor =
+            FakeExecutor { if (it.id.ordinal == 2) throw TestExecutionStopped("stalled") else Outcome.Survived }
+        val error = assertThrows(TestExecutionStopped::class.java) { analysis(mutants, executor).run() }
+        assertEquals("stalled", error.message)
+        assertTrue(writer.written.isEmpty())
+        assertPoolStopped(executor)
     }
 
     @Test

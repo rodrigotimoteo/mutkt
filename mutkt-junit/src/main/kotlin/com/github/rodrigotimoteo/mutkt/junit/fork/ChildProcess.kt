@@ -22,6 +22,9 @@ private const val KILL_WAIT_MILLIS = 5_000L
 // A POSIX shell convention the JVM follows: a process ended by signal N exits with 128 + N.
 private const val SIGNAL_EXIT_BASE = 128
 
+/** What a kill by an [OutOfMemoryError] that ended the child names as the killing test. */
+internal const val OUT_OF_MEMORY: String = "OutOfMemoryError"
+
 /** One forked JVM speaking the frame protocol; used by one thread at a time. */
 internal class ChildProcess private constructor(
     val process: Process,
@@ -46,8 +49,9 @@ internal class ChildProcess private constructor(
         private set
 
     /**
-     * Sends [request]. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
-     * detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout] of [timeoutMillis].
+     * Sends [request]. Silence for [prepareMillis] before the child reports Started throws [PreparationStalled] (a
+     * stuck child is not a detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout] of
+     * [timeoutMillis].
      * A child that dies before Started throws; one that dies after it was killed by the mutant ([Outcome.Killed]).
      */
     fun exchange(
@@ -62,9 +66,12 @@ internal class ChildProcess private constructor(
             // A mutant or test class that cannot link answers Result without a Started.
             val first =
                 awaitReply(prepareMillis)
-                    ?: throw failure(
-                        "$context, no Started within $prepareMillis ms",
-                        IOException("Silent while preparing"),
+                    ?: throw PreparationStalled(
+                        failure(
+                            "$context, no Started within $prepareMillis ms",
+                            IOException("Silent while preparing"),
+                        ),
+                        stderr.shown(),
                     )
             if (first !is ForkReply.Started) {
                 first.asResult()
@@ -256,7 +263,7 @@ private fun ForkReply.asResult(): TimedOutcome =
     }
 
 private fun killedBy(exitCode: Int): String =
-    if (exitCode == EXIT_OUT_OF_MEMORY) "OutOfMemoryError" else "JVM exit $exitCode"
+    if (exitCode == EXIT_OUT_OF_MEMORY) OUT_OF_MEMORY else "JVM exit $exitCode"
 
 // Descendants first: a mutant or test may have forked helpers that would otherwise outlive the child.
 private fun Process.destroyTree() {
