@@ -97,8 +97,9 @@ internal class ChildProcess private constructor(
     ): ForkReply.Result {
         val code = awaitExit()
         if (code == null || code > SIGNAL_EXIT_BASE) throw failure(context, cause, code)
-        check(request !is ForkRequest.Baseline) {
-            "the test JVM exited with code $code on the original classes. Last stderr: ${stderr.shown()}"
+        if (request is ForkRequest.Baseline) {
+            val classes = if (request.probed == null) "original" else "probed"
+            error("the test JVM exited with code $code on the $classes classes. Last stderr: ${stderr.shown()}")
         }
         return ForkReply.Result(
             Outcome.Killed(killedBy(code)),

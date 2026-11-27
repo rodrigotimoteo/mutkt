@@ -39,8 +39,8 @@ class MutKtMockingAgentTest {
         val result = project.build()
         assertEquals(TaskOutcome.SUCCESS, result.task(":mutkt")?.outcome, result.output)
         val summary = project.report.readText()
-        // The multiplication and the return of total() are killed; base() is mocked, so its mutant survives.
-        listOf("Mutants: 3", "KILLED       2", "SURVIVED     1").forEach { line ->
+        // The multiplication and the return of total() are killed; base() is mocked, so no test runs its body.
+        listOf("Mutants: 3", "KILLED       2", "NO_COVERAGE  1").forEach { line ->
             assertTrue(summary.lines().any { it.trim() == line }, "Missing line '$line' in:\n$summary")
         }
     }

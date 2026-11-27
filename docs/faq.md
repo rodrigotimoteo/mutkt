@@ -10,16 +10,22 @@ The other statuses:
 
 | Status | Meaning | Score |
 |---|---|---|
-| SURVIVED | Every selected test passed | not detected |
+| SURVIVED | Every test that ran passed | not detected |
 | TIMEOUT | The tests did not finish within the mutant's deadline | detected |
-| NO_COVERAGE | No test ran at all, for example because `includeTags` or `engines` select none | not detected |
+| NO_COVERAGE | No test reaches the mutated code, so none ran against it; also when `includeTags` or `engines` select no test | not detected |
 | ERROR | The mutant could not be loaded or run (a `VerifyError`, a child JVM that died before the tests started) | left out |
 
-MutKt does not measure coverage: every selected test runs against every mutant, so NO_COVERAGE never means "no test reaches this line". Score = (KILLED + TIMEOUT) / (all mutants − ERROR).
+Score = (KILLED + TIMEOUT) / (all mutants − ERROR).
+
+## Which tests run against a mutant?
+
+The baseline run (below) records which test classes reach each mutated instruction. A mutant then runs only those classes, in the order the baseline ran them, and one that no test class reaches is NO_COVERAGE without a run. Coverage says a test executed the code, not that it checked the result: a test that reaches a mutant but never checks its effect still yields SURVIVED.
+
+Some mutants run every selected test instead: one whose code was reached outside any test class (while JUnit discovered the tests, for instance), one in a class that cannot be instrumented (an interface, a method near the JVM size limit), and every mutant when the tests use Robolectric. If the tests fail on the instrumented classes but pass on the original ones, the run warns `The baseline on probed classes failed (<cause>); running every mutant against the whole suite` and goes on that way.
 
 ## Why does TIMEOUT count as detected?
 
-A mutant that makes a test run past the deadline usually turned a loop or a recursion endless: the tests noticed a change, they just never finished. The deadline is per mutant and starts when the tests start, after class loading. It is 4 times how long the tests ran on the original classes (the baseline run) plus 4 s, at most `timeoutMs` (60 s by default). A child JVM that passes it is killed and replaced, so an endless loop does not hold a thread.
+A mutant that makes a test run past the deadline usually turned a loop or a recursion endless: the tests noticed a change, they just never finished. The deadline is per mutant and starts when the tests start, after class loading. It is 4 times how long the mutant's test classes ran on the original classes (the baseline run), plus the time of the baseline's first test class (which paid the class loading and library set-up that every run pays again), plus 4 s, at most `timeoutMs` (60 s by default). A mutant that runs the whole suite gets 4 times the whole suite's time plus 4 s. A child JVM that passes it is killed and replaced, so an endless loop does not hold a thread.
 
 If many mutants end in TIMEOUT, the suite is too slow for the deadline. When `timeoutMs` cut the deadline, the run warns with `Per-mutant deadline capped at timeoutMs` and names the value to set. Raise `timeoutMs`, or lower `threads`: deadlines scale from a baseline run alone, so `threads` above the core count can cause false TIMEOUTs. Otherwise a slow or busy machine can inflate the score. The baseline run gets 5 times `timeoutMs`, since its JVM starts cold.
 

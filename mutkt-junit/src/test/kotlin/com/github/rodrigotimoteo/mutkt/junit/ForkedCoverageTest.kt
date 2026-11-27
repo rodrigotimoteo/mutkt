@@ -6,8 +6,10 @@ import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
@@ -31,11 +33,14 @@ class ForkedCoverageTest {
                 "class CTest { @Test fun subtracts() { assertEquals(1, Calc().sub(3, 2)) } }",
         )
 
-    private fun executor(extraClasspath: List<Path> = emptyList()): ForkedTestExecutor {
+    private fun executor(
+        extraClasspath: List<Path> = emptyList(),
+        classes: CoverageFixture = fixture,
+    ): ForkedTestExecutor {
         val settings =
             forkSettingsFor(dir, "").copy(
-                projectClassDir = writeClasses(dir.resolve("project"), fixture.project),
-                testClassDir = writeClasses(dir.resolve("tests"), fixture.tests),
+                projectClassDir = writeClasses(dir.resolve("project"), classes.project),
+                testClassDir = writeClasses(dir.resolve("tests"), classes.tests),
                 classpath = runtimeJars() + extraClasspath,
             )
         return ForkedTestExecutor(settings).also { executor = it }
@@ -47,6 +52,15 @@ class ForkedCoverageTest {
         assertEquals(Outcome.Survived, baseline.outcome)
         val hits = baseline.coverage!!.tests.map { it.test to it.hits }
         assertEquals(listOf(TestId("ATest") to setOf(ADD), TestId("CTest") to setOf(SUB)), hits)
+    }
+
+    @Test
+    fun `a forked baseline that exits its JVM names the probed classes`() {
+        val exiting = coverageFixture("class ATest { @Test fun exits() { System.exit(7) } }")
+        val pool = executor(classes = exiting)
+        val error = assertThrows<IllegalStateException> { pool.baseline(LONG, exiting.instrumented) }
+        val message = error.message.orEmpty()
+        assertTrue(message.startsWith("the test JVM exited with code 7 on the probed classes"), message)
     }
 
     @Test

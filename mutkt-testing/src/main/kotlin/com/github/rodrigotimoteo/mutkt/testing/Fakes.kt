@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.testing
 import com.github.rodrigotimoteo.mutkt.application.port.Baseline
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
+import com.github.rodrigotimoteo.mutkt.application.port.Coverage
 import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
@@ -37,16 +38,20 @@ class FakeMutantGenerator(
  * Returns the scripted outcome per mutant ([default] otherwise) and records each call's mutant, bytes and deadline in
  * [runs] and its test classes (null: all) in [selections], index for index;
  * [baseline] answers the baseline run in [baselineElapsed]; its deadlines are recorded in [baselines].
+ * A baseline on instrumented classes answers [instrumentedBaseline] with [coverage] and is recorded in [instrumented].
  */
 class FakeTestExecutor(
     private val outcomes: Map<Mutant, Outcome> = emptyMap(),
     private val default: Outcome = Outcome.Survived,
     private val baseline: Outcome = Outcome.Survived,
     private val baselineElapsed: Duration = Duration.ZERO,
+    private val coverage: Coverage? = null,
+    private val instrumentedBaseline: Outcome = baseline,
 ) : TestExecutor {
     val runs = mutableListOf<Triple<Mutant, ByteArray, Duration>>()
     val selections = mutableListOf<List<TestId>?>()
     val baselines = mutableListOf<Duration>()
+    val instrumented = mutableListOf<Instrumented?>()
 
     override fun run(
         mutant: Mutant,
@@ -64,7 +69,9 @@ class FakeTestExecutor(
         instrumented: Instrumented?,
     ): Baseline {
         baselines += deadline
-        return Baseline(baseline, baselineElapsed)
+        this.instrumented += instrumented
+        if (instrumented == null) return Baseline(baseline, baselineElapsed)
+        return Baseline(instrumentedBaseline, baselineElapsed, coverage)
     }
 }
 

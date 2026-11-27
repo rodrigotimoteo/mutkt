@@ -72,7 +72,7 @@ class MutKtScenariosTest {
     }
 
     @OnGradleVersions
-    fun `excluding the tag of the only asserting test makes its mutants survive`(version: String) {
+    fun `excluding the tag of the only asserting test leaves its mutants undetected`(version: String) {
         val sources = mapOf("demo/Calc.java" to CALC)
         val tests = mapOf("demo/CalcTest.java" to TAGGED_TEST)
 
@@ -80,7 +80,9 @@ class MutKtScenariosTest {
         val filtered = run(version, "mutkt { excludeTags.add('slow') }", sources, tests)
 
         assertLine(all, "KILLED       4")
-        assertLine(filtered, "SURVIVED     4")
+        // add still runs in the untagged test; isPositive is reached by no test left.
+        assertLine(filtered, "SURVIVED     2")
+        assertLine(filtered, "NO_COVERAGE  2")
     }
 
     @OnGradleVersions

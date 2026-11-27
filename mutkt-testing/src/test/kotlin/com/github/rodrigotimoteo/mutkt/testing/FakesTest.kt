@@ -2,6 +2,8 @@ package com.github.rodrigotimoteo.mutkt.testing
 
 import com.github.rodrigotimoteo.mutkt.application.port.Baseline
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
+import com.github.rodrigotimoteo.mutkt.application.port.Coverage
+import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
@@ -65,6 +67,24 @@ class FakesTest {
         assertEquals(Baseline(Outcome.Killed("FooTest"), 2.seconds), executor.baseline(3.seconds))
         assertEquals(listOf(3.seconds), executor.baselines)
         assertEquals(emptyList<Any>(), executor.runs)
+    }
+
+    @Test
+    fun `executor answers an instrumented baseline with its own outcome and the coverage`() {
+        val coverage = Coverage(emptyList(), emptySet())
+        val probed = Instrumented(emptyList(), "probes", emptyMap())
+        val executor =
+            FakeTestExecutor(
+                baselineElapsed = 2.seconds,
+                coverage = coverage,
+                instrumentedBaseline = Outcome.LoadError("VerifyError"),
+            )
+
+        val answer = executor.baseline(3.seconds, probed)
+
+        assertEquals(Baseline(Outcome.LoadError("VerifyError"), 2.seconds, coverage), answer)
+        assertEquals(Baseline(Outcome.Survived, 2.seconds), executor.baseline(4.seconds))
+        assertEquals(listOf(probed, null), executor.instrumented)
     }
 
     @Test
