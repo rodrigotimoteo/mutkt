@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
+import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
 import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
@@ -95,8 +96,8 @@ public class RunMutationAnalysis(
         }
     }
 
-    // A mutant can make the JVM refuse its class (LinkageError), which is that mutant's ERROR. Any other Error
-    // means the run itself is broken and must surface.
+    // A mutant can make the JVM refuse its class (LinkageError), which is that mutant's ERROR. Any other Error, or an
+    // executor that cannot continue, means the run itself is broken and must surface.
     @Suppress("TooGenericExceptionCaught")
     private fun evaluate(
         mutant: Mutant,
@@ -104,6 +105,8 @@ public class RunMutationAnalysis(
     ): MutantResult =
         try {
             executor.run(mutant, generator.materialize(mutant), deadline).toResult(mutant)
+        } catch (e: TestExecutionStopped) {
+            throw e
         } catch (e: Exception) {
             MutantResult(mutant, MutantStatus.ERROR, cause(e.message?.takeIf(String::isNotBlank) ?: e.toString()))
         } catch (e: LinkageError) {

@@ -43,6 +43,13 @@ class ForkStartupTest {
     }
 
     @Test
+    fun `reads code sources by class name`() {
+        val startup =
+            parse("projectClassDir=/p", "testClassDir=/t", "engine=e", "codeSource=a.B=/c=d", "codeSource=E=/f")
+        assertEquals(mapOf("a.B" to Path.of("/c=d"), "E" to Path.of("/f")), startup.codeSources)
+    }
+
+    @Test
     fun `rejects unknown keys, missing keys and malformed lines`() {
         assertThrows<IllegalArgumentException> {
             parse("projectClassDir=/p", "testClassDir=/t", "engine=e", "other=1")

@@ -2,7 +2,6 @@ package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
-import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -21,6 +20,9 @@ private const val KILL_WAIT_MILLIS = 5_000L
 
 // A POSIX shell convention the JVM follows: a process ended by signal N exits with 128 + N.
 private const val SIGNAL_EXIT_BASE = 128
+
+/** What a kill by an [OutOfMemoryError] that ended the child names as the killing test. */
+internal const val OUT_OF_MEMORY: String = "OutOfMemoryError"
 
 /** One forked JVM speaking the frame protocol; used by one thread at a time. */
 internal class ChildProcess private constructor(
@@ -46,8 +48,9 @@ internal class ChildProcess private constructor(
         private set
 
     /**
-     * Sends [request]. Silence for [prepareMillis] before the child reports Started throws (a stuck child is not a
-     * detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout] of [timeoutMillis].
+     * Sends [request]. Silence for [prepareMillis] before the child reports Started throws [PreparationStalled] (a
+     * stuck child is not a detection); silence for [timeoutMillis] + [graceMillis] after it is a [Outcome.Timeout] of
+     * [timeoutMillis].
      * A child that dies before Started throws; one that dies after it was killed by the mutant ([Outcome.Killed]).
      */
     fun exchange(
@@ -62,9 +65,12 @@ internal class ChildProcess private constructor(
             // A mutant or test class that cannot link answers Result without a Started.
             val first =
                 awaitReply(prepareMillis)
-                    ?: throw failure(
-                        "$context, no Started within $prepareMillis ms",
-                        IOException("Silent while preparing"),
+                    ?: throw PreparationStalled(
+                        failure(
+                            "$context, no Started within $prepareMillis ms",
+                            IOException("Silent while preparing"),
+                        ),
+                        stderr.shown(),
                     )
             if (first !is ForkReply.Started) {
                 first.asResult()
@@ -214,12 +220,17 @@ internal class ChildProcess private constructor(
             tmpDir: Path?,
         ): ChildProcess {
             val child = spawn(command, environment, workingDir, tmpDir)
+            var ready = false
             try {
                 child.handshake()
+                ready = true
             } catch (e: IOException) {
-                throw child.failure("starting", e).also { child.kill() }
+                throw child.failure("starting", e)
             } catch (e: ForkProtocolException) {
-                throw child.failure("starting", e).also { child.kill() }
+                throw child.failure("starting", e)
+            } finally {
+                // Whatever ends the start, an interrupt (a cancelled build) too, must not leave a child behind.
+                if (!ready) child.kill()
             }
             return child
         }
@@ -256,38 +267,10 @@ private fun ForkReply.asResult(): TimedOutcome =
     }
 
 private fun killedBy(exitCode: Int): String =
-    if (exitCode == EXIT_OUT_OF_MEMORY) "OutOfMemoryError" else "JVM exit $exitCode"
+    if (exitCode == EXIT_OUT_OF_MEMORY) OUT_OF_MEMORY else "JVM exit $exitCode"
 
 // Descendants first: a mutant or test may have forked helpers that would otherwise outlive the child.
 private fun Process.destroyTree() {
     descendants().forEach { it.destroyForcibly() }
     destroyForcibly().waitFor(KILL_WAIT_MILLIS, TimeUnit.MILLISECONDS)
-}
-
-private fun StderrTail.shown(): String = text().ifBlank { "<empty>" }
-
-// Keeps the last [limit] bytes; the buffer is trimmed at twice that to avoid copying on every append.
-private class StderrTail(
-    private val limit: Int,
-) {
-    private val buffer = ByteArrayOutputStream()
-
-    @Synchronized
-    fun append(
-        bytes: ByteArray,
-        length: Int,
-    ) {
-        buffer.write(bytes, 0, length)
-        if (buffer.size() > 2 * limit) {
-            val all = buffer.toByteArray()
-            buffer.reset()
-            buffer.write(all, all.size - limit, limit)
-        }
-    }
-
-    @Synchronized
-    fun text(): String {
-        val all = buffer.toByteArray()
-        return String(all, maxOf(0, all.size - limit), minOf(all.size, limit), Charsets.UTF_8).trim()
-    }
 }

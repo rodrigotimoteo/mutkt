@@ -9,11 +9,14 @@ import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.nio.file.Path
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.milliseconds
 
 private const val EXIT_PROTOCOL = 2
 private const val EXIT_UNEXPECTED = 3
+private const val EXIT_ORPHANED = 5
+private const val PARENT_POLL_MILLIS = 1_000L
 
 /**
  * The child's exit code when an [OutOfMemoryError] ends it, which the parent reports as the kill's cause. A mutant
@@ -24,13 +27,14 @@ internal const val EXIT_OUT_OF_MEMORY: Int = 4
 
 /**
  * Child JVM entry point; `args[0]` is the startup file. Exit 0: shutdown or EOF, 2: protocol, 3: failure,
- * 4: out of memory.
+ * 4: out of memory, 5: the parent is gone.
  */
 @Suppress("TooGenericExceptionCaught")
 internal fun main(args: Array<String>) {
     // Frames own the real stdout; System.out goes to stderr. FileDescriptor.out writes bypass this (known limit).
     val protocol = DataOutputStream(BufferedOutputStream(System.out))
     System.setOut(System.err)
+    exitWithParent()
     val status =
         try {
             serve(Path.of(args.single()), DataInputStream(BufferedInputStream(System.`in`)), protocol)
@@ -49,6 +53,16 @@ internal fun main(args: Array<String>) {
     exitProcess(status)
 }
 
+// A child busy running tests reads no frames, so it would not see stdin end when the parent dies.
+// It halts, as the parent's kill would: a shutdown hook a test or mutant left behind must not keep it alive.
+private fun exitWithParent() =
+    ProcessHandle.current().parent().ifPresent { parent ->
+        thread(isDaemon = true, name = "mutkt-fork-watchdog") {
+            while (parent.isAlive) Thread.sleep(PARENT_POLL_MILLIS)
+            Runtime.getRuntime().halt(EXIT_ORPHANED)
+        }
+    }
+
 private fun serve(
     startupFile: Path,
     input: DataInputStream,
@@ -63,6 +77,7 @@ private fun serve(
         startup.engines,
         startup.includeTags,
         startup.excludeTags,
+        startup.codeSources,
     ).use { runForkLoop(input, output, it) }
 }
 

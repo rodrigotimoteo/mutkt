@@ -24,11 +24,13 @@ The score and the surviving mutants are printed in the build log. Reports land i
 
 ## Docs
 
+The guides and the API reference are published at <https://rodrigotimoteo.github.io/mutkt/>.
+
 - [Getting started](docs/getting-started.md)
 - [DSL reference](docs/dsl.md)
 - [Operators](docs/operators.md)
 - [FAQ](docs/faq.md)
 - [Migrating from 0.3.x](docs/migration.md)
-- [API docs](https://rodrigotimoteo.github.io/mutkt/)
+- [API reference](https://rodrigotimoteo.github.io/mutkt/api/)
 
 Contributor and agent rules: [AGENTS.md](AGENTS.md). License: [LICENSE](LICENSE).
