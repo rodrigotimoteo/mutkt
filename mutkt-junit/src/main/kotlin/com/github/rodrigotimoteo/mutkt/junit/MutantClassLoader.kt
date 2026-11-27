@@ -27,6 +27,9 @@ internal class MutantClassLoader(
 
     @Volatile private var closed = false
 
+    /** The class [name] when this loader already loaded it; never loads or initializes it. */
+    fun loadedClass(name: String): Class<*>? = findLoadedClass(name)
+
     // Not registered parallel-capable, so getClassLoadingLock is loader-wide.
     override fun loadClass(
         name: String,

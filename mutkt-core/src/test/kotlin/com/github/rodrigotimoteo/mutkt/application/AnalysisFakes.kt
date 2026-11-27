@@ -1,12 +1,14 @@
 package com.github.rodrigotimoteo.mutkt.application
 
+import com.github.rodrigotimoteo.mutkt.application.port.Baseline
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
+import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
-import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
@@ -68,15 +70,19 @@ internal class FakeExecutor(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
+        tests: List<TestId>?,
     ): Outcome {
         threads += Thread.currentThread()
         received += Triple(mutant, String(bytes), deadline)
         return behavior(mutant)
     }
 
-    override fun baseline(deadline: Duration): TimedOutcome {
+    override fun baseline(
+        deadline: Duration,
+        instrumented: Instrumented?,
+    ): Baseline {
         baselines += deadline
-        return TimedOutcome(baseline(), baselineElapsed)
+        return Baseline(baseline(), baselineElapsed)
     }
 }
 

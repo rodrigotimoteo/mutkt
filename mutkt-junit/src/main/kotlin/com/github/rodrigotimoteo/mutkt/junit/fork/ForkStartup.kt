@@ -50,6 +50,19 @@ internal data class ForkStartup(
     }
 }
 
+/** Writes [classes] as class files under [root], the layout [readClassFiles] reads; returns [root]. */
+internal fun writeClassFiles(
+    root: Path,
+    classes: List<ClassFile>,
+): Path {
+    classes.forEach {
+        val file = root.resolve(it.name.replace('.', '/') + ".class")
+        Files.createDirectories(file.parent)
+        Files.write(file, it.bytes)
+    }
+    return root
+}
+
 internal fun readClassFiles(root: Path): List<ClassFile> =
     Files.walk(root).use { paths ->
         paths

@@ -1,11 +1,13 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.EOFException
 import java.nio.ByteBuffer
+import java.nio.file.Path
 
 // Frame = int length + payload; payload starts with a one-byte tag. No Java serialization.
 internal const val MAX_FRAME_BYTES: Int = 64 * 1024 * 1024
@@ -27,10 +29,15 @@ internal fun writeRequest(
             writeMutant(request.mutant)
             writeByteArray(request.bytes)
             writeLong(request.timeoutMillis)
+            writeOptional(request.tests) { tests -> writeList(tests) { writeString(it.className) } }
         }
         is ForkRequest.Baseline -> {
             writeByte(REQUEST_BASELINE)
             writeLong(request.timeoutMillis)
+            writeOptional(request.probed) {
+                writeString(it.dir.toString())
+                writeString(it.field)
+            }
         }
         ForkRequest.Shutdown -> writeByte(REQUEST_SHUTDOWN)
     }
@@ -40,8 +47,20 @@ internal fun writeRequest(
 internal fun readRequest(input: DataInputStream): ForkRequest? =
     readFrame(input) {
         when (val tag = readUnsignedByte()) {
-            REQUEST_RUN -> ForkRequest.Run(readMutant(), readByteArray(), readLong())
-            REQUEST_BASELINE -> ForkRequest.Baseline(readLong())
+            REQUEST_RUN ->
+                ForkRequest.Run(
+                    readMutant(),
+                    readByteArray(),
+                    readLong(),
+                    readOptional { readList { TestId(readString()) } },
+                )
+            REQUEST_BASELINE ->
+                ForkRequest.Baseline(
+                    readLong(),
+                    readOptional {
+                        ProbedClasses(Path.of(readString()), readString())
+                    },
+                )
             REQUEST_SHUTDOWN -> ForkRequest.Shutdown
             else -> throw ForkProtocolException("Unknown request tag $tag")
         }
@@ -62,6 +81,7 @@ internal fun writeReply(
             writeOutcome(reply.outcome)
             writeLong(reply.elapsedMillis)
             writeBoolean(reply.retire)
+            writeOptional(reply.coverage) { writeCoverage(it) }
         }
     }
 }
@@ -71,7 +91,7 @@ internal fun readReply(input: DataInputStream): ForkReply? =
     readFrame(input) {
         when (val tag = readUnsignedByte()) {
             REPLY_READY -> ForkReply.Ready(readInt())
-            REPLY_RESULT -> ForkReply.Result(readOutcome(), readLong(), readBoolean())
+            REPLY_RESULT -> ForkReply.Result(readOutcome(), readLong(), readBoolean(), readOptional { readCoverage() })
             REPLY_STARTED -> ForkReply.Started
             else -> throw ForkProtocolException("Unknown reply tag $tag")
         }
