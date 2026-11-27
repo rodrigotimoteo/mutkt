@@ -1,11 +1,14 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
 import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.junit.fork.ChildProcess
 import com.github.rodrigotimoteo.mutkt.junit.fork.ForkRequest
+import com.github.rodrigotimoteo.mutkt.junit.fork.OUT_OF_MEMORY
+import com.github.rodrigotimoteo.mutkt.junit.fork.PreparationStalled
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -20,6 +23,7 @@ import kotlin.time.Duration
 
 private const val FORK_MAIN = "com.github.rodrigotimoteo.mutkt.junit.fork.ForkMain"
 private const val MAX_START_FAILURES = 3
+private const val MAX_STALLS = 3
 private const val SHUTDOWN_WAIT_NANOS = 5_000_000_000L
 private const val CLOSED = "ForkedTestExecutor is closed"
 private const val TMPDIR = "java.io.tmpdir"
@@ -34,6 +38,11 @@ private const val ROBOLECTRIC_MARKER = "org/robolectric/internal/SandboxManager.
  * static holds it) is replaced too. With Robolectric on the classpath no child is reused: it caches its sandbox and the
  * instrumented project classes in statics with no reset API, and that a fresh class loader per run resets all of them
  * is not shown on a real Robolectric project.
+ * A reused child that runs out of memory or time may do so from what earlier runs left behind (a leak, a stray
+ * thread), so that mutant runs again on a fresh child, whose outcome counts. [MAX_START_FAILURES] failed starts or
+ * [MAX_STALLS] runs with no Started within the preparation limit, each in a row, stop the analysis
+ * ([TestExecutionStopped]): every later mutant would fail the same way. The stall count is shared by all children
+ * and only a run that gets past preparation resets it; failed starts do not.
  */
 public class ForkedTestExecutor(
     private val settings: ForkSettings,
@@ -44,7 +53,8 @@ public class ForkedTestExecutor(
     private val children = CopyOnWriteArrayList<ChildProcess>()
     private val started = AtomicInteger()
     private val failedStarts = AtomicInteger()
-    private val lastStartFailure = AtomicReference<String>()
+    private val stalls = AtomicInteger()
+    private val stopped = AtomicReference<String>()
     private val tmpDirs = AtomicInteger()
     private val startup = lazy { writeStartupFile() }
 
@@ -73,11 +83,21 @@ public class ForkedTestExecutor(
     ): TimedOutcome {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { CLOSED }
+        stopped.throwIfSet()
         val timeoutMillis = deadline.inWholeMilliseconds.coerceAtLeast(1)
         permits.acquire()
         try {
             check(!closed) { CLOSED }
-            val outcome = runOnChild(borrow(), request(timeoutMillis), context, timeoutMillis)
+            // A run that held the permit may have stopped the executor while this one waited.
+            stopped.throwIfSet()
+            val pooled = pooled()
+            val first = runOnChild(pooled ?: start(), request(timeoutMillis), context, timeoutMillis)
+            val outcome =
+                if (pooled != null && first.mayBeLeftover()) {
+                    runOnChild(start(), request(timeoutMillis), context, timeoutMillis)
+                } else {
+                    first
+                }
             // A child that close() killed mid-run looks like a kill by the mutant.
             check(!closed) { CLOSED }
             return outcome
@@ -98,7 +118,18 @@ public class ForkedTestExecutor(
     ): TimedOutcome {
         var reusable = false
         try {
-            val outcome = child.exchange(request, context, timeoutMillis, settings.graceMillis, settings.prepareMillis)
+            val outcome =
+                try {
+                    child.exchange(request, context, timeoutMillis, settings.graceMillis, settings.prepareMillis)
+                } catch (e: PreparationStalled) {
+                    if (stalls.incrementAndGet() < MAX_STALLS) throw e
+                    stopped.stop(
+                        "Forked test JVMs did not finish loading and discovering the tests within " +
+                            "${settings.prepareMillis} ms for $MAX_STALLS mutants in a row, so the analysis stopped. " +
+                            "Last child output: ${e.output}",
+                    )
+                }
+            stalls.set(0)
             // A child that timed out may still be running the abandoned mutant thread; one that died is replaced.
             reusable = reuseChildren && outcome.outcome != Outcome.Timeout && child.isAlive && !child.retiring
             return outcome
@@ -129,9 +160,10 @@ public class ForkedTestExecutor(
         }
     }
 
-    private fun borrow(): ChildProcess {
+    // Null when no live child is idle; a child goes idle only after a run, so a pooled one has served before.
+    private fun pooled(): ChildProcess? {
         while (true) {
-            val candidate = idle.poll() ?: return start()
+            val candidate = idle.poll() ?: return null
             if (candidate.isAlive) return candidate
             discard(candidate)
         }
@@ -139,18 +171,17 @@ public class ForkedTestExecutor(
 
     private fun start(): ChildProcess {
         check(!closed) { CLOSED }
-        check(failedStarts.get() < MAX_START_FAILURES) {
-            "Forked test JVM failed to start $MAX_START_FAILURES times in a row, giving up. " +
-                "Last failure: ${lastStartFailure.get()}"
-        }
+        stopped.throwIfSet()
         val (command, tmpDir) = command()
         val child =
             try {
                 ChildProcess.start(command, settings.environment, settings.workingDir, tmpDir)
             } catch (e: IllegalStateException) {
-                failedStarts.incrementAndGet()
-                lastStartFailure.set(e.message)
-                throw e
+                if (failedStarts.incrementAndGet() < MAX_START_FAILURES) throw e
+                stopped.stop(
+                    "Forked test JVM failed to start $MAX_START_FAILURES times in a row, so the analysis stopped. " +
+                        "Last failure: ${e.message}",
+                )
             }
         failedStarts.set(0)
         started.incrementAndGet()
@@ -212,6 +243,19 @@ public class ForkedTestExecutor(
         return Files.write(Files.createTempDirectory("mutkt-fork").resolve("startup.properties"), lines)
     }
 }
+
+private fun AtomicReference<String>.throwIfSet() {
+    get()?.let { throw TestExecutionStopped(it) }
+}
+
+// The first reason wins: runs already in flight may end the same way.
+private fun AtomicReference<String>.stop(message: String): Nothing {
+    compareAndSet(null, message)
+    throw TestExecutionStopped(get())
+}
+
+private fun TimedOutcome.mayBeLeftover(): Boolean =
+    outcome == Outcome.Timeout || outcome == Outcome.Killed(OUT_OF_MEMORY)
 
 // Only jars and directories can hold classes; other entries (a missing directory, a stray file) are skipped.
 private fun hasRobolectric(entry: Path): Boolean =
