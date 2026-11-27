@@ -1,14 +1,19 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
+import com.github.rodrigotimoteo.mutkt.application.port.Baseline
+import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
-import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.junit.fork.ChildProcess
+import com.github.rodrigotimoteo.mutkt.junit.fork.ForkReply
 import com.github.rodrigotimoteo.mutkt.junit.fork.ForkRequest
 import com.github.rodrigotimoteo.mutkt.junit.fork.OUT_OF_MEMORY
 import com.github.rodrigotimoteo.mutkt.junit.fork.PreparationStalled
+import com.github.rodrigotimoteo.mutkt.junit.fork.ProbedClasses
+import com.github.rodrigotimoteo.mutkt.junit.fork.writeClassFiles
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -18,9 +23,9 @@ import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
-import java.util.zip.ZipFile
 import kotlin.concurrent.thread
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val FORK_MAIN = "com.github.rodrigotimoteo.mutkt.junit.fork.ForkMain"
 private const val MAX_START_FAILURES = 3
@@ -28,7 +33,6 @@ private const val MAX_STALLS = 3
 private const val SHUTDOWN_WAIT_NANOS = 5_000_000_000L
 private const val CLOSED = "ForkedTestExecutor is closed"
 private const val TMPDIR = "java.io.tmpdir"
-private const val ROBOLECTRIC_MARKER = "org/robolectric/internal/SandboxManager.class"
 
 /**
  * Runs mutants in a pool of child JVMs (ADR 0008), at most `parallelism` at a time; each child serves one mutant
@@ -36,9 +40,8 @@ private const val ROBOLECTRIC_MARKER = "org/robolectric/internal/SandboxManager.
  * A child that dies once the tests started is a kill by the mutant and is replaced (ADR 0002); one that dies
  * before, or cannot start, makes [run] throw with its exit code and last stderr lines.
  * A child whose memory is past its limits after a run (a run's class loader stays reachable while a library thread or
- * static holds it) is replaced too. With Robolectric on the classpath no child is reused: it caches its sandbox and the
- * instrumented project classes in statics with no reset API, and that a fresh class loader per run resets all of them
- * is not shown on a real Robolectric project.
+ * static holds it) is replaced too. With Robolectric on the classpath no child is reused and the baseline reads no
+ * coverage (see [hasRobolectric]).
  * A reused child that runs out of memory or time may do so from what earlier runs left behind (a leak, a stray
  * thread), so that mutant runs again on a fresh child, whose outcome counts. [MAX_START_FAILURES] failed starts or
  * [MAX_STALLS] runs with no Started within the preparation limit, each in a row, stop the analysis
@@ -80,16 +83,35 @@ public class ForkedTestExecutor(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
-    ): Outcome = onChild(deadline, "running a mutant") { ForkRequest.Run(mutant, bytes, it) }.outcome
+        tests: List<TestId>?,
+    ): Outcome = onChild(deadline, "running a mutant") { ForkRequest.Run(mutant, bytes, it, tests) }.outcome
 
-    override fun baseline(deadline: Duration): TimedOutcome =
-        onChild(deadline, "running the baseline") { ForkRequest.Baseline(it) }
+    override fun baseline(
+        deadline: Duration,
+        instrumented: Instrumented?,
+    ): Baseline {
+        // Under the startup directory, which close() deletes, and under the lock as in command().
+        val probed =
+            instrumented?.takeUnless { robolectric }?.let {
+                synchronized(lock) {
+                    check(!closed) { CLOSED }
+                    val dir = Files.createTempDirectory(startup.value.parent, "probed")
+                    ProbedClasses(writeClassFiles(dir, it.classes), it.probeField)
+                }
+            }
+        try {
+            val result = onChild(deadline, "running the baseline") { ForkRequest.Baseline(it, probed) }
+            return Baseline(result.outcome, result.elapsedMillis.milliseconds, result.coverage)
+        } finally {
+            probed?.dir?.toFile()?.deleteRecursively()
+        }
+    }
 
     private fun onChild(
         deadline: Duration,
         context: String,
         request: (timeoutMillis: Long) -> ForkRequest,
-    ): TimedOutcome {
+    ): ForkReply.Result {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { CLOSED }
         stopped.throwIfSet()
@@ -124,7 +146,7 @@ public class ForkedTestExecutor(
         request: ForkRequest,
         context: String,
         timeoutMillis: Long,
-    ): TimedOutcome {
+    ): ForkReply.Result {
         var reusable = false
         try {
             val outcome =
@@ -140,7 +162,7 @@ public class ForkedTestExecutor(
                 }
             stalls.set(0)
             // A child that timed out may still be running the abandoned mutant thread; one that died is replaced.
-            reusable = reuseChildren && outcome.outcome != Outcome.Timeout && child.isAlive && !child.retiring
+            reusable = !robolectric && outcome.outcome != Outcome.Timeout && child.isAlive && !child.retiring
             return outcome
         } finally {
             if (reusable) idle.push(child)
@@ -235,7 +257,7 @@ public class ForkedTestExecutor(
 
     private val userTmpDir = settings.jvmArgs.any { it.startsWith("-D$TMPDIR=") }
 
-    private val reuseChildren by lazy { settings.classpath.none(::hasRobolectric) }
+    private val robolectric by lazy { settings.classpath.any(::hasRobolectric) }
 
     private val kotestArgs by lazy { kotestProperties(projectClasspath, settings.testClassDir, settings.jvmArgs) }
 
@@ -274,14 +296,5 @@ private fun removeShutdownHook(hook: Thread) {
     }
 }
 
-private fun TimedOutcome.mayBeLeftover(): Boolean =
+private fun ForkReply.Result.mayBeLeftover(): Boolean =
     outcome == Outcome.Timeout || outcome == Outcome.Killed(OUT_OF_MEMORY)
-
-// Only jars and directories can hold classes; other entries (a missing directory, a stray file) are skipped.
-private fun hasRobolectric(entry: Path): Boolean =
-    when {
-        Files.isDirectory(entry) -> Files.isRegularFile(entry.resolve(ROBOLECTRIC_MARKER))
-        Files.isRegularFile(entry) && entry.toString().endsWith(".jar") ->
-            ZipFile(entry.toFile()).use { it.getEntry(ROBOLECTRIC_MARKER) != null }
-        else -> false
-    }

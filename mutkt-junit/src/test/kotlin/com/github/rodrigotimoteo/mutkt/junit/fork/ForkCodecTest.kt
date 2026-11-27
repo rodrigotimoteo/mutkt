@@ -1,6 +1,10 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
+import com.github.rodrigotimoteo.mutkt.application.port.Coverage
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.Probe
+import com.github.rodrigotimoteo.mutkt.application.port.TestCoverage
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -14,6 +18,8 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.nio.file.Path
+import kotlin.time.Duration.Companion.nanoseconds
 
 class ForkCodecTest {
     private val operator = OperatorId("math")
@@ -86,6 +92,61 @@ class ForkCodecTest {
     }
 
     @Test
+    fun `baseline request with instrumented classes round-trips`() {
+        val request = ForkRequest.Baseline(1500L, ProbedClasses(Path.of("/tmp/probed é"), "\$mutktProbes"))
+        assertEquals(request, roundTrip(request))
+    }
+
+    @Test
+    fun `run request with a test subset round-trips, an empty one too`() {
+        listOf(listOf(TestId("b.BTest"), TestId("a.ATest")), emptyList()).forEach {
+            val request = ForkRequest.Run(mutant(), byteArrayOf(1), 5L, it)
+            assertEquals(request, roundTrip(request))
+        }
+    }
+
+    @Test
+    fun `a result with coverage round-trips`() {
+        val probes = listOf(Probe("a.Calc", 0), Probe("a.Calc", 70), Probe("b.Other", 3))
+        val tests =
+            listOf(
+                TestCoverage(TestId("a.CalcTest"), setOf(probes[1], probes[2]), 1234567.nanoseconds),
+                TestCoverage(TestId("b.Empty"), emptySet(), 0.nanoseconds),
+            )
+        val reply = ForkReply.Result(Outcome.Survived, 7L, coverage = Coverage(tests, setOf(probes[0])))
+        assertEquals(reply, roundTrip(reply))
+    }
+
+    @Test
+    fun `coverage that would not fit in a frame is dropped`() {
+        val coverage =
+            Coverage(listOf(TestCoverage(TestId("a.CalcTest"), setOf(Probe("a.Calc", 3)), 1.nanoseconds)), setOf())
+        val size = ByteArrayOutputStream().also { DataOutputStream(it).writeCoverage(coverage) }.size()
+        assertEquals(coverage, coverage.fitting(size))
+        assertNull(coverage.fitting(size - 1))
+        assertEquals(coverage, coverage.fitting())
+    }
+
+    @Test
+    fun `a class index outside the coverage table is rejected`() {
+        val input =
+            frame {
+                writeByte(2)
+                writeByte(2)
+                writeLong(0)
+                writeBoolean(false)
+                writeBoolean(true)
+                writeInt(0)
+                writeInt(1)
+                writeInt(0)
+                writeInt(1)
+                writeByte(1)
+                writeInt(0)
+            }
+        assertThrows<ForkProtocolException> { readReply(input) }
+    }
+
+    @Test
     fun `baseline request rejects a non-positive timeout`() {
         assertThrows<IllegalArgumentException> { ForkRequest.Baseline(0) }
     }
@@ -152,6 +213,7 @@ class ForkCodecTest {
     @Test
     fun `ready with another protocol version is incompatible`() {
         ForkReply.Ready().requireCompatible()
+        assertThrows<ForkProtocolException> { ForkReply.Ready(6).requireCompatible() }
         val reply = roundTrip(ForkReply.Ready(PROTOCOL_VERSION + 1)) as ForkReply.Ready
         val error = assertThrows<ForkProtocolException> { reply.requireCompatible() }
         assertTrue("protocol" in error.message.orEmpty())

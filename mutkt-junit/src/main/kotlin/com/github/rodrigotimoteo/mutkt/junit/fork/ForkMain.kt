@@ -2,7 +2,7 @@
 
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
-import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
+import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.junit.JUnitTestExecutor
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -101,19 +101,18 @@ internal fun runForkLoop(
             is ForkRequest.Run -> {
                 val deadline = request.timeoutMillis.milliseconds
                 val started = { writeReply(output, ForkReply.Started) }
-                writeResult(output, executor.run(request.mutant, request.bytes, deadline, started), retire())
+                val result = executor.run(request.mutant, request.bytes, deadline, request.tests, started)
+                writeReply(output, ForkReply.Result(result.outcome, result.elapsed.inWholeMilliseconds, retire()))
             }
             is ForkRequest.Baseline -> {
                 val started = { writeReply(output, ForkReply.Started) }
-                writeResult(output, executor.baseline(request.timeoutMillis.milliseconds, started), retire())
+                // The parent locates each probe already; the child only reads the arrays.
+                val probed = request.probed?.let { Instrumented(readClassFiles(it.dir), it.field, emptyMap()) }
+                val result = executor.baseline(request.timeoutMillis.milliseconds, probed, started)
+                val elapsed = result.elapsed.inWholeMilliseconds
+                writeReply(output, ForkReply.Result(result.outcome, elapsed, retire(), result.coverage?.fitting()))
             }
             ForkRequest.Shutdown, null -> return
         }
     }
 }
-
-private fun writeResult(
-    output: DataOutputStream,
-    result: TimedOutcome,
-    retire: Boolean,
-) = writeReply(output, ForkReply.Result(result.outcome, result.elapsed.inWholeMilliseconds, retire))
