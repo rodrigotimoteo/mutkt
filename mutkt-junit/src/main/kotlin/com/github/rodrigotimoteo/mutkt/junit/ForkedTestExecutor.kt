@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.ZipFile
+import kotlin.concurrent.thread
 import kotlin.time.Duration
 
 private const val FORK_MAIN = "com.github.rodrigotimoteo.mutkt.junit.fork.ForkMain"
@@ -57,6 +58,14 @@ public class ForkedTestExecutor(
     private val stopped = AtomicReference<String>()
     private val tmpDirs = AtomicInteger()
     private val startup = lazy { writeStartupFile() }
+
+    // A daemon that exits mid-run (a cancelled build) closes no executor. Each child's watchdog ends that child, but
+    // not the processes its tests forked; this kills the whole trees.
+    private val shutdownHook =
+        lazy {
+            thread(start = false, name = "mutkt-fork-shutdown") { children.forEach(ChildProcess::kill) }
+                .also(Runtime.getRuntime()::addShutdownHook)
+        }
 
     // Checked here so a missing engine fails before any child JVM starts.
     private val projectClasspath = projectClasspathFor(settings.engines, settings.classpath)
@@ -151,6 +160,7 @@ public class ForkedTestExecutor(
             children.toList().forEach(::discard)
         } finally {
             synchronized(lock) {
+                if (shutdownHook.isInitialized()) removeShutdownHook(shutdownHook.value)
                 if (startup.isInitialized()) {
                     startup.value.parent
                         .toFile()
@@ -205,6 +215,7 @@ public class ForkedTestExecutor(
     private fun command(): Pair<List<String>, Path?> =
         synchronized(lock) {
             check(!closed) { CLOSED }
+            shutdownHook.value
             val tmpDir =
                 if (userTmpDir) {
                     null
@@ -253,6 +264,14 @@ private fun AtomicReference<String>.throwIfSet() {
 private fun AtomicReference<String>.stop(message: String): Nothing {
     compareAndSet(null, message)
     throw TestExecutionStopped(get())
+}
+
+private fun removeShutdownHook(hook: Thread) {
+    try {
+        Runtime.getRuntime().removeShutdownHook(hook)
+    } catch (_: IllegalStateException) {
+        // The JVM is already shutting down, so the hook runs anyway.
+    }
 }
 
 private fun TimedOutcome.mayBeLeftover(): Boolean =
