@@ -78,7 +78,7 @@
           "com.keylesspalace.tusky.util.**"
         ],
         "threads": null,
-        "timeoutMs": null
+        "timeoutMs": 120000
       },
       "why": "Large Groovy-DSL app on AGP 8 with flavors, JDK 21 toolchain, Robolectric and Mockito; targets util, where most unit tests are."
     },

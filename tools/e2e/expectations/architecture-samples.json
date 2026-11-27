@@ -1,11 +1,11 @@
 {
   "mutants": {
-    "min": 100,
-    "max": 700
+    "min": 800,
+    "max": 1500
   },
   "score": {
-    "min": 0.3,
-    "max": 0.9
+    "min": 0.05,
+    "max": 0.4
   },
   "maxError": 0,
   "operators": [

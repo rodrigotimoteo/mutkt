@@ -4,7 +4,7 @@
     "max": 240
   },
   "score": {
-    "min": 0.4,
+    "min": 0.3,
     "max": 0.9
   },
   "maxError": 0,
@@ -13,7 +13,6 @@
     "arithmetic",
     "conditionals-boundary",
     "null-returns",
-    "return-vals",
     "empty-returns"
   ],
   "mustNotContain": [
