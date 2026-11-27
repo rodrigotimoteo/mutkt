@@ -22,6 +22,10 @@ plugins {
 
 The score and the surviving mutants are printed in the build log. Reports land in `build/reports/mutkt/`: `mutation-report.html` (one offline page), `mutation-report.json` (Stryker schema) and `mutkt.txt` (the printed summary).
 
+## Benchmark
+
+How MutKt does on 10 real open-source repos, with mutant counts, scores and wall times: [docs/benchmark.md](docs/benchmark.md).
+
 ## Docs
 
 The guides and the API reference are published at <https://rodrigotimoteo.github.io/mutkt/>.

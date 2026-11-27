@@ -5,6 +5,7 @@ on:
     branches: [master, main, "rebuild/**"]
   pull_request:
   workflow_call:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -225,7 +226,8 @@ jobs:
   dogfood:
     name: Mutation score of MutKt on itself
     needs: [lint]
-    if: github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/rebuild/') || github.ref == 'refs/heads/master'
+    # 13 minutes: not on pull requests. Release verify runs it through workflow_call, where the event is the tag push.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
