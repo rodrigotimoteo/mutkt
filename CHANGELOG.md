@@ -11,6 +11,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 - Opt-in `when-switch` operator: a `when` over Int, Char or String constants sends one case to the else branch, or the else branch to the first case ([docs/operators.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md)).
 - Opt-in operator `remove-negation`: removes a unary minus (`INEG`/`LNEG`/`FNEG`/`DNEG`), so `-x` becomes `x`, as PIT's negation mutator does.
+- Opt-in operator `extreme`: replaces a whole method body with a default return (nothing, false, 0, `""`, empty, `this` for a builder, else null), one mutant per method, as Descartes does. A survivor marks a pseudo-tested method: tests run it, but none depends on what it does.
 ### Fixed
 
 - Docs: mutants reached only through another project's classes on the test classpath (its test fixtures, for instance) are killed, as they have been since 0.5.0 loads each run in one class loader. The known-gap note is gone, and a multi-module build now tests it.
