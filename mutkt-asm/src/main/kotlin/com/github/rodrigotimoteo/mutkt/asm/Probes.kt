@@ -1,15 +1,16 @@
 package com.github.rodrigotimoteo.mutkt.asm
 
+import org.objectweb.asm.Opcodes.AASTORE
 import org.objectweb.asm.Opcodes.ACC_PRIVATE
 import org.objectweb.asm.Opcodes.ACC_STATIC
 import org.objectweb.asm.Opcodes.ACC_SYNTHETIC
 import org.objectweb.asm.Opcodes.ACC_TRANSIENT
-import org.objectweb.asm.Opcodes.ALOAD
+import org.objectweb.asm.Opcodes.ACONST_NULL
+import org.objectweb.asm.Opcodes.ANEWARRAY
 import org.objectweb.asm.Opcodes.ARETURN
-import org.objectweb.asm.Opcodes.ASTORE
-import org.objectweb.asm.Opcodes.ATHROW
 import org.objectweb.asm.Opcodes.BASTORE
 import org.objectweb.asm.Opcodes.BIPUSH
+import org.objectweb.asm.Opcodes.CHECKCAST
 import org.objectweb.asm.Opcodes.DUP
 import org.objectweb.asm.Opcodes.GETSTATIC
 import org.objectweb.asm.Opcodes.ICONST_0
@@ -17,13 +18,11 @@ import org.objectweb.asm.Opcodes.ICONST_1
 import org.objectweb.asm.Opcodes.ICONST_5
 import org.objectweb.asm.Opcodes.IFNONNULL
 import org.objectweb.asm.Opcodes.INVOKESTATIC
-import org.objectweb.asm.Opcodes.MONITORENTER
-import org.objectweb.asm.Opcodes.MONITOREXIT
-import org.objectweb.asm.Opcodes.NEWARRAY
+import org.objectweb.asm.Opcodes.INVOKEVIRTUAL
 import org.objectweb.asm.Opcodes.POP
 import org.objectweb.asm.Opcodes.PUTSTATIC
 import org.objectweb.asm.Opcodes.SIPUSH
-import org.objectweb.asm.Opcodes.T_BOOLEAN
+import org.objectweb.asm.Type
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.ClassNode
 import org.objectweb.asm.tree.FieldInsnNode
@@ -36,8 +35,7 @@ import org.objectweb.asm.tree.LabelNode
 import org.objectweb.asm.tree.LdcInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
 import org.objectweb.asm.tree.MethodNode
-import org.objectweb.asm.tree.TryCatchBlockNode
-import org.objectweb.asm.tree.VarInsnNode
+import org.objectweb.asm.tree.TypeInsnNode
 
 /** Name of the static `boolean[]` field that holds a class's probes. */
 internal const val PROBE_FIELD = "\$mutktProbes"
@@ -45,8 +43,12 @@ private const val PROBE_INIT = "\$mutktInit"
 private const val PROBES_TYPE = "[Z"
 private const val HIDDEN = ACC_PRIVATE or ACC_STATIC or ACC_SYNTHETIC
 
-// One JVM-wide interned string guards every class's first probe; user code never locks it, unlike the class.
-private const val PROBE_LOCK = "mutkt probe initialisation"
+private const val LOADER = "java/lang/ClassLoader"
+private const val CLASS = "java/lang/Class"
+private const val STRING = "java/lang/String"
+private const val INTEGER = "java/lang/Integer"
+private const val OBJECT = "java/lang/Object"
+private const val METHOD = "java/lang/reflect/Method"
 
 /** Sets probe [index] of class [owner] right before each instruction in [at]; leaves the stack as it was. */
 internal fun MethodNode.insertProbe(
@@ -74,68 +76,89 @@ private fun pushInt(value: Int): AbstractInsnNode =
     }
 
 /**
- * Adds the probe field and the accessor that creates its array of [size] on first use. Lazy like JaCoCo's, so it
- * does not depend on when `<clinit>` runs, and a class whose probes were never reached keeps a null field.
+ * Adds the probe field and the accessor that fetches its array of [size] from [registry] (a class on the system class
+ * path) under [key] on first use. Lazy like JaCoCo's, so it does not depend on when `<clinit>` runs, and a class whose
+ * probes were never reached keeps a null field. Through `java.lang.ClassLoader`, which every loader shares, so the
+ * copies a sandbox loader (Robolectric's) defines again from the class file all hit one array.
  */
-internal fun ClassNode.addProbeArray(size: Int) {
+internal fun ClassNode.addProbeArray(
+    registry: String,
+    key: String,
+    size: Int,
+) {
     check(fields.none { it.name == PROBE_FIELD } && methods.none { it.name == PROBE_INIT }) {
         "$name already has probes"
     }
     fields.add(FieldNode(HIDDEN or ACC_TRANSIENT, PROBE_FIELD, PROBES_TYPE, null, null))
     val owner = name
-    methods.add(MethodNode(HIDDEN, PROBE_INIT, "()$PROBES_TYPE", null, null).apply { probeInitCode(owner, size) })
+    methods.add(
+        MethodNode(HIDDEN, PROBE_INIT, "()$PROBES_TYPE", null, null).apply {
+            instructions.add(probeInitCode(owner, fetch(registry, key, size)))
+        },
+    )
 }
 
-// Double-checked: the unlocked read is safe without volatile because a racing reader at worst sees null and takes
-// the lock, and a published array holds only defaults; the lock stops two threads each creating one and losing hits.
-private fun MethodNode.probeInitCode(
+// The unlocked read is safe without volatile: a racing reader at worst sees null and fetches again, and the registry
+// hands every caller for a class the same array, so no hit is lost.
+private fun probeInitCode(
     owner: String,
-    size: Int,
-) {
+    fetch: InsnList,
+) = InsnList().apply {
     val ready = LabelNode()
-    instructions.apply {
-        add(FieldInsnNode(GETSTATIC, owner, PROBE_FIELD, PROBES_TYPE))
-        add(InsnNode(DUP))
-        add(JumpInsnNode(IFNONNULL, ready))
-        add(InsnNode(POP))
-        add(lockedCreate(owner, size))
-        add(ready)
-        add(InsnNode(ARETURN))
-    }
+    add(FieldInsnNode(GETSTATIC, owner, PROBE_FIELD, PROBES_TYPE))
+    add(InsnNode(DUP))
+    add(JumpInsnNode(IFNONNULL, ready))
+    add(InsnNode(POP))
+    add(fetch)
+    add(InsnNode(DUP))
+    add(FieldInsnNode(PUTSTATIC, owner, PROBE_FIELD, PROBES_TYPE))
+    add(ready)
+    add(InsnNode(ARETURN))
 }
 
-// Leaves the array on the stack; the catch-any handler releases the lock if allocation throws.
-private fun MethodNode.lockedCreate(
-    owner: String,
+// ClassLoader.getSystemClassLoader().loadClass(registry).getMethod("probes", String, int).invoke(null, key, size).
+// A registry that is missing or denied throws out of the probed method, failing the baseline on probed classes, which
+// then falls back to running every mutant against the whole suite.
+private fun fetch(
+    registry: String,
+    key: String,
     size: Int,
-): InsnList {
-    val start = LabelNode()
-    val end = LabelNode()
-    val handler = LabelNode()
-    val created = LabelNode()
-    tryCatchBlocks.add(TryCatchBlockNode(start, end, handler, null))
-    return InsnList().apply {
-        add(LdcInsnNode(PROBE_LOCK))
+) = InsnList().apply {
+    add(MethodInsnNode(INVOKESTATIC, LOADER, "getSystemClassLoader", "()L$LOADER;", false))
+    add(LdcInsnNode(registry))
+    add(MethodInsnNode(INVOKEVIRTUAL, LOADER, "loadClass", "(L$STRING;)L$CLASS;", false))
+    add(LdcInsnNode("probes"))
+    add(
+        array(
+            CLASS,
+            listOf(LdcInsnNode(Type.getObjectType(STRING))),
+            listOf(FieldInsnNode(GETSTATIC, INTEGER, "TYPE", "L$CLASS;")),
+        ),
+    )
+    add(MethodInsnNode(INVOKEVIRTUAL, CLASS, "getMethod", "(L$STRING;[L$CLASS;)L$METHOD;", false))
+    add(InsnNode(ACONST_NULL))
+    add(
+        array(
+            OBJECT,
+            listOf(LdcInsnNode(key)),
+            listOf(pushInt(size), MethodInsnNode(INVOKESTATIC, INTEGER, "valueOf", "(I)L$INTEGER;", false)),
+        ),
+    )
+    add(MethodInsnNode(INVOKEVIRTUAL, METHOD, "invoke", "(L$OBJECT;[L$OBJECT;)L$OBJECT;", false))
+    add(TypeInsnNode(CHECKCAST, PROBES_TYPE))
+}
+
+// An array of [type] whose element i is what items[i] pushes.
+private fun array(
+    type: String,
+    vararg items: List<AbstractInsnNode>,
+) = InsnList().apply {
+    add(pushInt(items.size))
+    add(TypeInsnNode(ANEWARRAY, type))
+    items.forEachIndexed { index, item ->
         add(InsnNode(DUP))
-        add(VarInsnNode(ASTORE, 0))
-        add(InsnNode(MONITORENTER))
-        add(start)
-        add(FieldInsnNode(GETSTATIC, owner, PROBE_FIELD, PROBES_TYPE))
-        add(InsnNode(DUP))
-        add(JumpInsnNode(IFNONNULL, created))
-        add(InsnNode(POP))
-        add(pushInt(size))
-        add(IntInsnNode(NEWARRAY, T_BOOLEAN))
-        add(InsnNode(DUP))
-        add(FieldInsnNode(PUTSTATIC, owner, PROBE_FIELD, PROBES_TYPE))
-        add(created)
-        add(VarInsnNode(ALOAD, 0))
-        add(InsnNode(MONITOREXIT))
-        add(end)
-        add(InsnNode(ARETURN))
-        add(handler)
-        add(VarInsnNode(ALOAD, 0))
-        add(InsnNode(MONITOREXIT))
-        add(InsnNode(ATHROW))
+        add(pushInt(index))
+        item.forEach(::add)
+        add(InsnNode(AASTORE))
     }
 }

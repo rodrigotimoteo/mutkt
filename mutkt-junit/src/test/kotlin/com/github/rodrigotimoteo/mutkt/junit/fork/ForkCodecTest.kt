@@ -93,7 +93,7 @@ class ForkCodecTest {
 
     @Test
     fun `baseline request with instrumented classes round-trips`() {
-        val request = ForkRequest.Baseline(1500L, ProbedClasses(Path.of("/tmp/probed é"), "\$mutktProbes"))
+        val request = ForkRequest.Baseline(1500L, ProbedClasses(Path.of("/tmp/probed é")))
         assertEquals(request, roundTrip(request))
     }
 

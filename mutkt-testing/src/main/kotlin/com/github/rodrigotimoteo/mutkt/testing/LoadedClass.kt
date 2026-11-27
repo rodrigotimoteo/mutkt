@@ -1,26 +1,40 @@
 package com.github.rodrigotimoteo.mutkt.testing
 
+import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.lang.reflect.InvocationTargetException
 
+private const val CLASS_SUFFIX = ".class"
+
 private class BytesClassLoader(
-    private val classes: Map<String, ByteArray>,
-) : ClassLoader(BytesClassLoader::class.java.classLoader) {
+    parent: ClassLoader,
+    private val classes: (String) -> ByteArray?,
+) : ClassLoader(parent) {
     // Child-first for the given names, so a class shadows a same-named one on the test classpath.
     override fun loadClass(
         name: String,
         resolve: Boolean,
     ): Class<*> =
         synchronized(getClassLoadingLock(name)) {
-            val bytes = classes[name] ?: return super.loadClass(name, resolve)
+            val bytes = classes(name) ?: return super.loadClass(name, resolve)
             findLoadedClass(name) ?: defineClass(name, bytes, 0, bytes.size)
         }
+
+    override fun getResourceAsStream(name: String): InputStream? =
+        name
+            .takeIf { it.endsWith(CLASS_SUFFIX) }
+            ?.let { classes(it.removeSuffix(CLASS_SUFFIX).replace('/', '.')) }
+            ?.let(::ByteArrayInputStream)
+            ?: super.getResourceAsStream(name)
 }
 
 /** [classes] in one fresh loader, so calls and reads see the same static state. */
-class IsolatedClasses(
-    classes: Map<String, ByteArray>,
+class IsolatedClasses private constructor(
+    private val loader: ClassLoader,
+    private val names: Set<String>,
 ) {
-    private val loader = BytesClassLoader(classes)
+    constructor(classes: Map<String, ByteArray>) :
+        this(BytesClassLoader(BytesClassLoader::class.java.classLoader, classes::get), classes.keys)
 
     /** Calls static [method] of [className]; overloads unsupported (first name+arity wins). */
     fun invoke(
@@ -51,6 +65,23 @@ class IsolatedClasses(
             .getDeclaredField(field)
             .apply { isAccessible = true }
             .get(null) as BooleanArray?
+
+    /** The same classes defined again from this loader's class file resources, as Robolectric's sandbox does. */
+    fun sandbox(): IsolatedClasses = IsolatedClasses(sandboxLoader(loader, names), names)
+}
+
+/**
+ * A loader that defines [names] again from the class file resources of [source], child-first, and delegates the rest
+ * to it, like Robolectric's sandbox loader.
+ */
+fun sandboxLoader(
+    source: ClassLoader,
+    names: Set<String>,
+): ClassLoader = BytesClassLoader(source) { name -> if (name in names) source.classFile(name) else null }
+
+private fun ClassLoader.classFile(name: String): ByteArray {
+    val path = name.replace('.', '/') + CLASS_SUFFIX
+    return checkNotNull(getResourceAsStream(path)) { "No class file for $name" }.use { it.readBytes() }
 }
 
 /** Calls static [method] of [className] in a fresh loader; overloads unsupported (first name+arity wins). */

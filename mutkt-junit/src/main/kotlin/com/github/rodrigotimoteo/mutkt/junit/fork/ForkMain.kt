@@ -107,7 +107,7 @@ internal fun runForkLoop(
             is ForkRequest.Baseline -> {
                 val started = { writeReply(output, ForkReply.Started) }
                 // The parent locates each probe already; the child only reads the arrays.
-                val probed = request.probed?.let { Instrumented(readClassFiles(it.dir), it.field, emptyMap()) }
+                val probed = request.probed?.let { Instrumented(readClassFiles(it.dir), emptyMap()) }
                 val result = executor.baseline(request.timeoutMillis.milliseconds, probed, started)
                 val elapsed = result.elapsed.inWholeMilliseconds
                 writeReply(output, ForkReply.Result(result.outcome, elapsed, retire(), result.coverage?.fitting()))

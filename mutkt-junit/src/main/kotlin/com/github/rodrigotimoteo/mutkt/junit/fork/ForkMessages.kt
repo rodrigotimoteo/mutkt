@@ -79,11 +79,7 @@ internal sealed interface ForkReply {
     ) : ForkReply
 }
 
-/**
- * Class files with probes under [dir] (a class directory layout; a frame could not hold a large project's) that keep
- * them in the static field [field].
- */
+/** Class files with probes under [dir] (a class directory layout; a frame could not hold a large project's). */
 internal data class ProbedClasses(
     val dir: Path,
-    val field: String,
 )

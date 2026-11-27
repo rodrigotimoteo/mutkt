@@ -69,16 +69,10 @@ class JUnitTestExecutorCoverageTest {
     }
 
     @Test
-    fun `reading probes never initializes a class a test only loaded`() {
-        val extra =
-            "object Log { val events = mutableListOf<String>() }\n" +
-                "class Boom { companion object { @JvmField var probes: BooleanArray? = null\n" +
-                "init { Log.events += \"boom\" } } }"
-        val tests =
-            "class ATest { @Test fun loads() { assertEquals(\"Boom\", Boom::class.java.name) } }\n" +
-                "class BTest { @Test fun untouched() { assertEquals(listOf<String>(), Log.events) } }"
-        val baseline = baseline(coverageFixture(tests, extra, probed = setOf("Boom")))
-        assertEquals(Outcome.Survived, baseline.outcome.withoutCause())
+    fun `a probe reached in a copy of the class from another loader counts`() {
+        val baseline = baseline(coverageFixture(SANDBOX_TEST))
+        assertEquals(Outcome.Survived, baseline.outcome)
+        assertEquals(listOf(TestId("ATest") to setOf(ADD)), baseline.coverage!!.hits())
     }
 
     @Test

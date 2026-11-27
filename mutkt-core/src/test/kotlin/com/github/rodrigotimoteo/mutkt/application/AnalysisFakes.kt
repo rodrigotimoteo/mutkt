@@ -72,7 +72,7 @@ internal class FakeInstrumenter(
         mutants: List<Mutant>,
     ): Instrumented {
         calls += classes.map { it.name } to mutants
-        return Instrumented(emptyList(), "probes", probes).also { made += it }
+        return Instrumented(emptyList(), probes).also { made += it }
     }
 }
 

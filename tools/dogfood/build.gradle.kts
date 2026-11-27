@@ -16,8 +16,15 @@ subprojects {
             sourceSets.named("main") { kotlin.setSrcDirs(listOf(module.resolve("src/main/kotlin"))) }
             sourceSets.named("test") {
                 kotlin.setSrcDirs(listOf(module.resolve("src/test/kotlin")))
-                // These read the repository root and its docs, not the code under mutation.
-                kotlin.exclude("**/ArchitectureTest.kt", "**/ParityDocTest.kt", "**/OperatorDocTest.kt")
+                // These read the repository root and its docs, not the code under mutation. AsmCoverageInstrumenterTest
+                // reaches its probe registry through the system class loader, which in a MutKt child holds MutKt, not
+                // the test classpath.
+                kotlin.exclude(
+                    "**/ArchitectureTest.kt",
+                    "**/ParityDocTest.kt",
+                    "**/OperatorDocTest.kt",
+                    "**/AsmCoverageInstrumenterTest.kt",
+                )
             }
         }
     }

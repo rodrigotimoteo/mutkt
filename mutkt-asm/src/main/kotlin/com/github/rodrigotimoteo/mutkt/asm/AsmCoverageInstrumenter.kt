@@ -15,12 +15,15 @@ import org.objectweb.asm.tree.MethodNode
 /**
  * ASM [CoverageInstrumenter]: sets a probe right before the instructions each mutant changes (finally copies
  * included), so a hit means execution reached the site. Mutants that change the same instructions share a probe.
- * [classpath] is the lookup given to [AsmMutantGenerator], so sites and frames resolve the same way.
+ * Each class fetches its probe array from [registry], the binary name of a class on the test JVM's system class path
+ * with a public static `probes(String className, int size): boolean[]`. [classpath] is the lookup given to
+ * [AsmMutantGenerator], so sites and frames resolve the same way.
  *
  * Interfaces (which cannot hold a private static field) and classes whose probes would push a method over the JVM
  * size limit stay uninstrumented; their mutants are unmapped.
  */
 public class AsmCoverageInstrumenter(
+    private val registry: String,
     private val classpath: (String) -> ByteArray?,
 ) : CoverageInstrumenter {
     override fun instrument(
@@ -36,7 +39,6 @@ public class AsmCoverageInstrumenter(
             }
         return Instrumented(
             classes = probed.map { it.first },
-            probeField = PROBE_FIELD,
             probes = probed.flatMap { it.second.entries }.associate { it.key to it.value },
         )
     }
@@ -59,7 +61,7 @@ public class AsmCoverageInstrumenter(
                 mutant.id to Probe(name, spots.getOrPut(spot) { spots.size })
             }
         spots.forEach { (spot, index) -> spot.first.insertProbe(node.name, spot.second, index) }
-        node.addProbeArray(spots.size)
+        node.addProbeArray(registry, name, spots.size)
         return try {
             ClassFile(name, HierarchyClassWriter(hierarchy).also(node::accept).toByteArray()) to probes
         } catch (_: MethodTooLargeException) {

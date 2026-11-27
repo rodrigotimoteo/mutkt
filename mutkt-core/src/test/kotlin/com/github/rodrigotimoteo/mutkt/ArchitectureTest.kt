@@ -23,6 +23,15 @@ private val ALLOWED_PROJECTS =
         "mutkt-gradle" to setOf("mutkt-core", "mutkt-annotations", "mutkt-asm", "mutkt-junit", "mutkt-report"),
     )
 
+// The probe registries' arrays (ADR 0010): every class loader that defines a probed class (Robolectric's sandbox too)
+// must reach one array.
+private val PROBE_REGISTRIES =
+    setOf(
+        "mutkt-junit/src/main/kotlin/$PACKAGE_DIR/junit/ProbeRegistry.kt: <top-level>.arrays",
+        "mutkt-testing/src/main/kotlin/$PACKAGE_DIR/testing/TestProbeRegistry.kt: <top-level>.arrays",
+    )
+private const val PACKAGE_DIR = "com/github/rodrigotimoteo/mutkt"
+
 // Adapters may use mutkt-testing for fixtures, in test scope only; no module may in main scope.
 private const val TEST_SUPPORT = "mutkt-testing"
 private val TEST_SUPPORT_USERS = setOf("mutkt-asm", "mutkt-junit", "mutkt-report", "mutkt-gradle")
@@ -140,14 +149,15 @@ class ArchitectureTest {
             property.isVar || STATE_TYPES.containsMatchIn(property.text)
         }
         val violations =
-            mainFiles.flatMap { file ->
-                val owners =
-                    file.objects(includeNested = true).map { it.name to it.properties() } +
-                        ("<top-level>" to file.properties(includeNested = false))
-                owners.flatMap { (owner, properties) ->
-                    properties.filter(isStateful).map { "${file.path}: $owner.${it.name}" }
-                }
-            }
+            mainFiles
+                .flatMap { file ->
+                    val owners =
+                        file.objects(includeNested = true).map { it.name to it.properties() } +
+                            ("<top-level>" to file.properties(includeNested = false))
+                    owners.flatMap { (owner, properties) ->
+                        properties.filter(isStateful).map { "${file.path}: $owner.${it.name}" }
+                    }
+                }.filterNot { violation -> PROBE_REGISTRIES.any(violation::endsWith) }
         assertNoViolations(violations, "Global mutable state")
     }
 
