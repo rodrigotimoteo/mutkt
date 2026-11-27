@@ -2,7 +2,6 @@ package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
-import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -221,12 +220,17 @@ internal class ChildProcess private constructor(
             tmpDir: Path?,
         ): ChildProcess {
             val child = spawn(command, environment, workingDir, tmpDir)
+            var ready = false
             try {
                 child.handshake()
+                ready = true
             } catch (e: IOException) {
-                throw child.failure("starting", e).also { child.kill() }
+                throw child.failure("starting", e)
             } catch (e: ForkProtocolException) {
-                throw child.failure("starting", e).also { child.kill() }
+                throw child.failure("starting", e)
+            } finally {
+                // Whatever ends the start, an interrupt (a cancelled build) too, must not leave a child behind.
+                if (!ready) child.kill()
             }
             return child
         }
@@ -269,32 +273,4 @@ private fun killedBy(exitCode: Int): String =
 private fun Process.destroyTree() {
     descendants().forEach { it.destroyForcibly() }
     destroyForcibly().waitFor(KILL_WAIT_MILLIS, TimeUnit.MILLISECONDS)
-}
-
-private fun StderrTail.shown(): String = text().ifBlank { "<empty>" }
-
-// Keeps the last [limit] bytes; the buffer is trimmed at twice that to avoid copying on every append.
-private class StderrTail(
-    private val limit: Int,
-) {
-    private val buffer = ByteArrayOutputStream()
-
-    @Synchronized
-    fun append(
-        bytes: ByteArray,
-        length: Int,
-    ) {
-        buffer.write(bytes, 0, length)
-        if (buffer.size() > 2 * limit) {
-            val all = buffer.toByteArray()
-            buffer.reset()
-            buffer.write(all, all.size - limit, limit)
-        }
-    }
-
-    @Synchronized
-    fun text(): String {
-        val all = buffer.toByteArray()
-        return String(all, maxOf(0, all.size - limit), minOf(all.size, limit), Charsets.UTF_8).trim()
-    }
 }
