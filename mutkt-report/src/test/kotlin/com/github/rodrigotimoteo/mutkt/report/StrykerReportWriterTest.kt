@@ -61,6 +61,32 @@ class StrykerReportWriterTest {
     }
 
     @Test
+    fun `coveredBy lists the covering test classes and testFiles defines each one for the viewer`() {
+        val json = ObjectMapper().readTree(render(fixtureReport(dir)))
+        val coveredBy =
+            json.get("files").flatMap { it.get("mutants") }.associate {
+                it.get("description").asText() to it.get("coveredBy")?.map(JsonNode::asText)
+            }
+
+        assertEquals(listOf("demo.CalcTest"), coveredBy["Replaced + with -"])
+        assertEquals(listOf("demo.MaxTest", "demo.CalcTest"), coveredBy["Negated conditional"])
+        assertEquals(emptyList<String>(), coveredBy["Replaced return value"])
+        assertEquals(null, coveredBy["Replaced + with *"])
+        assertEquals(
+            """{"demo.CalcTest":{"tests":[{"id":"demo.CalcTest","name":"demo.CalcTest"}]},""" +
+                """"demo.MaxTest":{"tests":[{"id":"demo.MaxTest","name":"demo.MaxTest"}]}}""",
+            json.get("testFiles").toString(),
+        )
+    }
+
+    @Test
+    fun `a report without coverage has no testFiles`() {
+        val report = fixtureReport(dir).let { r -> r.copy(results = r.results.map { it.copy(coveredBy = null) }) }
+
+        assertEquals(null, ObjectMapper().readTree(render(report)).get("testFiles"))
+    }
+
+    @Test
     fun `every status maps to its schema name`() {
         val files = ObjectMapper().readTree(render(fixtureReport(dir))).get("files")
         val statuses =

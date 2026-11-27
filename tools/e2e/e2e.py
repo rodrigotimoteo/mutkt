@@ -6,6 +6,8 @@ Run with python3 -I. Subcommands:
   entry <corpus> <name>         the repo's corpus entry as JSON, for the init script
   gradle-args <corpus> <name>   the repo's gradleArgs, one per line (none when absent)
   check <expectations> <report> one summary line; exits 1 and prints the broken expectations when any fails
+  compare <old> <new>           per mutant id, how a report's statuses changed; exits 1 when any changed other than
+                                Survived to NoCoverage
 """
 import json
 import re
@@ -105,6 +107,28 @@ def summary(report):
     return f"mutants={len(statuses)} score={shown} errors={statuses.count('RuntimeError')}"
 
 
+def mutants(report):
+    return {m["id"]: m for f in report["files"].values() for m in f["mutants"]}
+
+
+def comparison(old, new):
+    """Same status and Survived to NoCoverage are counted; every other change is listed with the tests involved."""
+    before, after = mutants(old), mutants(new)
+    pairs = [(before[i]["status"], after[i]["status"]) for i in before.keys() & after.keys()]
+    whole_suite = sum("coveredBy" not in m for m in after.values())
+    yield (
+        f"same={sum(a == b for a, b in pairs)} survived->nocoverage={pairs.count(('Survived', 'NoCoverage'))}"
+        f" whole-suite={whole_suite}/{len(after)} only-old={len(before.keys() - after.keys())}"
+        f" only-new={len(after.keys() - before.keys())}"
+    )
+    for i in sorted(before.keys() & after.keys()):
+        was, now = before[i]["status"], after[i]["status"]
+        if was != now and (was, now) != ("Survived", "NoCoverage"):
+            covered = ",".join(after[i].get("coveredBy", ["<whole suite>"])) or "<none>"
+            killed = ",".join(before[i].get("killedBy", [])) or "-"
+            yield f"  {was}->{now} {i} coveredBy={covered} oldKilledBy={killed}"
+
+
 def main(args):
     command = args[0] if args else ""
     if command == "fields" and len(args) in (2, 3):
@@ -126,6 +150,10 @@ def main(args):
         for problem in found:
             print(f"  {problem}")
         sys.exit(1 if found else 0)
+    elif command == "compare" and len(args) == 3:
+        lines = list(comparison(load(args[1]), load(args[2])))
+        print("\n".join(lines))
+        sys.exit(1 if len(lines) > 1 else 0)
     else:
         sys.exit(__doc__)
 
