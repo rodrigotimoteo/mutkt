@@ -4,10 +4,12 @@ import com.github.rodrigotimoteo.mutkt.application.port.Baseline
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
 import com.github.rodrigotimoteo.mutkt.application.port.Coverage
+import com.github.rodrigotimoteo.mutkt.application.port.History
 import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
+import com.github.rodrigotimoteo.mutkt.application.port.ResultHistory
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
@@ -101,4 +103,17 @@ class FakeSourceLookup(
             .filter { it.first == className }
             .maxOfOrNull { it.second }
             ?.let { last -> (1..last).joinToString("\n") { lines[className to it].orEmpty() } }
+}
+
+/** Reads [stored] until a history is written, then the last one written; records every write in [written]. */
+class FakeResultHistory(
+    private val stored: History? = null,
+) : ResultHistory {
+    val written = mutableListOf<History>()
+
+    override fun read(): History? = written.lastOrNull() ?: stored
+
+    override fun write(history: History) {
+        written += history
+    }
 }

@@ -60,3 +60,7 @@ MutKt sees AGP's classes only when AGP is declared in the same or a parent `plug
 ## Self-test
 
 `selftest/run.sh` turns `selftest/fixture` (a Kotlin JVM build with a `:lib` module) into a git repo with this repository's wrapper and runs `selftest/corpus.json` against it in a temporary cache with isolated projects on: `fixture-broken` (its build fails) must fail without stopping the run, `fixture-pass` must pass, `fixture-fail` (every expectation wrong) must fail, `fixture-leak` (its log fakes a scan upload) must fail with `build scan published`, and running `fixture-pass` alone must pass.
+
+## Benchmark page
+
+`python3 -I tools/e2e/benchmark.py <reports dir>` writes `docs/benchmark.md` from one Stryker report per repo (`<repo>.json`), `corpus.json` and `benchmark-run.json` (wall times and machine, which the reports do not hold). Run it after the release gate (docs/release.md).
