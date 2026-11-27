@@ -13,5 +13,5 @@ Only the latest release gets security fixes. The 0.3.x line and earlier are supe
 ## What the project does
 
 - CodeQL and a verified-secret scan (TruffleHog) run on every push and pull request, and weekly (`.github/workflows/security.yml`).
-- Dependabot proposes Gradle and GitHub Actions updates weekly; versions are pinned in `gradle/libs.versions.toml`.
+- Versions are pinned in `gradle/libs.versions.toml` and GitHub Actions by commit SHA, and are updated deliberately, not by a bot.
 - Releases are published only by `.github/workflows/release.yml` from a `v*` tag, after approval of the `release` environment, and every artifact is GPG-signed (see `docs/release.md`).
