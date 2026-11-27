@@ -49,6 +49,13 @@ class UserDocsTest {
         assertEquals(ANDROID_GENERATED_CLASSES.toSet(), ANDROID_GLOB.findAll(section).map { it.groupValues[1] }.toSet())
     }
 
+    @Test
+    fun `dsl md names the generated-sources entry of excludedClasses`() {
+        val dsl = File(readme.parentFile, "docs/dsl.md").readText()
+
+        assertTrue("`$GENERATED_SOURCES`" in dsl)
+    }
+
     private companion object {
         val ANDROID_GLOB = Regex("`(\\*\\*\\.[^`]+)`")
 

@@ -11,6 +11,7 @@ import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.CompileClasspath
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
@@ -49,6 +50,13 @@ public abstract class MutKtTask : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
     public abstract val sourceDirs: ConfigurableFileCollection
+
+    /**
+     * `build/generated`, searched for the sources of classes to skip (see [MutKtExtension.excludedClasses]). Not an
+     * input: the classes compiled from it are, and declaring it would claim other tasks' outputs without a dependency.
+     */
+    @get:Internal
+    public abstract val generatedSourcesDir: DirectoryProperty
 
     /** See [MutKtExtension.targetClasses]. */
     @get:Input

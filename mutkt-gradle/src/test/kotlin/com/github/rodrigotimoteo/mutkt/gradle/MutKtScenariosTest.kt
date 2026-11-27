@@ -58,6 +58,29 @@ class MutKtScenariosTest {
     }
 
     @OnGradleVersions
+    fun `classes compiled from generated sources are skipped unless excludedClasses drops the default`(
+        version: String,
+    ) {
+        val project = TestKitProject(dir, version)
+        // Stands in for a KSP output directory: a generator registers its directory as a source directory.
+        val generated = "sourceSets.main.java.srcDir('build/generated/ksp/main/java')"
+        project.write("build/generated/ksp/main/java/demo/Other.java", OTHER)
+        val sources = mapOf("demo/Calc.java" to CALC)
+        val tests = mapOf("demo/CalcTest.java" to WEAK_TEST)
+
+        val json = dir.resolve("build/reports/mutkt/mutation-report.json")
+
+        val summary = run(version, "$generated\nmutkt { excludedClasses.add('demo.None') }", sources, tests)
+        val skipped = json.readText()
+        run(version, "$generated\nmutkt { excludedClasses = [] }", sources, tests)
+        val mutated = json.readText()
+
+        assertLine(summary, "Mutants: 4")
+        assertTrue("\"demo/Other.java\"" !in skipped, skipped)
+        assertTrue("\"demo/Other.java\"" in mutated, mutated)
+    }
+
+    @OnGradleVersions
     fun `a suppressed method is not mutated`(version: String) {
         val sources =
             mapOf(
