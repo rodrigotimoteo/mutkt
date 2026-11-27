@@ -42,13 +42,13 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
     // The generator resolves supertypes of the analysed classes, including the ones the filters left out. The compile
     // classpath comes last, so runtime versions win and compileOnly types still resolve for frame computation.
     val compileOnly = compileClasspath.files.map(File::toPath)
-    val urls = (listOf(production) + dependencies + compileOnly).map { it.toUri().toURL() }.toTypedArray()
+    val urls = (listOf(production.dir) + dependencies + compileOnly).map { it.toUri().toURL() }.toTypedArray()
     val report =
         URLClassLoader(urls, null).use { loader ->
             // Built first so an unknown operator id fails before any child JVM could start.
             val generator = generator(loader)
             ForkedTestExecutor(forkSettings(projectClasses, tests, dependencies, config.parallelism)).use { executor ->
-                RunMutationAnalysis(DirectoryClassSource(production), generator, executor, writer, config)
+                RunMutationAnalysis(DirectoryClassSource(production.dir), generator, executor, writer, config)
                     // Logged as soon as the baseline ends so a long run shows the hint before its mutants.
                     .run(onDeadlineCap = { logger.warn(deadlineWarning(it)) })
             }
@@ -86,8 +86,8 @@ private fun MutKtTask.analysisConfig() =
     )
 
 internal fun MutKtTask.forkSettings(
-    production: Path,
-    tests: Path,
+    production: Staged,
+    tests: Staged,
     dependencies: List<Path>,
     parallelism: Int,
 ) = ForkSettings(
@@ -96,19 +96,22 @@ internal fun MutKtTask.forkSettings(
     // The child inherits the daemon's environment; the test task's own entries are deliberately not forwarded.
     environment = emptyMap(),
     workingDir = Path.of(testWorkingDir.get()),
-    projectClassDir = production,
-    testClassDir = tests,
+    projectClassDir = production.dir,
+    testClassDir = tests.dir,
     classpath = dependencies,
     parallelism = parallelism,
     engineClasspath = derivedEngineClasspath(),
     engines = engines.get().toList(),
     includeTags = includeTags.get().toList(),
     excludeTags = excludeTags.get().toList(),
+    // Tools that map a code source back to sources (strikt's filepeek) only know Gradle's output directories.
+    // A test class named like a main class wins, as it does in the child's loader.
+    codeSources = production.origins + tests.origins,
 )
 
 // Support classes from the base loader would call the original classes (or none: the main jar may be missing),
 // so the child JVMs load them next to the main classes; only the main classes are mutated.
-private fun MutKtTask.projectClasses(production: Path): Path {
+private fun MutKtTask.projectClasses(production: Staged): Staged {
     val support = projectSupportClassesDirs.files
     if (support.isEmpty()) return production
     checkNoSharedClasses(classesDirs.files, support)

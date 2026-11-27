@@ -16,6 +16,8 @@ import java.nio.file.Paths
  * until the run ends); silence for longer fails the run
  * (not a timeout, so it earns no detection credit). Once it reports the start, a reply is awaited for the
  * mutant's deadline plus [graceMillis].
+ * [codeSources] maps a class's binary name to the directory or jar it was built into, reported as its code source in
+ * place of [projectClassDir] or [testClassDir].
  */
 public data class ForkSettings(
     val javaExecutable: Path,
@@ -32,6 +34,7 @@ public data class ForkSettings(
     val engines: List<String> = listOf(JUPITER_ENGINE),
     val includeTags: List<String> = emptyList(),
     val excludeTags: List<String> = emptyList(),
+    val codeSources: Map<String, Path> = emptyMap(),
 ) {
     init {
         require(parallelism >= 1) { "parallelism must be at least 1: $parallelism" }
@@ -40,6 +43,9 @@ public data class ForkSettings(
         require(excludeTags.none(::hasLineBreak)) { "excludeTags must not contain line breaks: $excludeTags" }
         require(graceMillis >= 0) { "graceMillis must not be negative: $graceMillis" }
         require(prepareMillis > 0) { "prepareMillis must be positive: $prepareMillis" }
+        val startupEntries = listOf(projectClassDir, testClassDir) + classpath + codeSources.keys + codeSources.values
+        val broken = startupEntries.map(Any::toString).filter(::hasLineBreak)
+        require(broken.isEmpty()) { "Startup file paths must not contain line breaks: $broken" }
     }
 
     private companion object {

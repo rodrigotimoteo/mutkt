@@ -218,11 +218,15 @@ class MutKtTaskTest {
         assertEquals(setOf("fast"), task.includeTags.get())
         assertEquals(setOf("slow"), task.excludeTags.get())
 
-        val settings = task.forkSettings(Path.of("main"), Path.of("test"), emptyList(), 1)
+        val main = Staged(Path.of("main"), mapOf("Calc" to Path.of("build/classes/kotlin/main")))
+        val test = Staged(Path.of("test"), mapOf("CalcTest" to Path.of("build/classes/kotlin/test")))
+        val settings = task.forkSettings(main, test, emptyList(), 1)
 
         assertEquals(listOf("junit-jupiter", "junit-vintage"), settings.engines)
         assertEquals(listOf("fast"), settings.includeTags)
         assertEquals(listOf("slow"), settings.excludeTags)
+        assertEquals(Path.of("main"), settings.projectClassDir)
+        assertEquals(main.origins + test.origins, settings.codeSources)
     }
 
     @Test

@@ -42,12 +42,18 @@ private fun classPaths(root: File): List<String> =
 private fun stagedEntries(zip: ZipFile) =
     zip.entries().asSequence().filterNot { it.isDirectory || it.name.startsWith("META-INF/versions/") }
 
+/** A merged class directory; [origins] maps each class's binary name to the root it was copied from. */
+internal data class Staged(
+    val dir: Path,
+    val origins: Map<String, Path>,
+)
+
 // Several class directories (Kotlin and Java output) and, on Android, jars become one, because the fork reads a
 // single root per side. A class in two roots would silently replace the other one, so that fails the run.
 internal fun stage(
     entries: Set<File>,
     into: File,
-): Path {
+): Staged {
     val roots = entries.filter(File::exists)
     val origins = mutableMapOf<String, File>()
     roots.forEach { root ->
@@ -58,7 +64,10 @@ internal fun stage(
     into.deleteRecursively()
     into.mkdirs()
     roots.forEach { if (it.isDirectory) it.copyRecursively(into, overwrite = true) else unpack(it, into) }
-    return into.toPath()
+    return Staged(
+        into.toPath(),
+        origins.entries.associate { (path, root) -> path.removeSuffix(".class").replace('/', '.') to root.toPath() },
+    )
 }
 
 private fun unpack(
