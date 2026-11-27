@@ -3,6 +3,8 @@ package com.github.rodrigotimoteo.mutkt.testing
 import com.github.rodrigotimoteo.mutkt.application.port.Baseline
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.Coverage
+import com.github.rodrigotimoteo.mutkt.application.port.History
+import com.github.rodrigotimoteo.mutkt.application.port.HistoryEntry
 import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
@@ -95,6 +97,20 @@ class FakesTest {
         writer.write(report)
 
         assertEquals(listOf(report), writer.reports)
+    }
+
+    @Test
+    fun `result history reads what was stored, then what was last written`() {
+        val stored = History("f0", emptyList())
+        val next = History("f1", listOf(HistoryEntry(first.id.toString(), "k", MutantStatus.SURVIVED)))
+        val history = FakeResultHistory(stored)
+
+        assertEquals(stored, history.read())
+        history.write(next)
+
+        assertEquals(next, history.read())
+        assertEquals(listOf(next), history.written)
+        assertNull(FakeResultHistory().read())
     }
 
     @Test

@@ -1,0 +1,18 @@
+{
+  "version": "0.5.0",
+  "commit": "1a545ac",
+  "date": "2026-11-27",
+  "machine": "MacBook, 11 cores",
+  "wallTime": {
+    "nowinandroid": "1m",
+    "architecture-samples": "50s",
+    "tusky": "6m41s",
+    "chucker": "8m47s",
+    "pluto": "54s",
+    "strikt": "1m25s",
+    "spring-petclinic-kotlin": "4m07s",
+    "gradle-semver-plugin": "17s",
+    "http4k": "1m3s",
+    "diffuse": "11s"
+  }
+}

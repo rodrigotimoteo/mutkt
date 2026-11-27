@@ -28,6 +28,7 @@ nav:
   - Gradle DSL: dsl.md
   - Operators: operators.md
   - FAQ: faq.md
+  - Benchmark: benchmark.md
   - Migration from 0.3.x: migration.md
   - Changelog: changelog.md
   # Dokka output the docs workflow copies in after this build, so strict mode cannot check a relative path.
