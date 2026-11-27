@@ -62,7 +62,7 @@ Port fakes land here with ROD-87.
 - Statuses `KILLED, SURVIVED, TIMEOUT, NO_COVERAGE, ERROR`; score = (KILLED + TIMEOUT) / (total − ERROR) (ROD-82).
 - Reports: console + HTML + Stryker-schema JSON (ROD-83).
 - No JUnit extension API or runner module (ROD-84).
-- JDK 17 and 21, Gradle 8.10+ including 9.x, Jupiter engine by default; vintage/suite opt-in (ROD-85, amended in ADR 0005).
+- JDK 17 and 21, Gradle 8.11+ including 9.x, Jupiter engine by default; vintage/suite opt-in (ROD-85, amended in ADR 0005).
 - Android: same plugin id, activated by `com.android.application`/`library`, one variant (DSL `variant`, default `debug`) with its unit tests, AGP public `androidComponents` API via `compileOnly`, AGP 8.4 through 9.x (ROD-125, [ADR 0006](docs/adr/0006-android.md)).
 - Releases: plain `maven-publish` + `signing` to Central, `plugin-publish` for the Plugin Portal, one tag-triggered workflow, no GitHub Packages (ROD-121, [docs/release.md](docs/release.md)).
 

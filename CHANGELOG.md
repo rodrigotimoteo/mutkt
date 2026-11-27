@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Changed
+
+- Breaking: Gradle 8.10 is no longer supported; the minimum is Gradle 8.11. MutKt is now built with Kotlin 2.4, which compiles for Kotlin 2.0 at the oldest, and Gradle 8.11 is the first Gradle with Kotlin 2.0 ([ADR 0005](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/adr/0005-support-matrix.md)).
+
 ## [0.5.0] - 2026-11-27
 
 Android support, and mutants that run only the tests that reach them.

@@ -4,11 +4,11 @@ An Android library with a Robolectric test, mutated by MutKt. `Greeter` reads st
 
 ## Run
 
-The sample takes the plugin from a local Maven repository that the repository's own wrapper fills. Gradle 9.6, which AGP 9.5 needs, cannot build the repository from source with Kotlin 2.1, so there is no `includeBuild`. Needs JDK 17 and an Android SDK (`ANDROID_HOME`).
+The sample takes the plugin from a local Maven repository that the repository's own wrapper fills, so each AGP cell's Gradle (8.11.1 for AGP 8.4) runs only the sample, not the repository's build. Needs JDK 17 and an Android SDK (`ANDROID_HOME`).
 
 ```bash
 ./gradlew publishAllPublicationsToCentralRepository -Pmutkt.version=0.0.0-sample -Pmutkt.publishUrl=file://$PWD/build/sample-repo
-gradle -p samples/android mutkt                    # AGP 8.4.2, run with Gradle 8.6 or later
+gradle -p samples/android mutkt                    # AGP 8.4.2, run with Gradle 8.11 or later
 gradle -p samples/android mutkt -Pmutkt.agp=9.5.3  # AGP 9.5.3, run with Gradle 9.6.0 or later
 ```
 

@@ -1,5 +1,4 @@
 import org.gradle.plugin.compatibility.compatibility
-import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     id("mutkt.published-library")
@@ -30,14 +29,6 @@ gradlePlugin {
     }
 }
 
-// Gradle 8.10 Kotlin DSL embeds Kotlin 1.8 and cannot read newer API metadata of this plugin's classes.
-kotlin {
-    compilerOptions {
-        languageVersion = KotlinVersion.KOTLIN_1_8
-        apiVersion = KotlinVersion.KOTLIN_1_8
-    }
-}
-
 tasks.withType<Test>().configureEach {
     val dslDoc = rootProject.layout.projectDirectory.file("docs/dsl.md")
     systemProperty("mutkt.dslDoc", dslDoc.asFile.absolutePath)
@@ -59,28 +50,27 @@ tasks.test {
 }
 
 // Own JVM: the end-to-end timeout mutant leaves a spinning thread that must not outlive its test JVM's other tests.
-val e2eTest by tasks.registering(Test::class) {
+tasks.register<Test>("e2eTest") {
     testClassesDirs = tasks.test.get().testClassesDirs
     classpath = tasks.test.get().classpath
     useJUnitPlatform { includeTags("e2e") }
 }
 
 // Same scenarios as e2eTest on other Gradle versions; needs the network to fetch distributions, so it is not in check.
-// The minimum supported Gradle is 8.10 (Kotlin DSL limit above) and the wrapper is 8.10, so e2eTest already covers it:
-// the default adds only the latest 8.x.
-val matrixTest by tasks.registering(Test::class) {
+// The wrapper is 9.x, so e2eTest already covers it: the default adds the minimum supported Gradle and the latest 8.x.
+tasks.register<Test>("matrixTest") {
     description =
-        "Runs the TestKit scenarios on the Gradle versions of -Pmutkt.gradleVersions (minimum and latest 8.x)."
+        "Runs the TestKit scenarios on the Gradle versions of -Pmutkt.gradleVersions (default: minimum and latest 8.x)."
     group = "verification"
     testClassesDirs = tasks.test.get().testClassesDirs
     classpath = tasks.test.get().classpath
     useJUnitPlatform { includeTags("matrix") }
     // Read at configuration, so a new version list is a new task input rather than an up-to-date skip.
-    systemProperty("mutkt.gradleVersions", providers.gradleProperty("mutkt.gradleVersions").getOrElse("8.14.3"))
+    systemProperty("mutkt.gradleVersions", providers.gradleProperty("mutkt.gradleVersions").getOrElse("8.11.1,8.14.3"))
 }
 
 // Android builds on real AGP; needs ANDROID_HOME and the network (google()), so it is not in check.
-val agpTest by tasks.registering(Test::class) {
+tasks.register<Test>("agpTest") {
     description = "Runs the Android TestKit scenarios on -Pmutkt.agp and -Pmutkt.agpGradle (default: minimum AGP)."
     group = "verification"
     testClassesDirs = tasks.test.get().testClassesDirs
@@ -89,9 +79,9 @@ val agpTest by tasks.registering(Test::class) {
     // Read at configuration, so a new cell is a new task input rather than an up-to-date skip.
     systemProperty("mutkt.agpVersion", providers.gradleProperty("mutkt.agp").getOrElse(libs.versions.agp.get()))
     // The Kotlin Android plugin of the scenario that mutates a Kotlin class.
-    systemProperty("mutkt.kotlinVersion", libs.versions.kotlin.get())
-    // AGP 8.4's minimum Gradle.
-    systemProperty("mutkt.agpGradleVersion", providers.gradleProperty("mutkt.agpGradle").getOrElse("8.6"))
+    systemProperty("mutkt.kotlinVersion", libs.versions.kotlinAndroid.get())
+    // MutKt's minimum Gradle (ADR 0005), which AGP 8.4 supports.
+    systemProperty("mutkt.agpGradleVersion", providers.gradleProperty("mutkt.agpGradle").getOrElse("8.11.1"))
     // A fixed Gradle user home for the scenarios, so CI can cache what they download (AGP, Kotlin) between runs.
     val testKitDir =
         layout.buildDirectory
@@ -107,7 +97,7 @@ val agpTest by tasks.registering(Test::class) {
 }
 
 tasks.check {
-    dependsOn(e2eTest)
+    dependsOn("e2eTest")
 }
 
 // Kover would otherwise run every Test task for the coverage report, pulling this network-bound one into build.
