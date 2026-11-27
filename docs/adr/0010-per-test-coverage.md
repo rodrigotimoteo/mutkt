@@ -15,13 +15,14 @@ A mutant runs the whole suite, with the whole suite's deadline, when coverage ca
 - its site has no probe (an interface, a method the probes would push over the JVM size limit);
 - its probe was hit outside any test class (test discovery, engine start), which no test class owns;
 - it is in a class initialiser, which runs once per run under whichever test class loads the class first;
-- the baseline recorded no coverage (Robolectric, whose sandbox loader defines the project classes again);
+- the baseline recorded no coverage;
 - the instrumented baseline is red while the original classes pass; the run warns `The baseline on probed classes failed (<cause>); running every mutant against the whole suite` and goes on without coverage. If the original classes fail too, the run fails as before.
 
 ## Consequences
 
 - Coverage says a test executed the code, not that it checked the result: a test that reaches a mutant but never checks its effect still yields SURVIVED.
 - A subset runs its classes without the classes that do not cover the mutant, so an order-dependent suite (state one class leaves for the next) can give a different result than a full run.
-- A hit from a thread that outlives its test class is credited to the next class that runs. That can turn KILLED into SURVIVED (the class that would kill is not selected), never into NO_COVERAGE, since the hit is still recorded.
+- A hit from a thread that outlives its test class is credited to the next class that runs; since the probe registry is shared by the whole JVM, a stray thread left by an earlier run on a reused child credits its hits to the current run the same way. That can turn KILLED into SURVIVED (the class that would kill is not selected), never into NO_COVERAGE, since the hit is still recorded.
 - Code that runs while a class initialises (methods called from `<clinit>`, object or companion `init`, top-level property initialisers) is attributed to the first test class that triggers it, so a later test class that depends on what it set is not selected. ROD-241 compares against full-suite runs; if that turns KILLED into SURVIVED, mutants in such methods run the whole suite too.
 - `RunMutationAnalysis` takes a `CoverageInstrumenter`; `CoverageMap` (application) holds the rules above.
+- A probed class fetches its probe array, on its first probe, from a process-wide registry in `mutkt-junit` (`ProbeRegistry`, keyed by class name) that it reaches through `ClassLoader.getSystemClassLoader()`. Robolectric's sandbox loader defines every project class again from its class file, and `java.*` is the only code all copies share, so this is how their hits land in one array. The registry is the one allowed piece of global mutable state; reading it never touches, loads or initializes a class.

@@ -36,13 +36,13 @@
     },
     {
       "path": "library/src/main/kotlin/com/chuckerteam/chucker/api/RetentionManager.kt",
-      "survivedAtLeast": 1,
-      "note": "No direct unit test; cleanup-frequency comparison and period arithmetic should survive without coverage tests."
+      "note": "No direct unit test; cleanup-frequency comparison and period arithmetic should survive without coverage tests.",
+      "noCoverageAtLeast": 1
     },
     {
       "path": "library/src/main/kotlin/com/chuckerteam/chucker/internal/support/SpanTextUtil.kt",
-      "survivedAtLeast": 1,
-      "note": "No direct unit test; the token index arithmetic should survive."
+      "note": "No direct unit test; the token index arithmetic should survive.",
+      "noCoverageAtLeast": 1
     }
   ],
   "risks": [

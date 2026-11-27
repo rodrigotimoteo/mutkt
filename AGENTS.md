@@ -41,7 +41,7 @@ Ports (application layer): `ClassSource`, `MutantGenerator`, `TestExecutor`, `Re
 
 ## Hard rules
 
-- No `object` singletons with mutable state; no global registries.
+- No `object` singletons with mutable state; no global registries (except the coverage probe registry, ADR 0010).
 - No `println`/`System.err` in main code.
 - Domain classes hold no bytecode and no framework types.
 - Mutant ids include the method descriptor.

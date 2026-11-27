@@ -40,8 +40,7 @@ private const val TMPDIR = "java.io.tmpdir"
  * A child that dies once the tests started is a kill by the mutant and is replaced (ADR 0002); one that dies
  * before, or cannot start, makes [run] throw with its exit code and last stderr lines.
  * A child whose memory is past its limits after a run (a run's class loader stays reachable while a library thread or
- * static holds it) is replaced too. With Robolectric on the classpath no child is reused and the baseline reads no
- * coverage (see [hasRobolectric]).
+ * static holds it) is replaced too. With Robolectric on the classpath no child is reused (see [hasRobolectric]).
  * A reused child that runs out of memory or time may do so from what earlier runs left behind (a leak, a stray
  * thread), so that mutant runs again on a fresh child, whose outcome counts. [MAX_START_FAILURES] failed starts or
  * [MAX_STALLS] runs with no Started within the preparation limit, each in a row, stop the analysis
@@ -92,11 +91,11 @@ public class ForkedTestExecutor(
     ): Baseline {
         // Under the startup directory, which close() deletes, and under the lock as in command().
         val probed =
-            instrumented?.takeUnless { robolectric }?.let {
+            instrumented?.let {
                 synchronized(lock) {
                     check(!closed) { CLOSED }
                     val dir = Files.createTempDirectory(startup.value.parent, "probed")
-                    ProbedClasses(writeClassFiles(dir, it.classes), it.probeField)
+                    ProbedClasses(writeClassFiles(dir, it.classes))
                 }
             }
         try {

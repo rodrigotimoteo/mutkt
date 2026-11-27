@@ -5,7 +5,6 @@ import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -73,12 +72,13 @@ class ForkedCoverageTest {
     }
 
     @Test
-    fun `with Robolectric on the classpath the baseline has no coverage`() {
+    fun `with Robolectric on the classpath the baseline reads the probes of sandbox copies`() {
         val robolectric = mapOf("org.robolectric.internal.SandboxManager" to compileKotlin("class X").getValue("X"))
         val jar = writeJar(Files.createDirectories(dir.resolve("jars")).resolve("robolectric.jar"), robolectric)
-        val baseline = executor(listOf(jar)).baseline(LONG, fixture.instrumented)
+        val sandboxed = coverageFixture(SANDBOX_TEST)
+        val baseline = executor(listOf(jar), sandboxed).baseline(LONG, sandboxed.instrumented)
         assertEquals(Outcome.Survived, baseline.outcome)
-        assertNull(baseline.coverage)
+        assertEquals(listOf(TestId("ATest") to setOf(ADD)), baseline.coverage!!.tests.map { it.test to it.hits })
     }
 
     private companion object {

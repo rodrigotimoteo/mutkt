@@ -12,6 +12,7 @@ import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import com.github.rodrigotimoteo.mutkt.junit.ForkSettings
 import com.github.rodrigotimoteo.mutkt.junit.ForkedTestExecutor
+import com.github.rodrigotimoteo.mutkt.junit.PROBE_REGISTRY
 import com.github.rodrigotimoteo.mutkt.junit.derivedEngineClasspath
 import com.github.rodrigotimoteo.mutkt.report.ConsoleReportWriter
 import com.github.rodrigotimoteo.mutkt.report.FileSourceLookup
@@ -44,7 +45,7 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
         URLClassLoader(urls, null).use { loader ->
             // Built first so an unknown operator id fails before any child JVM could start.
             val generator = generator(loader)
-            val instrumenter = AsmCoverageInstrumenter { name -> loader.classBytes(name) }
+            val instrumenter = AsmCoverageInstrumenter(PROBE_REGISTRY) { name -> loader.classBytes(name) }
             val source = DirectoryClassSource(production.dir)
             ForkedTestExecutor(forkSettings(projectClasses, tests, dependencies, config.parallelism)).use { executor ->
                 try {

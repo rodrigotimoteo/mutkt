@@ -172,7 +172,7 @@ public class JUnitTestExecutor(
             }
         val coverage =
             request.instrumented?.let { instrumented ->
-                CoverageListener(ProbeReader(loader, instrumented.classes.map { it.name }, instrumented.probeField))
+                CoverageListener(ProbeReader(instrumented.classes.map { it.name }))
             }
         return runTests(types, executing, coverage) to coverage?.coverage()
     }

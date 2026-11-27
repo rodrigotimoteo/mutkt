@@ -13,6 +13,7 @@ import com.github.rodrigotimoteo.mutkt.domain.MutantStatus.SURVIVED
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus.TIMEOUT
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import com.github.rodrigotimoteo.mutkt.junit.JUnitTestExecutor
+import com.github.rodrigotimoteo.mutkt.junit.PROBE_REGISTRY
 import com.github.rodrigotimoteo.mutkt.report.ConsoleReportWriter
 import com.github.rodrigotimoteo.mutkt.report.FileSourceLookup
 import com.github.rodrigotimoteo.mutkt.testing.FakeClassSource
@@ -62,7 +63,7 @@ class EndToEndTest {
             RunMutationAnalysis(
                 FakeClassSource(production),
                 AsmMutantGenerator(MVP_OPERATORS, ::error, ::systemClass),
-                AsmCoverageInstrumenter(::systemClass),
+                AsmCoverageInstrumenter(PROBE_REGISTRY, ::systemClass),
                 executor,
                 ConsoleReportWriter(console, FileSourceLookup(listOf(sources))),
                 AnalysisConfig(ClassFilters(), 60.seconds, parallelism = 2),

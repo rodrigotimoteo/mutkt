@@ -72,7 +72,7 @@ class FakesTest {
     @Test
     fun `executor answers an instrumented baseline with its own outcome and the coverage`() {
         val coverage = Coverage(emptyList(), emptySet())
-        val probed = Instrumented(emptyList(), "probes", emptyMap())
+        val probed = Instrumented(emptyList(), emptyMap())
         val executor =
             FakeTestExecutor(
                 baselineElapsed = 2.seconds,

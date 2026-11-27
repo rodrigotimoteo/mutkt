@@ -34,10 +34,7 @@ internal fun writeRequest(
         is ForkRequest.Baseline -> {
             writeByte(REQUEST_BASELINE)
             writeLong(request.timeoutMillis)
-            writeOptional(request.probed) {
-                writeString(it.dir.toString())
-                writeString(it.field)
-            }
+            writeOptional(request.probed) { writeString(it.dir.toString()) }
         }
         ForkRequest.Shutdown -> writeByte(REQUEST_SHUTDOWN)
     }
@@ -58,7 +55,7 @@ internal fun readRequest(input: DataInputStream): ForkRequest? =
                 ForkRequest.Baseline(
                     readLong(),
                     readOptional {
-                        ProbedClasses(Path.of(readString()), readString())
+                        ProbedClasses(Path.of(readString()))
                     },
                 )
             REQUEST_SHUTDOWN -> ForkRequest.Shutdown
