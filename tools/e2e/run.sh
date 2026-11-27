@@ -36,7 +36,7 @@ checkout() {
 
 # Prints one result line: PASS or FAIL, then the details. Gradle's output goes to the log.
 run_repo() {
-  local name=$1 url=$2 commit=$3 module=$4 jdk=$5 apply=$6 patch=$7
+  local name=$1 url=$2 commit=$3 module=$4 jdk=$5 apply=$6 patch=$7 module_dir=$8
   local dir=$cache/repos/$name log=$cache/logs/$name.log
   local expect=$(dirname "$corpus")/expectations/$name.json
   [[ -f $expect ]] || { echo "FAIL no expectations file $expect"; return; }
@@ -45,7 +45,7 @@ run_repo() {
     git -C "$dir" apply "$(dirname "$corpus")/$patch" >>"$log" 2>&1 || { echo "FAIL patch $patch does not apply"; return; }
   fi
   json entry "$corpus" "$name" >"$cache/logs/$name.entry.json"
-  local task=${module%:}:mutkt module_dir=${module#:}
+  local task=${module%:}:mutkt
   local java_home gradle_args=() arg args_text
   args_text=$(json gradle-args "$corpus" "$name" 2>&1) || { echo "FAIL $args_text"; return; }
   [[ -z $args_text ]] || while IFS= read -r arg; do gradle_args+=("$arg"); done <<<"$args_text"
@@ -68,16 +68,16 @@ run_repo() {
     grep -q 'MutKt cannot load the Android Gradle plugin' "$log" && echo "  AGP is not visible to MutKt: use patch mode"
     return
   fi
-  local report=$dir/${module_dir//://}/build/reports/mutkt/mutation-report.json
+  local report=$dir/$module_dir/build/reports/mutkt/mutation-report.json
   local checked
   if checked=$(json check "$expect" "$report" 2>&1); then echo "PASS $checked"; else echo "FAIL $checked"; fi
 }
 
 results=()
-while IFS=$'\t' read -r name url commit module jdk apply patch; do
+while IFS=$'\t' read -r name url commit module jdk apply patch module_dir; do
   echo "Running $name ($module at ${commit:0:12})"
   # A repo that fails, even with a non-zero status, is a FAIL row: the loop goes on to the next repo.
-  if ! outcome=$(run_repo "$name" "$url" "$commit" "$module" "$jdk" "$apply" "$patch"); then
+  if ! outcome=$(run_repo "$name" "$url" "$commit" "$module" "$jdk" "$apply" "$patch" "$module_dir"); then
     [[ $outcome == FAIL* ]] || outcome="FAIL runner stopped: ${outcome:-no output}"
   fi
   results+=("$name"$'\t'"$outcome")
