@@ -4,15 +4,15 @@ import com.github.rodrigotimoteo.mutkt.asm.ClassInfo
 import com.github.rodrigotimoteo.mutkt.asm.Operator
 import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.asm.filters.finallyTwins
+import com.github.rodrigotimoteo.mutkt.asm.filters.realBefore
 import com.github.rodrigotimoteo.mutkt.asm.isMappedOrdinal
+import com.github.rodrigotimoteo.mutkt.asm.ordinalOf
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
 import org.objectweb.asm.Opcodes.ALOAD
 import org.objectweb.asm.Opcodes.GETSTATIC
-import org.objectweb.asm.Opcodes.IALOAD
 import org.objectweb.asm.Opcodes.ICONST_0
 import org.objectweb.asm.Opcodes.INSTANCEOF
 import org.objectweb.asm.Opcodes.INVOKESTATIC
-import org.objectweb.asm.Opcodes.INVOKEVIRTUAL
 import org.objectweb.asm.Opcodes.POP
 import org.objectweb.asm.Opcodes.POP2
 import org.objectweb.asm.tree.AbstractInsnNode
@@ -34,9 +34,6 @@ private class Branch(
     val site: Site,
     val rewrite: (MethodNode) -> Unit,
 )
-
-private fun AbstractInsnNode.previousReal(): AbstractInsnNode? =
-    generateSequence(previous) { it.previous }.firstOrNull { it.opcode >= 0 }
 
 /**
  * Makes one `when` branch unreachable. Type tests (`INSTANCEOF`, or `Intrinsics.areEqual` against an object's
@@ -93,11 +90,11 @@ private fun typeTest(insn: AbstractInsnNode): Pair<Int, Branch>? =
     }
 
 private fun subject(test: AbstractInsnNode): Int? =
-    (test.previousReal() as? VarInsnNode)?.takeIf { it.opcode == ALOAD }?.`var`
+    (realBefore(test) as? VarInsnNode)?.takeIf { it.opcode == ALOAD }?.`var`
 
 // The `INSTANCE` field load of the `areEqual(subject, Object.INSTANCE)` that Kotlin emits for an object branch.
 private fun objectInstance(call: MethodInsnNode): FieldInsnNode? =
-    (call.previousReal() as? FieldInsnNode)?.takeIf {
+    (realBefore(call) as? FieldInsnNode)?.takeIf {
         call.opcode == INVOKESTATIC &&
             call.owner == INTRINSICS &&
             call.name == "areEqual" &&
@@ -130,15 +127,6 @@ private fun enumSwitches(
         .filter { it is TableSwitchInsnNode || it is LookupSwitchInsnNode }
         .filter { switch -> ordinalOf(switch)?.let(enumOrdinal) == true }
         .flatMap(::switchBranches)
-
-// The selector is `mapping[e.ordinal()]` (the `$WhenMappings` array Kotlin builds) or `e.ordinal()` itself.
-// Plain Int and String switches (a `hashCode()` selector) are not `when` over a hierarchy.
-private fun ordinalOf(switch: AbstractInsnNode): MethodInsnNode? {
-    val selector = switch.previousReal()?.let { if (it.opcode == IALOAD) it.previousReal() else it }
-    return (selector as? MethodInsnNode)?.takeIf {
-        it.opcode == INVOKEVIRTUAL && it.name == "ordinal" && it.desc == "()I"
-    }
-}
 
 // A method named `ordinal` is the enum's only if the compiler's mapping lookup says so or the owner is an enum
 // class; an owner the generator cannot read is not assumed to be one, so a direct `when (e.ordinal)` on an
