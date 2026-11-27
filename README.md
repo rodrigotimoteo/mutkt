@@ -2,7 +2,7 @@
 
 Mutation testing for Kotlin/JVM and Android. Add the Gradle plugin, run your existing JUnit tests against mutated bytecode, get a mutation score. No test changes.
 
-**Status:** 0.4.0, a full rebuild, is on Maven Central and the Gradle Plugin Portal. The previous implementation is tag `v0.3.3` (branch `old-master`); [docs/migration.md](docs/migration.md) lists what changed. See [getting started](docs/getting-started.md) to apply the plugin.
+**Status:** 0.5.0, a full rebuild with Android support, is on Maven Central and the Gradle Plugin Portal. The previous implementation is tag `v0.3.3` (branch `old-master`); [docs/migration.md](docs/migration.md) lists what changed. See [getting started](docs/getting-started.md) to apply the plugin.
 
 ## Quick start
 

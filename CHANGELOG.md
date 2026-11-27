@@ -4,15 +4,38 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
-- Gradle 9 support: the plugin is tested on Gradle 8.10, 8.14.3 and 9.9.2. On Gradle 9, declare `testRuntimeOnly("org.junit.platform:junit-platform-launcher")`, because Gradle no longer adds it.
+## [0.5.0] - 2026-11-27
+
+Android support, and mutants that run only the tests that reach them.
+
+### Added
+
 - Android support, for local unit tests on AGP 8.4 through 9.x (tested on 8.4.2, 8.13.2 and 9.5.3; AGP 9 needs Gradle 9.1 or later). Setup in [docs/getting-started.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/getting-started.md#android).
   - The plugin activates on `com.android.application` and `com.android.library`. `mutkt { variant = "debug" }` (the default) picks one variant; a variant that does not exist or has no unit tests fails the build with the names of those that have them. AGP must be declared in the same `plugins { }` block as MutKt or a parent project's.
   - `mutkt` mutates the variant's Kotlin and Java classes as AGP compiled them, with AGP 8's Kotlin Android plugin or AGP 9's built-in Kotlin, and runs the tests with the classpath and JVM settings of its `test<Variant>UnitTest` task, without running that task. The configuration cache is supported.
   - `excludedClasses` starts with globs for generated classes (R, BR, BuildConfig, Hilt, Dagger, view and data binding, Compose); `add` extends them, `=` replaces them.
   - Multi-module apps: each module has its own `mutkt` task and reports, and an app's tests may use Android library modules and AAR dependencies.
+  - Robolectric tests are supported. Each mutant gets its own test JVM, limited to two cores.
   - Instrumented tests (`src/androidTest`) are not supported.
-- Each mutant runs only the test classes that reach it, in baseline order, as recorded on instrumented classes during the baseline run; a mutant no test reaches is NO_COVERAGE without a run ([ADR 0010](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/adr/0010-per-test-coverage.md)). Mutants whose tests coverage cannot tell, and every mutant on Robolectric, still run the whole suite. The JSON report lists each mutant's covering test classes in `coveredBy`.
-- Fixed: Robolectric tests no longer see a stale class. Robolectric caches the project classes it loaded in JVM-wide statics, so a reused test JVM gave later mutants the first class it loaded and counts changed from run to run. With Robolectric on the test classpath each mutant now gets its own test JVM.
+- Gradle 9 support: the plugin is tested on Gradle 8.10, 8.14.3 and 9.9.2. On Gradle 9, declare `testRuntimeOnly("org.junit.platform:junit-platform-launcher")`, because Gradle no longer adds it.
+- Per-test coverage: the baseline run records which test classes reach each mutant. A mutant then runs only those classes, in baseline order, and one that no test reaches is NO_COVERAGE without a run ([ADR 0010](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/adr/0010-per-test-coverage.md)). This works with Robolectric too. On the ten real projects of the release check, runs got much shorter, with no killed mutant lost; most former survivors are now reported as NO_COVERAGE. Mutants that coverage cannot place (class initialisers, `lazy` bodies created there) still run the whole suite. The JSON report lists each mutant's covering test classes in `coveredBy`.
+- JUnit 4 projects (`useJUnit()` with only `junit:junit`) work with `engines = setOf("junit-vintage")`: MutKt supplies the vintage engine when the project has none.
+- A documentation site with guides and the API reference: <https://rodrigotimoteo.github.io/mutkt/>.
+
+### Fixed
+
+- Tests that load project classes by name (`Class.forName`, Spring classpath scanning) or keep them in statics no longer see another mutant's class: each mutant run uses a fresh class loader in the test JVM.
+- Robolectric tests no longer see a stale class from an earlier mutant.
+- Kotest projects: Kotest's classpath scanning is turned off in the test JVMs, so its own jars no longer break mutant runs.
+- Libraries that read a class's source location (strikt's `filepeek`, for instance) find the project's real output directory.
+- A test JVM that stalls or runs out of memory after earlier runs is replaced and the mutant is retried once on a fresh JVM. After three stalls in a row the task stops with the cause, instead of reporting every remaining mutant as TIMEOUT.
+- Test JVMs exit when the Gradle process goes away, and processes started by tests are killed with them.
+- Each test JVM has its own temp directory, deleted when it ends, so files that tests leak (Robolectric, MockK) no longer fill the disk.
+- A failing baseline names its cause.
+
+## [0.5.0-rc.1] - 2026-11-27
+
+The release candidate of 0.5.0 above, published to Maven Central and the Gradle Plugin Portal for a check on a real Android project.
 
 ## [0.4.0] - 2026-11-26
 
