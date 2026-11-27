@@ -27,6 +27,7 @@ internal const val JUPITER_ENGINE = "junit-jupiter"
  * Runs the project's tests of the selected [engines] (JUnit tag expressions in [includeTags] and [excludeTags]
  * narrow them; no include tags means all) in a fresh class loader per run that defines the project's classes (from
  * memory, the mutant included) and the [classpath], so dependencies resolve project classes but nothing outlives a run.
+ * [codeSources] maps binary class names to the location their code source reports (where Gradle built them).
  *
  * Each run executes on its own daemon thread and the deadline starts once the tests are discovered.
  * Loading, linking and discovery are unbounded here: only a forked child limits them (ForkSettings.prepareMillis).
@@ -34,6 +35,7 @@ internal const val JUPITER_ENGINE = "junit-jupiter"
  * class loader stays in memory until the JVM exits. Only a forked JVM can kill it for real (ROD-104).
  * A mutant that ignores interrupts is likewise abandoned but keeps running.
  */
+@Suppress("LongParameterList")
 public class JUnitTestExecutor(
     projectClasses: List<ClassFile>,
     testClasses: List<ClassFile>,
@@ -41,6 +43,7 @@ public class JUnitTestExecutor(
     engines: List<String> = listOf(JUPITER_ENGINE),
     includeTags: List<String> = emptyList(),
     excludeTags: List<String> = emptyList(),
+    codeSources: Map<String, Path> = emptyMap(),
 ) : TestExecutor,
     AutoCloseable {
     init {
@@ -57,6 +60,7 @@ public class JUnitTestExecutor(
             )
 
     private val classpath = classpath.toList()
+    private val codeSources = codeSources.toMap()
 
     @Volatile private var closed = false
 
@@ -95,7 +99,7 @@ public class JUnitTestExecutor(
     ): TimedOutcome {
         require(deadline.isPositive()) { "Deadline must be positive, was $deadline" }
         check(!closed) { "JUnitTestExecutor is closed, cannot run $label" }
-        return projectLoader(classpath, JUnitTestExecutor::class.java.classLoader, loaded).use { loader ->
+        return projectLoader(classpath, JUnitTestExecutor::class.java.classLoader, loaded, codeSources).use { loader ->
             val started = CountDownLatch(1)
             val task =
                 FutureTask {

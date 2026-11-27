@@ -77,6 +77,7 @@ private fun serve(
         startup.engines,
         startup.includeTags,
         startup.excludeTags,
+        startup.codeSources,
     ).use { runForkLoop(input, output, it) }
 }
 

@@ -15,11 +15,12 @@ import java.util.Enumeration
 // Mapped names are child-first; [classpath] entries are searched after the parent. Classes linked from the parent
 // keep seeing the parent's originals, so every class that must see a mapped one has to be defined here too.
 // A package scan (getResources("a/b/")) lists the class directories on [classpath] and reads the original class files
-// there, not the mapped bytes.
+// there, not the mapped bytes. A mapped class in [codeSources] reports that location as its code source.
 internal class MutantClassLoader(
     parent: ClassLoader,
     mutatedClasses: Map<String, ByteArray>,
     classpath: List<Path> = emptyList(),
+    private val codeSources: Map<String, Path> = emptyMap(),
 ) : URLClassLoader(classpath.map { it.toUri().toURL() }.toTypedArray(), parent) {
     private val mutatedClasses = mutatedClasses.toMap()
     private val classDirs = classpath.filter(Files::isDirectory)
@@ -41,12 +42,15 @@ internal class MutantClassLoader(
         return type
     }
 
-    // The class directory holding the original, as a URLClassLoader would report it: tools find sources from it
-    // (strikt's filepeek, Spring). SecureClassLoader keeps one ProtectionDomain per CodeSource, so per directory.
+    // Where the original was built, else the class directory holding it, as a URLClassLoader would report it: tools
+    // find sources from it (strikt's filepeek, Spring). SecureClassLoader keeps one ProtectionDomain per CodeSource.
     private fun codeSourceOf(name: String): CodeSource? {
         val file = name.replace('.', '/') + CLASS_SUFFIX
-        val dir = classDirs.firstOrNull { Files.isRegularFile(it.resolve(file)) } ?: return null
-        return CodeSource(dir.toUri().toURL(), null as Array<CodeSigner>?)
+        val location =
+            codeSources[name]
+                ?: classDirs.firstOrNull { Files.isRegularFile(it.resolve(file)) }
+                ?: return null
+        return CodeSource(location.toUri().toURL(), null as Array<CodeSigner>?)
     }
 
     // A class file a test reads as a resource must be the definition loadClass gives, never a parent copy.

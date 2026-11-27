@@ -9,5 +9,11 @@ internal fun projectLoader(
     classpath: List<Path>,
     pluginLoader: ClassLoader,
     classes: Map<String, ByteArray>,
+    codeSources: Map<String, Path>,
 ): MutantClassLoader =
-    MutantClassLoader(LauncherApiLoader(ClassLoader.getPlatformClassLoader(), pluginLoader), classes, classpath)
+    MutantClassLoader(
+        LauncherApiLoader(ClassLoader.getPlatformClassLoader(), pluginLoader),
+        classes,
+        classpath,
+        codeSources,
+    )
