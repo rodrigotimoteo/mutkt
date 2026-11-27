@@ -17,7 +17,7 @@ jackson = "2.21.3"
 pluginPublish = "2.2.1"
 dokka = "2.1.0"
 # The minimum supported AGP (docs/adr/0006-android.md): compiled against, never a newer one.
-agp = "8.4.2"
+agp = "9.5.3"
 # Only the Android sample (samples/android).
 robolectric = "4.18.1"
 junit4 = "4.13.2"
