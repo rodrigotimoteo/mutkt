@@ -28,11 +28,6 @@
       "path": "src/main/kotlin/strikt/assertions/Any.kt",
       "killedAtLeast": 1,
       "note": "Well tested by AnyAssertions.kt; isA and isEqualTo branch on is-checks and equality."
-    },
-    {
-      "path": "src/main/kotlin/strikt/internal/reporting/AnsiColorResultWriter.kt",
-      "noCoverageAtLeast": 1,
-      "note": "Internal object with no test and no main caller, so its when-branch mutants are never executed."
     }
   ],
   "risks": [

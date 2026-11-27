@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Self-test of the e2e runner on a local fixture: one repo whose expectations hold, one whose expectations fail.
+# Self-test of the e2e runner on a local fixture: one repo whose build fails, one whose expectations hold, one whose
+# expectations fail and one whose log shows a build scan upload.
 # Usage: tools/e2e/selftest/run.sh
 set -euo pipefail
 
@@ -26,8 +27,10 @@ export MUTKT_E2E_CACHE="$work/cache"
 if "$root/tools/e2e/run.sh" --corpus "$work/corpus/corpus.json" | tee "$work/all.txt"; then
   fail "the whole corpus passed, but fixture-fail must fail"
 fi
+grep -Eq '^fixture-broken +FAIL +:lib:mutkt failed ' "$work/all.txt" || fail "fixture-broken did not fail its build"
 grep -Eq '^fixture-pass +PASS ' "$work/all.txt" || fail "fixture-pass did not pass"
 grep -Eq '^fixture-fail +FAIL ' "$work/all.txt" || fail "fixture-fail did not fail"
+grep -Eq '^fixture-leak +FAIL +build scan published: ' "$work/all.txt" || fail "fixture-leak did not fail on its scan"
 
 "$root/tools/e2e/run.sh" --corpus "$work/corpus/corpus.json" fixture-pass | tee "$work/one.txt" ||
   fail "fixture-pass alone failed"

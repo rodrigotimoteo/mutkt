@@ -78,7 +78,7 @@
           "com.keylesspalace.tusky.util.**"
         ],
         "threads": null,
-        "timeoutMs": null
+        "timeoutMs": 120000
       },
       "why": "Large Groovy-DSL app on AGP 8 with flavors, JDK 21 toolchain, Robolectric and Mockito; targets util, where most unit tests are."
     },
@@ -246,7 +246,8 @@
         "threads": null,
         "timeoutMs": null
       },
-      "why": "JDK 21 multi-module library; the digest module mixes its own packages with core's org.http4k.filter and its tests use core's testFixtures, which depend on sibling projects."
+      "why": "JDK 21 multi-module library; the digest module mixes its own packages with core's org.http4k.filter and its tests use core's testFixtures, which depend on sibling projects.",
+      "moduleDir": "core/security/digest"
     },
     {
       "name": "diffuse",

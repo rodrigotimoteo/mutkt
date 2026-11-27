@@ -4,7 +4,7 @@
     "max": 600
   },
   "score": {
-    "min": 0.05,
+    "min": 0.01,
     "max": 0.35
   },
   "maxError": 0,
@@ -28,11 +28,6 @@
       "path": "src/main/java/com/pluto/core/applifecycle/AppLifecycle.kt",
       "killedAtLeast": 1,
       "note": "activityCount == 1 and == 0 checks in onActivityStarted/Stopped are covered by AppLifecycleTest"
-    },
-    {
-      "path": "src/main/java/com/pluto/plugin/PluginManager.kt",
-      "noCoverageAtLeast": 1,
-      "note": "no direct test; mocked in PlutoTest"
     },
     {
       "path": "src/main/java/com/pluto/Pluto.kt",

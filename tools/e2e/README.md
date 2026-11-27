@@ -15,17 +15,21 @@ Needs macOS (`/usr/libexec/java_home` picks each repo's `jdk`), git, `python3`, 
 
 1. Publishes the plugin and its modules at version `0.0.0-e2e` to `build/e2e-repo` with the repository's own wrapper, unsigned.
 2. For each repo: fetches its pinned `commit` into `~/.cache/mutkt-e2e/repos/<name>` (`MUTKT_E2E_CACHE` moves the cache), checks it out over any local changes and removes untracked files; ignored files such as `build/` stay, so reruns are incremental.
-3. Runs `<module>:mutkt` with the repo's own `gradlew`, `JAVA_HOME` set from `jdk`, the init script `mutkt-e2e.init.gradle` and the entry's optional `gradleArgs`. Gradle's output goes to `~/.cache/mutkt-e2e/logs/<name>.log`.
+3. Runs `<module>:mutkt` from the repo's directory with its own `gradlew`, `JAVA_HOME` set from `jdk`, `--dependency-verification lenient` (MutKt's artifacts are in no repo's verification metadata), the init script `mutkt-e2e.init.gradle` and the entry's optional `gradleArgs`. Gradle's output goes to `~/.cache/mutkt-e2e/logs/<name>.log`.
 
 `gradleArgs` is an array of extra Gradle arguments for every Gradle call on that repo, such as `["-PossrhToken=unused"]` for a build script that reads a publishing property at configuration time. Values are placeholders, never credentials; each must be a non-empty single-line string.
-4. Checks `<module dir>/build/reports/mutkt/mutation-report.json` (the module path with `:` read as `/`) with `e2e.py check`.
-5. Prints a table with one PASS or FAIL line per repo and the broken expectations under it, and exits 1 when any repo fails.
+4. Checks `<module dir>/build/reports/mutkt/mutation-report.json`: the entry's `moduleDir`, or the module path with `:` read as `/` with `e2e.py check`.
+5. Prints a table with one PASS or FAIL line per repo and the broken expectations under it, and exits 1 when any repo fails. A repo that fails (checkout, patch, build or check) does not stop the run.
+
+## Build scans
+
+The runner never publishes a build scan: scans carry the user name, host name and paths. Every Gradle call into a corpus repo gets `--no-scan`, which also beats a build's own `develocity { buildScan { publishing.onlyIf { true } } }` (checked with Develocity 3.18.2). An init script cannot do the same: Develocity publishes when any `onlyIf` holds, so adding `onlyIf { false }` changes nothing. As a guard, a repo whose log contains `Publishing build scan` or `gradle.com/s/` fails with `build scan published`: delete that scan at the URL in the log.
 
 ## Applying the plugin
 
 The init script adds `build/e2e-repo`, the Plugin Portal, Google and Maven Central to `pluginManagement`. Then, by the entry's `apply`:
 
-- `init-script`: adds `mutkt-gradle` to the root project's buildscript classpath and applies MutKt to `module` once its Java or Android plugin is applied.
+- `init-script`: adds `mutkt-gradle` to the root project's buildscript classpath and applies MutKt by id to `module` once its Java or Android plugin is applied. It never reads another project's model, so it works under isolated projects.
 - `patch`: applies `patch` (a path relative to the corpus file) with `git apply`; the patch adds `id("io.github.rodrigotimoteo.mutkt") version "0.0.0-e2e"` to the module's `plugins { }` block.
 
 Both modes then set the entry's `mutkt` values (`targetClasses`, `threads`, `timeoutMs`), `variant`, and `engines` from `tests`: `jupiter` is `junit-jupiter`, `vintage` and `robolectric` are `junit-vintage`, `kotest` is `kotest`.
@@ -47,4 +51,4 @@ MutKt sees AGP's classes only when AGP is declared in the same or a parent `plug
 
 ## Self-test
 
-`selftest/run.sh` turns `selftest/fixture` (a Kotlin JVM build with a `:lib` module) into a git repo with this repository's wrapper and runs `selftest/corpus.json` against it in a temporary cache: `fixture-pass` must pass, `fixture-fail` (every expectation wrong) must fail, and running `fixture-pass` alone must pass.
+`selftest/run.sh` turns `selftest/fixture` (a Kotlin JVM build with a `:lib` module) into a git repo with this repository's wrapper and runs `selftest/corpus.json` against it in a temporary cache with isolated projects on: `fixture-broken` (its build fails) must fail without stopping the run, `fixture-pass` must pass, `fixture-fail` (every expectation wrong) must fail, `fixture-leak` (its log fakes a scan upload) must fail with `build scan published`, and running `fixture-pass` alone must pass.
