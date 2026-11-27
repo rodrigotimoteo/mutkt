@@ -12,10 +12,10 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
 
 /**
- * Attributes probe hits to test classes: one that a root test class (a container right under its engine) reaches
- * while it runs is that class's; any other (discovery, engine start and stop) is global. Set [testClass] before
- * executing its plan; a plan's time counts as its class's. A class with no root container in its plan (a helper
- * in the test sources) is left out.
+ * Attributes probe hits and reached classes to test classes: what a root test class (a container right under its
+ * engine) reaches while it runs is that class's; any other hit (discovery, engine start and stop) is global, and any
+ * other reach is dropped. Set [testClass] before executing its plan; a plan's time counts as its class's. A class with
+ * no root container in its plan (a helper in the test sources) is left out.
  */
 internal class CoverageListener(
     private val probes: ProbeReader,
@@ -25,41 +25,47 @@ internal class CoverageListener(
     private var start = 0L
     private val global = mutableSetOf<Probe>()
     private val hits = LinkedHashMap<String, MutableSet<Probe>>()
+    private val reached = mutableMapOf<String, MutableSet<String>>()
     private val elapsed = mutableMapOf<String, Duration>()
 
     override fun testPlanExecutionStarted(plan: TestPlan) {
         this.plan = plan
-        global += probes.drain()
+        global += probes.drain().hits
         start = System.nanoTime()
     }
 
     override fun executionStarted(id: TestIdentifier) {
         if (!isRootClass(id)) return
-        global += probes.drain()
+        global += probes.drain().hits
         hits.getOrPut(testClass) { mutableSetOf() }
+        reached.getOrPut(testClass) { mutableSetOf() }
     }
 
     override fun executionFinished(
         id: TestIdentifier,
         result: TestExecutionResult,
     ) {
-        if (isRootClass(id)) hits.getValue(testClass) += probes.drain()
+        if (!isRootClass(id)) return
+        val drained = probes.drain()
+        hits.getValue(testClass) += drained.hits
+        reached.getValue(testClass) += drained.reached
     }
 
     override fun testPlanExecutionFinished(plan: TestPlan) {
-        global += probes.drain()
+        global += probes.drain().hits
         if (testClass in hits) elapsed.merge(testClass, (System.nanoTime() - start).nanoseconds, Duration::plus)
     }
 
     /** What the plans executed so far reached, in execution order. */
     fun coverage(): Coverage {
-        global += probes.drain()
+        global += probes.drain().hits
         val tests =
-            hits.map { (name, reached) ->
+            hits.map { (name, hit) ->
                 TestCoverage(
                     TestId(name),
-                    reached.toSet(),
+                    hit.toSet(),
                     elapsed[name] ?: Duration.ZERO,
+                    reached.getValue(name).toSet(),
                 )
             }
         return Coverage(tests, global.toSet())
