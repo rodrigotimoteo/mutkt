@@ -109,10 +109,29 @@ class RunMutationAnalysisCoverageTest {
                 writer,
                 AnalysisConfig(ClassFilters(), TIMEOUT, 2),
             ).run(progress = { events += it })
-        assertEquals(MutantResult(sub, MutantStatus.NO_COVERAGE), report.results[1])
+        assertEquals(MutantResult(sub, MutantStatus.NO_COVERAGE, coveredBy = emptyList()), report.results[1])
         assertTrue(executor.selections.none { it.first == sub })
         assertEquals(3, events.size)
         assertEquals(1.0 / 3, report.score)
+    }
+
+    @Test
+    fun `each result names the test classes that reached it, and none when it ran the whole suite`() {
+        val executor =
+            FakeExecutor(baselineElapsed = 3.seconds, coverage = coverage) {
+                if (it == add) Outcome.Killed("ATest.adds") else Outcome.Survived
+            }
+        val report = run(executor)
+        assertEquals(
+            listOf(listOf("ATest", "BTest"), listOf("BTest"), null),
+            report.results.map { it.coveredBy },
+        )
+    }
+
+    @Test
+    fun `a whole-suite run that finds no tests is NO_COVERAGE covered by none`() {
+        val report = run(FakeExecutor(baselineElapsed = 3.seconds) { Outcome.NoTests })
+        assertEquals(listOf(emptyList<String>()), report.results.map { it.coveredBy }.distinct())
     }
 
     @Test

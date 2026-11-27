@@ -27,7 +27,16 @@ internal fun strykerReport(
                 .toSortedMap()
                 .mapValues { fileResult(it.value, sources) },
         )
+        testFiles(report).takeIf { it.isNotEmpty() }?.let { put("testFiles", it) }
     }
+
+// The viewer shows a coveredBy id only when a test defines it. A test class is the unit coverage knows, so each one is
+// its own file holding one test.
+private fun testFiles(report: MutationReport): Map<String, Any> =
+    report.results
+        .flatMap { it.coveredBy.orEmpty() }
+        .toSortedSet()
+        .associateWith { mapOf("tests" to listOf(mapOf("id" to it, "name" to it))) }
 
 private fun config(report: MutationReport): Map<String, Any> =
     buildMap {
@@ -78,6 +87,7 @@ private fun mutant(
         put("status", status(result.status))
         (result.detail ?: result.killedBy?.let { "Killed by $it" })?.let { put("statusReason", it) }
         result.killedBy?.let { put("killedBy", listOf(it)) }
+        result.coveredBy?.let { put("coveredBy", it) }
     }
 }
 
