@@ -10,7 +10,7 @@ MutKt mutation-tests its own code with the plugin built from this repository.
 
 The fork child has the plugin's own `mutkt-core` jar on its JVM classpath (for the domain types of the fork protocol), but the project's classes load through a loader whose parent is the platform loader and that shares only the JUnit Platform packages with the plugin, so the tests see the mutated class, not the plugin's copy. The kills in every `mutkt-core` class, `domain.Mutant` included, confirm it: with the plugin's copy visible, no core mutant could be killed.
 
-The CI job `dogfood` (pull requests and `rebuild/**` branches) runs it and writes each score to the job summary. Reports: `tools/dogfood/<core|asm>/build/reports/mutkt/mutkt.txt`.
+The CI job `dogfood` runs on pushes to `master`, on `workflow_dispatch` and in the release verify, not on pull requests (13 minutes); it writes each score to the job summary. Reports: `tools/dogfood/<core|asm>/build/reports/mutkt/mutkt.txt`.
 
 | Module | Scope | Settings | Measured | `failBelowScore` |
 |---|---|---|---|---|
