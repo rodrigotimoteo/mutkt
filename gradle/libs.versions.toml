@@ -1,21 +1,21 @@
 [versions]
-kotlin = "2.1.10"
-asm = "9.8"
+kotlin = "2.4.21"
+asm = "9.11.1"
 junit = "5.10.2"
 # A second Jupiter/Platform line, only for the opt-in forked-executor compatibility test (mutkt-junit).
 junitOther = "5.11.4"
-mockk = "1.14.9"
+mockk = "1.14.12"
 ktlintGradle = "12.3.0"
 ktlint = "1.5.0"
 detekt = "1.23.8"
-kover = "0.9.1"
-kctfork = "0.7.1"
-konsist = "0.17.3"
-coroutines = "1.10.2"
+kover = "0.9.11"
+kctfork = "0.14.0"
+konsist = "0.18.1"
+coroutines = "1.11.0"
 # Test scope only: parses the JSON reports the writers produce.
-jackson = "2.21.3"
+jackson = "2.22.4"
 pluginPublish = "2.2.1"
-dokka = "2.1.0"
+dokka = "2.3.0"
 # The minimum supported AGP (docs/adr/0006-android.md): compiled against, never a newer one.
 agp = "8.4.2"
 # Only the Android sample (samples/android).
