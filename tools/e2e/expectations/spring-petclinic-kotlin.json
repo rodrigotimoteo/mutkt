@@ -20,21 +20,18 @@
       "path": "src/main/kotlin/org/springframework/samples/petclinic/owner/PetValidator.kt",
       "killedAtLeast": 1,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 0,
       "note": "field checks are exercised through the pet form tests; boolean supports() may survive"
     },
     {
       "path": "src/main/kotlin/org/springframework/samples/petclinic/owner/PetTypeFormatter.kt",
       "killedAtLeast": 1,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 0,
       "note": "PetTypeFormatterTest covers parse and print of known and unknown types"
     },
     {
       "path": "src/main/kotlin/org/springframework/samples/petclinic/vet/Vets.kt",
       "killedAtLeast": 0,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 0,
       "note": "weakly tested: data class generated members are only partly exercised"
     }
   ],

@@ -16,7 +16,7 @@ beforeSettings { settings ->
     repositories.mavenCentral()
 }
 
-// The root buildscript loader is the parent of every project's, so the module can apply the plugin by class. AGP
+// Every project's plugin scope inherits the root buildscript classpath, so the module can apply MutKt by id. AGP
 // classes are visible to MutKt only when the root also declares AGP (usually apply false): see tools/e2e/README.md.
 if (entry.apply == 'init-script') {
     rootProject { root ->
@@ -41,12 +41,12 @@ gradle.beforeProject { project ->
     if (project.path != entry.module) return
     project.pluginManager.withPlugin(pluginId) { configure(project.extensions.getByName('mutkt')) }
     if (entry.apply != 'init-script') return
-    // After the module's own JVM or Android plugin, so the module's plugins block has set up its class loader.
+    // After the module's own JVM or Android plugin. Applied by id: reading the root's buildscript from the module
+    // breaks isolated projects.
     ['java', 'com.android.application', 'com.android.library'].each { id ->
         project.pluginManager.withPlugin(id) {
             if (project.pluginManager.hasPlugin(pluginId)) return
-            def loader = project.rootProject.buildscript.classLoader
-            project.pluginManager.apply(loader.loadClass('com.github.rodrigotimoteo.mutkt.gradle.MutKtPlugin'))
+            project.pluginManager.apply(pluginId)
         }
     }
 }

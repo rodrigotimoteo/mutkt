@@ -1,7 +1,8 @@
 """JSON side of tools/e2e/run.sh: reads the corpus and checks a Stryker report against its expectations.
 
 Run with python3 -I. Subcommands:
-  fields <corpus> [name]        one tab-separated line per repo: name url commit module jdk apply patch ("-" for null)
+  fields <corpus> [name]        one tab-separated line per repo: name url commit module jdk apply patch moduleDir
+                                ("-" for null; moduleDir defaults to the module path with ":" read as "/")
   entry <corpus> <name>         the repo's corpus entry as JSON, for the init script
   gradle-args <corpus> <name>   the repo's gradleArgs, one per line (none when absent)
   check <expectations> <report> one summary line; exits 1 and prints the broken expectations when any fails
@@ -108,14 +109,18 @@ def main(args):
     command = args[0] if args else ""
     if command == "fields" and len(args) in (2, 3):
         for entry in repos(*args[1:]):
-            print("\t".join("-" if entry.get(f) is None else str(entry[f]) for f in FIELDS))
+            module_dir = entry.get("moduleDir") or entry["module"].strip(":").replace(":", "/")
+            print("\t".join(["-" if entry.get(f) is None else str(entry[f]) for f in FIELDS] + [module_dir]))
     elif command == "entry" and len(args) == 3:
         print(json.dumps(repos(args[1], args[2])[0]))
     elif command == "gradle-args" and len(args) == 3:
         for arg in gradle_args(repos(args[1], args[2])[0]):
             print(arg)
     elif command == "check" and len(args) == 3:
-        report = load(args[2])
+        try:
+            report = load(args[2])
+        except FileNotFoundError:
+            sys.exit(f"no report at {args[2]}: set moduleDir in the corpus when the module is not at its path")
         found = list(problems(load(args[1]), report))
         print(summary(report))
         for problem in found:

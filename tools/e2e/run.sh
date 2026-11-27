@@ -36,7 +36,7 @@ checkout() {
 
 # Prints one result line: PASS or FAIL, then the details. Gradle's output goes to the log.
 run_repo() {
-  local name=$1 url=$2 commit=$3 module=$4 jdk=$5 apply=$6 patch=$7
+  local name=$1 url=$2 commit=$3 module=$4 jdk=$5 apply=$6 patch=$7 module_dir=$8
   local dir=$cache/repos/$name log=$cache/logs/$name.log
   local expect=$(dirname "$corpus")/expectations/$name.json
   [[ -f $expect ]] || { echo "FAIL no expectations file $expect"; return; }
@@ -45,27 +45,42 @@ run_repo() {
     git -C "$dir" apply "$(dirname "$corpus")/$patch" >>"$log" 2>&1 || { echo "FAIL patch $patch does not apply"; return; }
   fi
   json entry "$corpus" "$name" >"$cache/logs/$name.entry.json"
-  local task=${module%:}:mutkt module_dir=${module#:}
+  local task=${module%:}:mutkt
   local java_home gradle_args=() arg args_text
   args_text=$(json gradle-args "$corpus" "$name" 2>&1) || { echo "FAIL $args_text"; return; }
   [[ -z $args_text ]] || while IFS= read -r arg; do gradle_args+=("$arg"); done <<<"$args_text"
   java_home=$(/usr/libexec/java_home -v "$jdk" 2>/dev/null) || { echo "FAIL no JDK $jdk installed"; return; }
-  if ! JAVA_HOME=$java_home "$dir/gradlew" -p "$dir" --init-script "$e2e/mutkt-e2e.init.gradle" \
+  # --no-scan is the only switch that beats a build's own publishing.onlyIf { true }: Develocity ORs every onlyIf.
+  # Lenient verification: the init script adds MutKt's artifacts, which no repo's verification metadata lists.
+  # Run from the repo: some builds read files relative to the working directory (pluto's version.properties).
+  local built=true
+  (cd "$dir" && JAVA_HOME=$java_home ./gradlew --no-scan --dependency-verification lenient \
+    --init-script "$e2e/mutkt-e2e.init.gradle" \
     "-Dmutkt.e2e.repo=file://$local_repo" "-Dmutkt.e2e.entry=$cache/logs/$name.entry.json" \
-    ${gradle_args[@]+"${gradle_args[@]}"} "$task" >>"$log" 2>&1; then
+    ${gradle_args[@]+"${gradle_args[@]}"} "$task") >>"$log" 2>&1 || built=false
+  # Scans carry the user name, host name and paths: one that got out anyway must not go unnoticed.
+  if grep -Eq 'Publishing build scan|gradle\.com/s/' "$log"; then
+    echo "FAIL build scan published: delete it at the URL in the log (log: $log)"
+    return
+  fi
+  if [[ $built == false ]]; then
     echo "FAIL $task failed (log: $log)"
     grep -q 'MutKt cannot load the Android Gradle plugin' "$log" && echo "  AGP is not visible to MutKt: use patch mode"
     return
   fi
-  local report=$dir/${module_dir//://}/build/reports/mutkt/mutation-report.json
+  local report=$dir/$module_dir/build/reports/mutkt/mutation-report.json
   local checked
   if checked=$(json check "$expect" "$report" 2>&1); then echo "PASS $checked"; else echo "FAIL $checked"; fi
 }
 
 results=()
-while IFS=$'\t' read -r name url commit module jdk apply patch; do
+while IFS=$'\t' read -r name url commit module jdk apply patch module_dir; do
   echo "Running $name ($module at ${commit:0:12})"
-  results+=("$name"$'\t'"$(run_repo "$name" "$url" "$commit" "$module" "$jdk" "$apply" "$patch")")
+  # A repo that fails, even with a non-zero status, is a FAIL row: the loop goes on to the next repo.
+  if ! outcome=$(run_repo "$name" "$url" "$commit" "$module" "$jdk" "$apply" "$patch" "$module_dir"); then
+    [[ $outcome == FAIL* ]] || outcome="FAIL runner stopped: ${outcome:-no output}"
+  fi
+  results+=("$name"$'\t'"$outcome")
 done <<<"$fields"
 
 status=0

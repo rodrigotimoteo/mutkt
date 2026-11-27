@@ -1,7 +1,7 @@
 {
   "mutants": {
-    "min": 60,
-    "max": 240
+    "min": 150,
+    "max": 400
   },
   "score": {
     "min": 0.05,
@@ -20,21 +20,18 @@
       "path": "src/main/kotlin/com/figure/gradle/semver/internal/extensions/VersionExtension.kt",
       "killedAtLeast": 5,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 0,
       "note": "Well tested: VersionExtensionKtSpec drives nextVersion across every Stage and Modifier. appendBuildMetadata and toBuildMetadata have no unit test."
     },
     {
       "path": "src/main/kotlin/com/figure/gradle/semver/internal/extensions/RefExtensions.kt",
       "killedAtLeast": 1,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 1,
       "note": "prereleaseLabel is covered by RefExtensionsKtSpec; shortName has no unit test."
     },
     {
       "path": "src/main/kotlin/com/figure/gradle/semver/internal/command/BranchList.kt",
       "killedAtLeast": 0,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 3,
       "note": "Untested: git branch lookups are only reached through the functionalTest source set, which the unit test task does not run."
     }
   ],
