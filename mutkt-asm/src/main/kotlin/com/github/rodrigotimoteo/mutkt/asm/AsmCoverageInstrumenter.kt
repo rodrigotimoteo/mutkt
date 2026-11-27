@@ -33,7 +33,7 @@ public class AsmCoverageInstrumenter(
     ): Instrumented {
         val byName = classes.associate { it.name to it.bytes }
         val hierarchy = hierarchyOf(byName, classpath)
-        val once = inLazyInitialiser(byName.values)
+        val once = inLazyInitialiser(byName)
         val probed =
             mutants.filterNot(once).groupBy { it.className }.toSortedMap().mapNotNull { (name, inClass) ->
                 val bytes = requireNotNull(byName[name]) { "No class $name for mutant ${inClass.first().id}" }
