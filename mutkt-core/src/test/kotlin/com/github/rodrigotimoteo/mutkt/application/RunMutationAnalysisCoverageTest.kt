@@ -78,9 +78,9 @@ class RunMutationAnalysisCoverageTest {
     fun `a covered mutant's deadline comes from its test classes' times`() {
         val executor = FakeExecutor(baselineElapsed = 3.seconds, coverage = coverage)
         run(executor)
-        // 4 × their time + ATest's 1 s warm-up + 4 s.
-        assertEquals(11.seconds, executor.deadlineOf(add))
-        assertEquals(7.seconds, executor.deadlineOf(sub))
+        // 4 × (their time + the longest class's 1 s as warm-up) + 4 s.
+        assertEquals(14.seconds, executor.deadlineOf(add))
+        assertEquals(10.seconds, executor.deadlineOf(sub))
     }
 
     @Test

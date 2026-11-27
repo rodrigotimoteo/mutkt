@@ -57,13 +57,13 @@ class CoverageMapTest {
     }
 
     @Test
-    fun `the deadline is four times the covering classes' time plus the first class's warm-up plus four seconds`() {
+    fun `the deadline is four times the covering classes' time plus the longest class as warm-up, plus four seconds`() {
         val coverage = covered("ATest" to 1.seconds, "BTest" to 1500.milliseconds, "CTest" to 250.milliseconds)
-        assertEquals(16.seconds, map(coverage).selection(add).deadline)
+        assertEquals(21.seconds, map(coverage).selection(add).deadline)
     }
 
     @Test
-    fun `the warm-up is the first test class's time even when it does not reach the mutant`() {
+    fun `the warm-up is the longest test class's time even when it does not reach the mutant`() {
         val coverage =
             Coverage(
                 listOf(
@@ -73,7 +73,7 @@ class CoverageMapTest {
                 ),
                 emptySet(),
             )
-        assertEquals(Selection(listOf(TestId("BTest")), 10.seconds), map(coverage).selection(add))
+        assertEquals(Selection(listOf(TestId("BTest")), 20.seconds), map(coverage).selection(add))
     }
 
     @Test
@@ -84,8 +84,8 @@ class CoverageMapTest {
 
     @Test
     fun `a deadline that exactly fits the timeout is kept`() {
-        assertEquals(TIMEOUT, map(covered("ATest" to 5200.milliseconds)).selection(add).deadline)
-        assertEquals(29.seconds, map(covered("ATest" to 5.seconds)).selection(add).deadline)
+        assertEquals(TIMEOUT, map(covered("ATest" to 3250.milliseconds)).selection(add).deadline)
+        assertEquals(29.seconds, map(covered("ATest" to 3125.milliseconds)).selection(add).deadline)
     }
 
     @Test

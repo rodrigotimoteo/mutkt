@@ -28,9 +28,10 @@ internal class CoverageMap(
     // In baseline order: an order-dependent suite then sees its classes as in a full run, and killedBy is stable.
     private val reaching = HashMap<Probe, MutableList<TestCoverage>>()
 
-    // The first test class paid the class loading and first-use library set-up that each run's fresh loader pays
-    // again.
-    private val warmUp = coverage?.tests?.firstOrNull()?.elapsed ?: Duration.ZERO
+    // Each run's fresh loader pays class loading and shared set-up again, in whichever class runs first, and under
+    // parallel load like the tests themselves. The baseline paid it once, in the class that first needed it (a Spring
+    // context is cached per JVM, so only one class shows it), so the longest class bounds it.
+    private val warmUp = coverage?.tests?.maxOfOrNull { it.elapsed } ?: Duration.ZERO
 
     init {
         for (test in coverage?.tests.orEmpty()) {
@@ -42,7 +43,7 @@ internal class CoverageMap(
         val probe = telling(mutant) ?: return Selection(null, suiteDeadline)
         val tests = reaching[probe].orEmpty()
         val elapsed = tests.fold(Duration.ZERO) { sum, test -> sum + test.elapsed }
-        return Selection(tests.map { it.test }, minOf(timeout, neededDeadline(elapsed) + warmUp))
+        return Selection(tests.map { it.test }, minOf(timeout, neededDeadline(elapsed + warmUp)))
     }
 
     // The mutant's probe when its hits name the tests that depend on the site. One hit outside any test class, or in
