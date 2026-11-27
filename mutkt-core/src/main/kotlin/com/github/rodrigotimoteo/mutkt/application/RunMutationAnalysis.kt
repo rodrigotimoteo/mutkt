@@ -202,7 +202,8 @@ private fun Outcome.toResult(
     covering: List<String>?,
 ): MutantResult =
     when (this) {
-        is Outcome.Killed -> MutantResult(mutant, MutantStatus.KILLED, killedBy = by, coveredBy = covering)
+        is Outcome.Killed ->
+            MutantResult(mutant, MutantStatus.KILLED, killedBy = by, coveredBy = covering, killKind = kind)
         Outcome.Survived -> MutantResult(mutant, MutantStatus.SURVIVED, coveredBy = covering)
         Outcome.Timeout -> MutantResult(mutant, MutantStatus.TIMEOUT, coveredBy = covering)
         Outcome.NoTests -> MutantResult(mutant, MutantStatus.NO_COVERAGE, coveredBy = emptyList())

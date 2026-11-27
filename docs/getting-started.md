@@ -58,6 +58,7 @@ Mutants: 16
   TIMEOUT      1
   NO_COVERAGE  0
   ERROR        0
+Killed 13 (assertions 11, exceptions 2)
 Score: 87.5%
 ```
 
