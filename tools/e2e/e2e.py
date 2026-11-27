@@ -8,10 +8,17 @@ Run with python3 -I. Subcommands:
   check <expectations> <report> one summary line; exits 1 and prints the broken expectations when any fails
   compare <old> <new>           per mutant id, how a report's statuses changed; exits 1 when any changed other than
                                 Survived to NoCoverage
+  operators <reports dir> [--sample N]
+                                per operator: mutants by status and share of all mutants in the directory's *.json
+                                reports; --sample N adds N random Survived mutants per operator with their source line
 """
+import glob
 import json
+import os
+import random
 import re
 import sys
+from collections import Counter
 
 FIELDS = ["name", "url", "commit", "module", "jdk", "apply", "patch"]
 
@@ -129,6 +136,67 @@ def comparison(old, new):
             yield f"  {was}->{now} {i} coveredBy={covered} oldKilledBy={killed}"
 
 
+COLUMNS = ["Killed", "Survived", "NoCoverage", "Timeout", "RuntimeError"]
+
+
+def mutant_rows(report_dir):
+    for path in sorted(glob.glob(os.path.join(report_dir, "*.json"))):
+        report = os.path.splitext(os.path.basename(path))[0]
+        for key, file in load(path)["files"].items():
+            for mutant in file["mutants"]:
+                yield report, key, file.get("source", ""), mutant
+
+
+def table_row(label, width, counts, total):
+    n = sum(counts.values())
+    cells = "  ".join(f"{counts[s]:>{len(s)}}" for s in COLUMNS)
+    return f"{label:<{width}}  {n:>7}  {cells}  {n / total:>7.1%}"
+
+
+def sample_lines(rows, names, sample):
+    survived = {}
+    for report, key, source, mutant in rows:
+        if mutant["status"] == "Survived":
+            survived.setdefault(mutant["mutatorName"], []).append((report, key, source, mutant))
+    for name in names:
+        pool = survived.get(name, [])
+        yield f"{name}: {min(sample, len(pool))} random of {len(pool)} survivors"
+        for report, key, source, mutant in random.sample(pool, min(sample, len(pool))):
+            line = mutant["location"]["start"]["line"]
+            lines = source.splitlines()
+            text = lines[line - 1].strip() if line <= len(lines) else ""
+            yield f"  {report} {key}:{line}  {mutant['description']}"
+            yield f"      {text}"
+
+
+def operators(report_dir, sample):
+    rows = list(mutant_rows(report_dir))
+    if not rows:
+        sys.exit(f"no *.json mutation reports in {report_dir}")
+    counts = {}
+    for _, _, _, mutant in rows:
+        counts.setdefault(mutant["mutatorName"], Counter())[mutant["status"]] += 1
+    names = sorted(counts, key=lambda n: (-sum(counts[n].values()), n))
+    width = max(len("operator"), len("all"), *(len(n) for n in names))
+    total = len(rows)
+    header = f"{'operator':<{width}}  {'mutants':>7}  " + "  ".join(f"{s:>{len(s)}}" for s in COLUMNS)
+    print(header + f"  {'share':>7}")
+    for name in names:
+        print(table_row(name, width, counts[name], total))
+    print(table_row("all", width, Counter(m["status"] for _, _, _, m in rows), total))
+    if sample:
+        print()
+        print("\n".join(sample_lines(rows, names, sample)))
+
+
+def sample_size(options):
+    if not options:
+        return 0
+    if len(options) == 2 and options[0] == "--sample" and options[1].isdigit():
+        return int(options[1])
+    sys.exit("operators takes [--sample N] after the reports dir")
+
+
 def main(args):
     command = args[0] if args else ""
     if command == "fields" and len(args) in (2, 3):
@@ -154,6 +222,8 @@ def main(args):
         lines = list(comparison(load(args[1]), load(args[2])))
         print("\n".join(lines))
         sys.exit(1 if len(lines) > 1 else 0)
+    elif command == "operators" and len(args) in (2, 4):
+        operators(args[1], sample_size(args[2:]))
     else:
         sys.exit(__doc__)
 
