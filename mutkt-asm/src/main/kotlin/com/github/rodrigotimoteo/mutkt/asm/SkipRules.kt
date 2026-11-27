@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.asm
 import com.github.rodrigotimoteo.mutkt.asm.filters.isInlineFunctionOriginal
 import org.objectweb.asm.Opcodes.ACC_ABSTRACT
 import org.objectweb.asm.Opcodes.ACC_BRIDGE
+import org.objectweb.asm.Opcodes.ACC_ENUM
 import org.objectweb.asm.Opcodes.ACC_NATIVE
 import org.objectweb.asm.Opcodes.ACC_SYNTHETIC
 import org.objectweb.asm.tree.ClassNode
@@ -30,15 +31,30 @@ internal fun isMutable(method: MethodNode): Boolean =
         !isInlineFunctionOriginal(method)
 
 /**
- * The [isMutable] methods of this class, minus the members kotlinc generates for a data class or data object.
- * kotlinc (K2, and K1 with the JVM IR backend) writes no line number into those; a member the user declares has
- * its own. Without debug info every method lacks lines, so nothing is recognised.
+ * The [isMutable] methods of this class, minus the members kotlinc generates for a data class, data object or
+ * enum class, and none of a SAM adapter. kotlinc (K2, and K1 with the JVM IR backend) writes no line number into
+ * data members; a member the user declares has its own. Without debug info every method lacks lines, so no data
+ * member is recognised. Enum members need no lines: kotlinc rejects a user declaration with their signatures.
  */
 internal fun ClassNode.mutableMethods(): List<MethodNode> {
-    val recognises = info().isKotlin && methods.any { it.hasLines() }
-    return methods.filter { isMutable(it) && !(recognises && it.isGeneratedDataMember()) }
+    if (isSamAdapter()) return emptyList()
+    val kotlin = info().isKotlin
+    val recognises = kotlin && methods.any { it.hasLines() }
+    return methods.filter {
+        isMutable(it) && !(recognises && it.isGeneratedDataMember()) && !(kotlin && isGeneratedEnumMember(it))
+    }
 }
 
-private fun MethodNode.hasLines() = instructions.any { it is LineNumberNode }
+// A function value converted to a SAM interface is wrapped in a synthetic Caller$sam$Iface$0 whose
+// equals, hashCode and getFunctionDelegate are generated, and so is the call it forwards.
+private fun ClassNode.isSamAdapter() =
+    access and ACC_SYNTHETIC != 0 && "kotlin/jvm/internal/FunctionAdapter" in interfaces.orEmpty()
 
 private fun MethodNode.isGeneratedDataMember() = !hasLines() && DATA_MEMBER.matches(name + desc)
+
+private fun ClassNode.isGeneratedEnumMember(method: MethodNode) =
+    access and ACC_ENUM != 0 &&
+        method.name + method.desc in
+        setOf("values()[L$name;", "valueOf(Ljava/lang/String;)L$name;", "getEntries()Lkotlin/enums/EnumEntries;")
+
+private fun MethodNode.hasLines() = instructions.any { it is LineNumberNode }
