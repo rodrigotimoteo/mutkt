@@ -5,6 +5,7 @@ import com.github.rodrigotimoteo.mutkt.application.ClassFilters
 import com.github.rodrigotimoteo.mutkt.application.Glob
 import com.github.rodrigotimoteo.mutkt.application.RunMutationAnalysis
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
+import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.asm.AsmMutantGenerator
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
@@ -48,9 +49,13 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
             // Built first so an unknown operator id fails before any child JVM could start.
             val generator = generator(loader)
             ForkedTestExecutor(forkSettings(projectClasses, tests, dependencies, config.parallelism)).use { executor ->
-                RunMutationAnalysis(DirectoryClassSource(production), generator, executor, writer, config)
-                    // Logged as soon as the baseline ends so a long run shows the hint before its mutants.
-                    .run(onDeadlineCap = { logger.warn(deadlineWarning(it)) })
+                try {
+                    RunMutationAnalysis(DirectoryClassSource(production), generator, executor, writer, config)
+                        // Logged as soon as the baseline ends so a long run shows the hint before its mutants.
+                        .run(onDeadlineCap = { logger.warn(deadlineWarning(it)) })
+                } catch (e: TestExecutionStopped) {
+                    throw GradleException(e.message.orEmpty(), e)
+                }
             }
         }
     return AnalysisResult(

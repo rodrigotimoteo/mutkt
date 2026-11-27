@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -64,12 +65,13 @@ class ForkedTestExecutorTest {
         assertEquals(Outcome.Survived, pool.run(mutantBytes(CALC)))
         val first = pool.liveProcesses.single()
 
+        // The reused child's timeout is retried on a fresh child, which times out too.
         assertEquals(Outcome.Timeout, pool.run(SPIN, 1.seconds))
         assertFalse(first.isAlive)
         assertTrue(pool.liveProcesses.isEmpty())
 
         assertKilledBy("CalcTest.adds", pool.run(mutantBytes()))
-        assertEquals(2, pool.startedChildren)
+        assertEquals(3, pool.startedChildren)
     }
 
     @Test
@@ -110,7 +112,8 @@ class ForkedTestExecutorTest {
         assertTrue(pool.liveProcesses.isEmpty())
 
         assertKilledBy("CalcTest.adds", pool.run(mutantBytes()))
-        assertEquals(2, pool.startedChildren)
+        // One more for the fresh child that retried the reused child's timeout.
+        assertEquals(3, pool.startedChildren)
     }
 
     @Test
@@ -253,15 +256,17 @@ class ForkedTestExecutorTest {
     }
 
     @Test
-    fun `a child that cannot boot reports its exit code and stderr, and three failures in a row stop retries`() {
+    fun `a child that cannot boot reports its exit code and stderr, and three failures in a row stop the analysis`() {
         val pool = executor { it.copy(jvmArgs = listOf("-XX:+NoSuchMutktOption")) }
-        repeat(3) {
+        repeat(2) {
             val error = assertThrows<IllegalStateException> { pool.run(mutantBytes(CALC)) }
             val message = error.message.orEmpty()
             assertTrue("exit code 1" in message && "NoSuchMutktOption" in message, message)
         }
-        val giveUp = assertThrows<IllegalStateException> { pool.run(mutantBytes(CALC)) }
-        assertTrue("3 times in a row" in giveUp.message.orEmpty(), giveUp.message)
+        val stop = assertThrows<TestExecutionStopped> { pool.run(mutantBytes(CALC)) }
+        val message = stop.message.orEmpty()
+        assertTrue("3 times in a row, so the analysis stopped" in message && "NoSuchMutktOption" in message, message)
+        assertThrows<TestExecutionStopped> { pool.run(mutantBytes(CALC)) }
         assertEquals(0, pool.startedChildren)
     }
 
