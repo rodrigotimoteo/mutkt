@@ -1,13 +1,15 @@
 package com.github.rodrigotimoteo.mutkt.testing
 
+import com.github.rodrigotimoteo.mutkt.application.port.Baseline
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
+import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
-import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import kotlin.time.Duration
@@ -32,7 +34,8 @@ class FakeMutantGenerator(
 }
 
 /**
- * Returns the scripted outcome per mutant ([default] otherwise) and records each call's mutant, bytes and deadline;
+ * Returns the scripted outcome per mutant ([default] otherwise) and records each call's mutant, bytes and deadline in
+ * [runs] and its test classes (null: all) in [selections], index for index;
  * [baseline] answers the baseline run in [baselineElapsed]; its deadlines are recorded in [baselines].
  */
 class FakeTestExecutor(
@@ -42,20 +45,26 @@ class FakeTestExecutor(
     private val baselineElapsed: Duration = Duration.ZERO,
 ) : TestExecutor {
     val runs = mutableListOf<Triple<Mutant, ByteArray, Duration>>()
+    val selections = mutableListOf<List<TestId>?>()
     val baselines = mutableListOf<Duration>()
 
     override fun run(
         mutant: Mutant,
         bytes: ByteArray,
         deadline: Duration,
+        tests: List<TestId>?,
     ): Outcome {
         runs += Triple(mutant, bytes, deadline)
+        selections += tests
         return outcomes[mutant] ?: default
     }
 
-    override fun baseline(deadline: Duration): TimedOutcome {
+    override fun baseline(
+        deadline: Duration,
+        instrumented: Instrumented?,
+    ): Baseline {
         baselines += deadline
-        return TimedOutcome(baseline, baselineElapsed)
+        return Baseline(baseline, baselineElapsed)
     }
 }
 

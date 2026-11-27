@@ -1,0 +1,22 @@
+package com.github.rodrigotimoteo.mutkt.junit
+
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.zip.ZipFile
+
+private const val ROBOLECTRIC_MARKER = "org/robolectric/internal/SandboxManager.class"
+
+/**
+ * True when [entry] holds Robolectric. Then no child is reused: Robolectric caches its sandbox and the instrumented
+ * project classes in statics with no reset API, and that a fresh class loader per run resets all of them is not shown
+ * on a real Robolectric project. Nor does a baseline read coverage: the sandbox loader defines the project classes
+ * again, so the probes its tests reach are in classes the run's loader never defines, and the missing hits would read
+ * as tests that reach nothing. Only jars and directories can hold classes; other entries are skipped.
+ */
+internal fun hasRobolectric(entry: Path): Boolean =
+    when {
+        Files.isDirectory(entry) -> Files.isRegularFile(entry.resolve(ROBOLECTRIC_MARKER))
+        Files.isRegularFile(entry) && entry.toString().endsWith(".jar") ->
+            ZipFile(entry.toFile()).use { it.getEntry(ROBOLECTRIC_MARKER) != null }
+        else -> false
+    }

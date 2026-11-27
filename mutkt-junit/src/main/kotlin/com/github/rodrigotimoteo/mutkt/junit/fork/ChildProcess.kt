@@ -1,7 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
-import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -10,7 +9,6 @@ import java.nio.file.Path
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
 
 private const val STDERR_TAIL_BYTES = 4096
@@ -59,7 +57,7 @@ internal class ChildProcess private constructor(
         timeoutMillis: Long,
         graceMillis: Long,
         prepareMillis: Long,
-    ): TimedOutcome =
+    ): ForkReply.Result =
         try {
             writeRequest(output, request)
             // A mutant or test class that cannot link answers Result without a Started.
@@ -78,7 +76,7 @@ internal class ChildProcess private constructor(
                 val start = System.nanoTime()
                 try {
                     awaitReply(timeoutMillis + graceMillis)?.asResult()
-                        ?: TimedOutcome(Outcome.Timeout, timeoutMillis.milliseconds)
+                        ?: ForkReply.Result(Outcome.Timeout, timeoutMillis)
                 } catch (e: IOException) {
                     exitedWhileTesting(request, context, e, start)
                 }
@@ -96,13 +94,16 @@ internal class ChildProcess private constructor(
         context: String,
         cause: IOException,
         start: Long,
-    ): TimedOutcome {
+    ): ForkReply.Result {
         val code = awaitExit()
         if (code == null || code > SIGNAL_EXIT_BASE) throw failure(context, cause, code)
         check(request !is ForkRequest.Baseline) {
             "the test JVM exited with code $code on the original classes. Last stderr: ${stderr.shown()}"
         }
-        return TimedOutcome(Outcome.Killed(killedBy(code)), (System.nanoTime() - start).nanoseconds)
+        return ForkReply.Result(
+            Outcome.Killed(killedBy(code)),
+            (System.nanoTime() - start).nanoseconds.inWholeMilliseconds,
+        )
     }
 
     fun requestShutdown() {
@@ -260,11 +261,8 @@ internal class ChildProcess private constructor(
     }
 }
 
-private fun ForkReply.asResult(): TimedOutcome =
-    when (this) {
-        is ForkReply.Result -> TimedOutcome(outcome, elapsedMillis.milliseconds)
-        else -> throw ForkProtocolException("Unexpected reply $this")
-    }
+private fun ForkReply.asResult(): ForkReply.Result =
+    this as? ForkReply.Result ?: throw ForkProtocolException("Unexpected reply $this")
 
 private fun killedBy(exitCode: Int): String =
     if (exitCode == EXIT_OUT_OF_MEMORY) OUT_OF_MEMORY else "JVM exit $exitCode"
