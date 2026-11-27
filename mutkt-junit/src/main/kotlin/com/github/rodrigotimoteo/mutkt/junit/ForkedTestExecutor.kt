@@ -247,6 +247,7 @@ public class ForkedTestExecutor(
                 }
             val command =
                 listOf(settings.javaExecutable.toString()) +
+                    (if (robolectric) robolectricJvmArgs() else emptyList()) +
                     settings.jvmArgs +
                     kotestArgs +
                     listOfNotNull(tmpDir?.let { "-D$TMPDIR=$it" }) +
