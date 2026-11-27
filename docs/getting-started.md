@@ -30,7 +30,7 @@ includeBuild("../mutkt")
 
 Then apply `id("io.github.rodrigotimoteo.mutkt")` without a version.
 
-Put the project's own JUnit Platform launcher on the test runtime classpath, so the mutants run on the same Platform version as your tests. Gradle 8 adds it to the `test` task only; Gradle 9 does not add it, so a Jupiter project on Gradle 9 must declare it:
+The mutants run on your project's JUnit Platform. Gradle 9 adds no `junit-platform-launcher` to the test runtime classpath and Gradle 8 adds it to the `test` task only, so when it is missing, `mutkt` resolves it from your repositories at the version of your `junit-platform-engine`. Declaring it skips that lookup:
 
 ```kotlin
 dependencies {
@@ -40,7 +40,7 @@ dependencies {
 }
 ```
 
-Without it the mutants run on the Platform bundled with MutKt (1.10.2), which may be older than your engine.
+If the launcher cannot be resolved (offline, for instance), the mutants run on the Platform bundled with MutKt (1.10.2), which may be older than your engine, and the build logs a warning naming the dependency to add.
 
 ## Run
 
