@@ -33,6 +33,17 @@ class ForkSettingsTest {
     }
 
     @Test
+    fun `paths written to the startup file reject line breaks`() {
+        val broken = Path.of("a\nb")
+        val expected = "must not contain line breaks: [a\nb]"
+        assertTrue(expected in message { settings().copy(projectClassDir = broken) })
+        assertTrue(expected in message { settings().copy(testClassDir = broken) })
+        assertTrue(expected in message { settings().copy(classpath = listOf(Path.of("ok.jar"), broken)) })
+        assertTrue(expected in message { settings().copy(codeSources = mapOf("Calc" to broken)) })
+        assertTrue("a\rb" in message { settings().copy(codeSources = mapOf("a\rb" to Path.of("ok"))) })
+    }
+
+    @Test
     fun `a non-positive preparation limit names its setting`() {
         assertTrue("prepareMillis" in message { settings().copy(prepareMillis = 0) })
     }

@@ -239,7 +239,8 @@ public class ForkedTestExecutor(
                 projectClasspath.map { "classpath=$it" } +
                 settings.engines.map { "engine=$it" } +
                 settings.includeTags.map { "includeTag=$it" } +
-                settings.excludeTags.map { "excludeTag=$it" }
+                settings.excludeTags.map { "excludeTag=$it" } +
+                settings.codeSources.map { (name, location) -> "codeSource=$name=$location" }
         return Files.write(Files.createTempDirectory("mutkt-fork").resolve("startup.properties"), lines)
     }
 }
