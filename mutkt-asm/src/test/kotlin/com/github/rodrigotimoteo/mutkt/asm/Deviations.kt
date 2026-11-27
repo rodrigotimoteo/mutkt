@@ -41,6 +41,24 @@ private val Row.inGeneratedDataMember get() =
 private const val GENERATED_DATA_MEMBER_REASON =
     "legacy mutates the members kotlinc generates for a data class; the rebuild skips them"
 
+// The parity suspend code, none of which has a user ===: the prologue of fetchTwice and chain (legacy rows without
+// a line) and the COROUTINE_SUSPENDED checks there and in the generate and runIt lambdas.
+private val Row.inStateMachine get() =
+    (
+        (inClass("ParityIdioms") && inMethod("fetchTwice")) ||
+            (inClass("ParityNulls") && inMethod("chain")) ||
+            (inClass("ParityIdioms\$generate\$1", "ParityIdioms\$runIt\$1") && inMethod("invokeSuspend"))
+    ) &&
+        (opcode == "IF_ACMPNE" || (line == -1 && opcode in setOf("ISUB", "IFEQ")))
+
+private const val STATE_MACHINE_REASON =
+    "legacy mutates the coroutine state machine kotlinc generates; the rebuild filters it"
+
+private val Row.inGeneratedEnumMember get() = inClass("Color", "Dir") && inMethod("values", "valueOf", "getEntries")
+
+private const val ENUM_MEMBER_REASON =
+    "legacy mutates the members kotlinc generates for an enum; the rebuild skips them"
+
 private val LATEINIT_CLASSES = arrayOf("ParityIdioms", "Holder")
 
 private val COLLECTIONS = setOf("Ljava/util/List;", "Ljava/util/Set;", "Ljava/util/Map;", "Ljava/util/Collection;")
@@ -355,5 +373,10 @@ internal object Deviations {
             ) {
                 it.inGeneratedDataMember
             },
+            legacyOnly("D17a", "arithmetic", STATE_MACHINE_REASON) { it.inStateMachine },
+            legacyOnly("D17b", "negate-conditionals", STATE_MACHINE_REASON) { it.inStateMachine },
+            legacyOnly("D18a", "empty-returns", ENUM_MEMBER_REASON) { it.inGeneratedEnumMember },
+            legacyOnly("D18b", "non-void-method-calls", ENUM_MEMBER_REASON) { it.inGeneratedEnumMember },
+            legacyOnly("D18c", "null-returns", ENUM_MEMBER_REASON) { it.inGeneratedEnumMember },
         )
 }

@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+### Changed
+
+- Fewer mutants in code kotlinc generates: the coroutine state machine (`COROUTINE_SUSPENDED` checks and returns, the `Unit` result of a Unit suspend function, the continuation prologue and re-entry), enum `values`/`valueOf`/`getEntries`, and SAM adapter classes. On the ten release-check projects this removes 437 of 4891 mutants, including 49 of the 77 timeouts ([operators](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md#generated-code-on-the-e2e-corpus)).
+
 ## [0.5.0] - 2026-11-27
 
 Android support, and mutants that run only the tests that reach them.
