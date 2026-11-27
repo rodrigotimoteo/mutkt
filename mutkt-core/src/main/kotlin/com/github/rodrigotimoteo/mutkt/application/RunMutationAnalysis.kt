@@ -123,23 +123,26 @@ public class RunMutationAnalysis(
     private fun evaluate(
         mutant: Mutant,
         selection: Selection,
-    ): MutantResult =
-        try {
-            if (selection.tests?.isEmpty() == true) {
-                MutantResult(mutant, MutantStatus.NO_COVERAGE)
+    ): MutantResult {
+        val covering = selection.tests?.map { it.className }
+        return try {
+            if (covering?.isEmpty() == true) {
+                MutantResult(mutant, MutantStatus.NO_COVERAGE, coveredBy = covering)
             } else {
                 executor
                     .run(mutant, generator.materialize(mutant), selection.deadline, selection.tests)
-                    .toResult(mutant)
+                    .toResult(mutant, covering)
             }
         } catch (e: TestExecutionStopped) {
             throw e
         } catch (e: Exception) {
-            MutantResult(mutant, MutantStatus.ERROR, cause(e.message?.takeIf(String::isNotBlank) ?: e.toString()))
+            val detail = cause(e.message?.takeIf(String::isNotBlank) ?: e.toString())
+            MutantResult(mutant, MutantStatus.ERROR, detail, coveredBy = covering)
         } catch (e: LinkageError) {
             // The message of a LinkageError is often just a class name.
-            MutantResult(mutant, MutantStatus.ERROR, cause(e.toString()))
+            MutantResult(mutant, MutantStatus.ERROR, cause(e.toString()), coveredBy = covering)
         }
+    }
 }
 
 private const val SHUTDOWN_WAIT_SECONDS = 5L
@@ -194,11 +197,14 @@ private fun problem(
         Outcome.Survived, Outcome.NoTests -> null
     }
 
-private fun Outcome.toResult(mutant: Mutant): MutantResult =
+private fun Outcome.toResult(
+    mutant: Mutant,
+    covering: List<String>?,
+): MutantResult =
     when (this) {
-        is Outcome.Killed -> MutantResult(mutant, MutantStatus.KILLED, killedBy = by)
-        Outcome.Survived -> MutantResult(mutant, MutantStatus.SURVIVED)
-        Outcome.Timeout -> MutantResult(mutant, MutantStatus.TIMEOUT)
-        Outcome.NoTests -> MutantResult(mutant, MutantStatus.NO_COVERAGE)
-        is Outcome.LoadError -> MutantResult(mutant, MutantStatus.ERROR, cause(message))
+        is Outcome.Killed -> MutantResult(mutant, MutantStatus.KILLED, killedBy = by, coveredBy = covering)
+        Outcome.Survived -> MutantResult(mutant, MutantStatus.SURVIVED, coveredBy = covering)
+        Outcome.Timeout -> MutantResult(mutant, MutantStatus.TIMEOUT, coveredBy = covering)
+        Outcome.NoTests -> MutantResult(mutant, MutantStatus.NO_COVERAGE, coveredBy = emptyList())
+        is Outcome.LoadError -> MutantResult(mutant, MutantStatus.ERROR, cause(message), coveredBy = covering)
     }

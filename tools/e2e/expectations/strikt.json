@@ -22,11 +22,13 @@
     {
       "path": "src/main/kotlin/strikt/assertions/Iterable.kt",
       "killedAtLeast": 1,
+      "noCoverageAtLeast": 1,
       "note": "Well tested by IterableAssertions.kt (about 200 assertion lines); int comparisons such as passedCount >= count and size == 1."
     },
     {
       "path": "src/main/kotlin/strikt/assertions/Any.kt",
       "killedAtLeast": 1,
+      "noCoverageAtLeast": 1,
       "note": "Well tested by AnyAssertions.kt; isA and isEqualTo branch on is-checks and equality."
     }
   ],

@@ -17,18 +17,21 @@
       "path": "formats/src/main/kotlin/com/jakewharton/diffuse/format/ApiMapping.kt",
       "killedAtLeast": 5,
       "survivedAtLeast": 0,
+      "noCoverageAtLeast": 11,
       "note": "ApiMappingTest has 20 tests covering get overloads and ?: returns"
     },
     {
       "path": "formats/src/main/kotlin/com/jakewharton/diffuse/format/Class.kt",
       "killedAtLeast": 1,
       "survivedAtLeast": 0,
+      "noCoverageAtLeast": 6,
       "note": "ClassTest parses a compiled Dummy class through parseMethod and the visitor branches"
     },
     {
       "path": "formats/src/main/kotlin/com/jakewharton/diffuse/format/AndroidManifest.kt",
       "killedAtLeast": 0,
       "survivedAtLeast": 0,
+      "noCoverageAtLeast": 55,
       "note": "no unit test references AndroidManifest, so its mutants have no coverage"
     }
   ],
