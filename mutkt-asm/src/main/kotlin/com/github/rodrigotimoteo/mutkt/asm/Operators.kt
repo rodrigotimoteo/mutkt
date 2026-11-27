@@ -12,6 +12,7 @@ import com.github.rodrigotimoteo.mutkt.asm.operators.NegateConditionalsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NonVoidMethodCallsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NullReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NullSafetyOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.RemoveNegationOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ReturnValsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.SealedWhenOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.TrueReturnsOperator
@@ -41,6 +42,7 @@ internal object Operators {
             NullSafetyOperator,
             DataClassCopyOperator,
             CoroutineOperator,
+            RemoveNegationOperator,
         )
 
     /** Every operator, in the order they are applied and reported. */
