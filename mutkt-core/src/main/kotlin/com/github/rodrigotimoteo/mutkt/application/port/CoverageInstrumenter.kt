@@ -6,7 +6,7 @@ import com.github.rodrigotimoteo.mutkt.domain.Mutant
 public interface CoverageInstrumenter {
     /**
      * Probes for the sites of [mutants], which a [MutantGenerator] discovered in [classes]. A mutant whose site
-     * cannot be probed is absent from [Instrumented.probes].
+     * cannot be probed, or whose hits would not name the tests that depend on it, is absent from [Instrumented.probes].
      */
     public fun instrument(
         classes: List<ClassFile>,

@@ -21,7 +21,7 @@ Score = (KILLED + TIMEOUT) / (all mutants − ERROR).
 
 The baseline run (below) records which test classes reach each mutated instruction. A mutant then runs only those classes, in the order the baseline ran them, and one that no test class reaches is NO_COVERAGE without a run. Coverage says a test executed the code, not that it checked the result: a test that reaches a mutant but never checks its effect still yields SURVIVED.
 
-Some mutants run every selected test instead: one whose code was reached outside any test class (while JUnit discovered the tests, for instance) and one in a class that cannot be instrumented (an interface, a method near the JVM size limit). If the tests fail on the instrumented classes but pass on the original ones, the run warns `The baseline on probed classes failed (<cause>); running every mutant against the whole suite` and goes on that way.
+Some mutants run every selected test instead: one whose code was reached outside any test class (while JUnit discovered the tests, for instance), one in a class initialiser or in a `lazy { }` of an object, a companion object or a top-level property (they run once, under whichever test class gets there first), and one in a class that cannot be instrumented (an interface, a method near the JVM size limit). If the tests fail on the instrumented classes but pass on the original ones, the run warns `The baseline on probed classes failed (<cause>); running every mutant against the whole suite` and goes on that way.
 
 ## Why does TIMEOUT count as detected?
 
