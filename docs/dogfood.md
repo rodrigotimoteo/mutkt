@@ -14,7 +14,7 @@ The CI job `dogfood` (pull requests and `rebuild/**` branches) runs it and write
 
 | Module | Scope | Settings | Measured | `failBelowScore` |
 |---|---|---|---|---|
-| `mutkt-core` | `com.github.rodrigotimoteo.mutkt.**` | defaults | 83.0% (100 mutants, about 20 s) | 75 |
+| `mutkt-core` | `com.github.rodrigotimoteo.mutkt.**` except `application.port.**` (contracts and data carriers read only by the adapters, whose tests this run does not execute) | defaults | 83.0% (100 mutants, about 20 s) | 75 |
 | `mutkt-asm` | `com.github.rodrigotimoteo.mutkt.asm.operators.**` | `timeoutMs = 120000`, `maxMutantsPerClass = 3` | 96.8% (63 evaluated, 170 omitted by the cap; about 3 min) | 90 |
 
 Measured on 2026-11-25, JDK 21, 11 threads (the default on 11 cores), offline. Members kotlinc generates for data classes are not mutated (see Noise filters in `docs/operators.md`); before that, `mutkt-core` measured 44.5% over 263 mutants, most survivors in those members.
