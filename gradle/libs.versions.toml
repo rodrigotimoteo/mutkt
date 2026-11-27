@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.4.21"
+kotlin = "2.4.20"
 # The Kotlin Android plugin of agpTest and the Android sample: KGP 2.4 needs AGP 8.5.2, above the minimum AGP below.
 kotlinAndroid = "2.1.10"
 # The stdlib the published modules depend on: the one of their apiVersion 2.0 (mutkt.published-library).
