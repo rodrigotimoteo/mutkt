@@ -11,6 +11,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
   - `excludedClasses` starts with globs for generated classes (R, BR, BuildConfig, Hilt, Dagger, view and data binding, Compose); `add` extends them, `=` replaces them.
   - Multi-module apps: each module has its own `mutkt` task and reports, and an app's tests may use Android library modules and AAR dependencies.
   - Instrumented tests (`src/androidTest`) are not supported.
+- Each mutant runs only the test classes that reach it, in baseline order, as recorded on instrumented classes during the baseline run; a mutant no test reaches is NO_COVERAGE without a run ([ADR 0010](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/adr/0010-per-test-coverage.md)). Mutants whose tests coverage cannot tell, and every mutant on Robolectric, still run the whole suite.
 - Fixed: Robolectric tests no longer see a stale class. Robolectric caches the project classes it loaded in JVM-wide statics, so a reused test JVM gave later mutants the first class it loaded and counts changed from run to run. With Robolectric on the test classpath each mutant now gets its own test JVM.
 
 ## [0.4.0] - 2026-11-26

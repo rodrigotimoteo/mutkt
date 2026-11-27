@@ -1,6 +1,9 @@
 package com.github.rodrigotimoteo.mutkt.application
 
+import com.github.rodrigotimoteo.mutkt.application.port.Baseline
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
+import com.github.rodrigotimoteo.mutkt.application.port.CoverageInstrumenter
+import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
@@ -19,22 +22,27 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
-/** Discovers mutants, runs the tests against each one and writes the report. Holds no state between runs. */
+/**
+ * Discovers mutants, runs the tests that reach each one (all of them when coverage cannot tell) and writes the report.
+ * Holds no state between runs.
+ */
 public class RunMutationAnalysis(
     private val classSource: ClassSource,
     private val generator: MutantGenerator,
+    private val instrumenter: CoverageInstrumenter,
     private val executor: TestExecutor,
     private val writer: ReportWriter,
     private val config: AnalysisConfig,
 ) {
     /**
      * Runs the analysis; [onDeadlineCap] is called once before any mutant when timeoutMs cuts the derived deadline,
+     * [onWarning] when the instrumented classes fail the tests the original ones pass, so coverage is not used,
      * [progress] on the calling thread once per finished mutant, in completion order.
      */
     public fun run(
         onDeadlineCap: (DeadlineCap) -> Unit = {},
+        onWarning: (String) -> Unit = {},
         progress: (MutantResult) -> Unit = {},
     ): MutationReport {
         val filters = config.filters
@@ -45,44 +53,57 @@ public class RunMutationAnalysis(
                 generator.discover(classes, targets).filter { filters.acceptsMethod(it.className, it.methodName) },
             )
         if (mutants.isEmpty()) return MutationReport(emptyList(), omitted).also(writer::write)
+        val instrumented = instrumenter.instrument(classes, mutants)
         // Without a green suite every failing test would count as a kill, so nothing is scored.
-        val baseline = baseline()
+        val baseline = baseline(instrumented, onWarning)
         // An endless loop is cut soon after the suite's own time instead of at timeoutMs, which stays the upper bound.
-        val needed = baseline * MUTANT_DEADLINE_FACTOR + MUTANT_DEADLINE_CONSTANT
-        val cap = DeadlineCap(config.timeout, baseline, needed).takeIf { needed > config.timeout }?.also(onDeadlineCap)
-        val results = analyse(mutants, minOf(config.timeout, needed), progress)
+        val needed = neededDeadline(baseline.elapsed)
+        val cap =
+            DeadlineCap(config.timeout, baseline.elapsed, needed)
+                .takeIf { needed > config.timeout }
+                ?.also(onDeadlineCap)
+        val map = CoverageMap(instrumented.probes, baseline.coverage, config.timeout, minOf(config.timeout, needed))
+        val results = analyse(mutants, map, progress)
         return MutationReport(results, omitted, cap).also(writer::write)
     }
 
-    // Returns how long the green suite ran.
-    private fun baseline(): Duration {
+    // The green baseline, with coverage when the instrumented classes pass too. Probes must not change behavior, but if
+    // they do, the original classes decide whether the suite is green.
+    private fun baseline(
+        instrumented: Instrumented,
+        onWarning: (String) -> Unit,
+    ): Baseline {
+        val probed = greenBaseline(instrumented)
+        probed.getOrNull()?.let { return it }
+        val plain = greenBaseline(null).getOrElse { throw IllegalStateException("$BASELINE_FAILED: ${it.message}", it) }
+        onWarning("The baseline on probed classes failed (${probed.exceptionOrNull()?.message}); $COVERAGE_LOST")
+        return plain
+    }
+
+    // The baseline when the suite is green, else a failure that says why it is not.
+    private fun greenBaseline(instrumented: Instrumented?): Result<Baseline> {
         val deadline = config.timeout * BASELINE_TIMEOUT_FACTOR
-        val problem =
+        val baseline =
             try {
-                val baseline = executor.baseline(deadline)
-                when (val outcome = baseline.outcome) {
-                    is Outcome.Killed -> "the first failure is ${outcome.by}${outcome.cause?.let { ": $it" }.orEmpty()}"
-                    is Outcome.LoadError -> "they cannot run: ${outcome.message}"
-                    Outcome.Timeout -> "they did not finish within $deadline; raise timeoutMs"
-                    Outcome.Survived, Outcome.NoTests -> return baseline.elapsed
-                }
+                executor.baseline(deadline, instrumented)
             } catch (e: IllegalStateException) {
-                throw IllegalStateException("$BASELINE_FAILED: ${e.message}", e)
+                return Result.failure(e)
             }
-        error("$BASELINE_FAILED: $problem")
+        return problem(baseline.outcome, deadline)?.let { Result.failure(IllegalStateException(it)) }
+            ?: Result.success(baseline)
     }
 
     // Results are keyed by discovery index so completion order never leaks into the report.
     private fun analyse(
         mutants: List<Mutant>,
-        deadline: Duration,
+        map: CoverageMap,
         progress: (MutantResult) -> Unit,
     ): List<MutantResult> {
         val pool = Executors.newFixedThreadPool(config.parallelism)
         try {
             val completion = ExecutorCompletionService<IndexedValue<MutantResult>>(pool)
             for ((index, mutant) in mutants.withIndex()) {
-                completion.submit(Callable { IndexedValue(index, evaluate(mutant, deadline)) })
+                completion.submit(Callable { IndexedValue(index, evaluate(mutant, map.selection(mutant))) })
             }
             val byIndex = mutableMapOf<Int, MutantResult>()
             repeat(mutants.size) {
@@ -101,10 +122,16 @@ public class RunMutationAnalysis(
     @Suppress("TooGenericExceptionCaught")
     private fun evaluate(
         mutant: Mutant,
-        deadline: Duration,
+        selection: Selection,
     ): MutantResult =
         try {
-            executor.run(mutant, generator.materialize(mutant), deadline).toResult(mutant)
+            if (selection.tests?.isEmpty() == true) {
+                MutantResult(mutant, MutantStatus.NO_COVERAGE)
+            } else {
+                executor
+                    .run(mutant, generator.materialize(mutant), selection.deadline, selection.tests)
+                    .toResult(mutant)
+            }
         } catch (e: TestExecutionStopped) {
             throw e
         } catch (e: Exception) {
@@ -124,14 +151,9 @@ private const val STDERR_MARKER = ". Last stderr:"
 // The baseline runs the whole suite on a cold JVM (class loading, engine start-up) that mutants then reuse.
 private const val BASELINE_TIMEOUT_FACTOR = 5
 
-// The baseline runs alone, mutants run `parallelism` at a time: on the dogfood asm suite (8 threads, 11 cores) a
-// mutant run took up to 2.9 times the baseline, so a lower factor turns slow kills into timeouts.
-private const val MUTANT_DEADLINE_FACTOR = 4
-
-// Absorbs JIT, GC and scheduling noise, which dominates a suite that runs in milliseconds.
-private val MUTANT_DEADLINE_CONSTANT = 4.seconds
-
 private const val BASELINE_FAILED = "The tests fail on the original classes, so no mutant was scored"
+
+private const val COVERAGE_LOST = "running every mutant against the whole suite"
 
 // Workers must not outlive run(); the interrupt flag is restored so the caller still sees it.
 private fun ExecutorService.stopAndAwait() {
@@ -159,6 +181,18 @@ private fun cause(text: String): String? =
         ?.substringBefore(STDERR_MARKER)
         ?.trim()
         ?.take(MAX_CAUSE)
+
+// Why a baseline with this outcome is not green, or null when it is.
+private fun problem(
+    outcome: Outcome,
+    deadline: Duration,
+): String? =
+    when (outcome) {
+        is Outcome.Killed -> "the first failure is ${outcome.by}${outcome.cause?.let { ": $it" }.orEmpty()}"
+        is Outcome.LoadError -> "they cannot run: ${outcome.message}"
+        Outcome.Timeout -> "they did not finish within $deadline; raise timeoutMs"
+        Outcome.Survived, Outcome.NoTests -> null
+    }
 
 private fun Outcome.toResult(mutant: Mutant): MutantResult =
     when (this) {

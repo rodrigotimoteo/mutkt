@@ -13,3 +13,4 @@ One file per decision: `NNNN-title.md` with Context, Decision, Consequences. Sou
 | 0007 | KMP scope | ROD-136 | later |
 | 0008 | Forked JVM pool instead of WorkerExecutor | ROD-104 | accepted (autopilot, owner to confirm) |
 | 0009 | Single release pipeline | ROD-121 | accepted (autopilot, owner to confirm) |
+| 0010 | Per-test coverage selects each mutant's tests; amends NO_COVERAGE of 0002 | ROD-237 | accepted (autopilot, owner to confirm) |

@@ -40,6 +40,7 @@ class RunMutationAnalysisTest {
     ) = RunMutationAnalysis(
         FakeClassSource(mutants.map { it.className }.distinct().map(::classFile)),
         generator,
+        FakeInstrumenter(),
         executor,
         writer,
         AnalysisConfig(filters, 7.seconds, parallelism),

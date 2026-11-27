@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutkt.application.AnalysisConfig
 import com.github.rodrigotimoteo.mutkt.application.ClassFilters
 import com.github.rodrigotimoteo.mutkt.application.RunMutationAnalysis
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
+import com.github.rodrigotimoteo.mutkt.asm.AsmCoverageInstrumenter
 import com.github.rodrigotimoteo.mutkt.asm.AsmMutantGenerator
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
@@ -61,6 +62,7 @@ class EndToEndTest {
             RunMutationAnalysis(
                 FakeClassSource(production),
                 AsmMutantGenerator(MVP_OPERATORS, ::error, ::systemClass),
+                AsmCoverageInstrumenter(::systemClass),
                 executor,
                 ConsoleReportWriter(console, FileSourceLookup(listOf(sources))),
                 AnalysisConfig(ClassFilters(), 60.seconds, parallelism = 2),

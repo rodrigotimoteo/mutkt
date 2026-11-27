@@ -16,3 +16,4 @@ A child JVM that exits after it reported `Started` (ADR 0008) is KILLED, as PIT 
 - A mutant killed by a JVM exit names no test; any `System.exit` reached while the tests run counts as detected.
 - A baseline whose child exits fails the run with `the test JVM exited with code <N> on the original classes`.
 - Reports (ADR 0003) use the same statuses and score.
+- ADR 0010 widens NO_COVERAGE to a mutant no test class reaches, which is not run.

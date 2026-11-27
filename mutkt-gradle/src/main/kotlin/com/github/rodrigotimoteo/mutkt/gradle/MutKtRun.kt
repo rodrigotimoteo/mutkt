@@ -6,6 +6,7 @@ import com.github.rodrigotimoteo.mutkt.application.Glob
 import com.github.rodrigotimoteo.mutkt.application.RunMutationAnalysis
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
+import com.github.rodrigotimoteo.mutkt.asm.AsmCoverageInstrumenter
 import com.github.rodrigotimoteo.mutkt.asm.AsmMutantGenerator
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
@@ -34,12 +35,7 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
     val summary = StringBuilder()
     val json = StringBuilder()
     val html = StringBuilder()
-    val lookup = FileSourceLookup(sourceDirs.files.map(File::toPath))
-    val writers = listOf(ConsoleReportWriter(summary, lookup), StrykerReportWriter(json, html, lookup))
-    val writer =
-        object : ReportWriter {
-            override fun write(report: MutationReport) = writers.forEach { it.write(report) }
-        }
+    val writer = reportWriter(summary, json, html)
     // The generator resolves supertypes of the analysed classes, including the ones the filters left out. The compile
     // classpath comes last, so runtime versions win and compileOnly types still resolve for frame computation.
     val compileOnly = compileClasspath.files.map(File::toPath)
@@ -48,11 +44,13 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
         URLClassLoader(urls, null).use { loader ->
             // Built first so an unknown operator id fails before any child JVM could start.
             val generator = generator(loader)
+            val instrumenter = AsmCoverageInstrumenter { name -> loader.classBytes(name) }
+            val source = DirectoryClassSource(production.dir)
             ForkedTestExecutor(forkSettings(projectClasses, tests, dependencies, config.parallelism)).use { executor ->
                 try {
-                    RunMutationAnalysis(DirectoryClassSource(production.dir), generator, executor, writer, config)
+                    RunMutationAnalysis(source, generator, instrumenter, executor, writer, config)
                         // Logged as soon as the baseline ends so a long run shows the hint before its mutants.
-                        .run(onDeadlineCap = { logger.warn(deadlineWarning(it)) })
+                        .run(onDeadlineCap = { logger.warn(deadlineWarning(it)) }, onWarning = { logger.warn(it) })
                 } catch (e: TestExecutionStopped) {
                     throw GradleException(e.message.orEmpty(), e)
                 }
@@ -66,6 +64,18 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
         json.toString(),
         html.toString(),
     )
+}
+
+private fun MutKtTask.reportWriter(
+    summary: Appendable,
+    json: Appendable,
+    html: Appendable,
+): ReportWriter {
+    val lookup = FileSourceLookup(sourceDirs.files.map(File::toPath))
+    val writers = listOf(ConsoleReportWriter(summary, lookup), StrykerReportWriter(json, html, lookup))
+    return object : ReportWriter {
+        override fun write(report: MutationReport) = writers.forEach { it.write(report) }
+    }
 }
 
 private fun MutKtTask.generator(loader: ClassLoader) =
