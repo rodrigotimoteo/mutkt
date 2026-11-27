@@ -8,15 +8,15 @@ import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 internal const val PLAIN_CALC = "class Calc { fun add(a: Int, b: Int) = a + b\nfun sub(a: Int, b: Int) = a - b }"
 
 // Calc with probes the way AsmCoverageInstrumenter adds them (mutkt-junit cannot use mutkt-asm): an array from the
-// registry, reached through the system class loader. add sets probe 0, sub probe 1.
+// registry, reached through the system class loader. add sets probe 0, sub probe 1, both the entry slot (the last).
 private const val PROBED_CALC =
     """
     class Calc {
-        fun add(a: Int, b: Int): Int { hit(0); return a + b }
-        fun sub(a: Int, b: Int): Int { hit(1); return a - b }
+        fun add(a: Int, b: Int): Int { hit(2); hit(0); return a + b }
+        fun sub(a: Int, b: Int): Int { hit(2); hit(1); return a - b }
         private fun hit(index: Int) {
             val registry = ClassLoader.getSystemClassLoader().loadClass("$PROBE_REGISTRY")
-            val probes = registry.getMethod("probes", String::class.java, Integer.TYPE).invoke(null, "Calc", 2)
+            val probes = registry.getMethod("probes", String::class.java, Integer.TYPE).invoke(null, "Calc", 3)
             (probes as BooleanArray)[index] = true
         }
     }

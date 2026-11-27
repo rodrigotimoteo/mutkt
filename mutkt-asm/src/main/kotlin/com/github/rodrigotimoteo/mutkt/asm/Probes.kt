@@ -57,6 +57,12 @@ internal fun MethodNode.insertProbe(
     index: Int,
 ) = at.forEach { instructions.insertBefore(it, probe(owner, index)) }
 
+/** Sets probe [index] of class [owner] first thing on entry, before any instruction a jump could return to. */
+internal fun MethodNode.insertEntryProbe(
+    owner: String,
+    index: Int,
+) = instructions.insert(probe(owner, index))
+
 private fun probe(
     owner: String,
     index: Int,

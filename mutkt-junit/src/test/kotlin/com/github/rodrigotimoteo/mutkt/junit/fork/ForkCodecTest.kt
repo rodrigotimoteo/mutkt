@@ -110,7 +110,12 @@ class ForkCodecTest {
         val probes = listOf(Probe("a.Calc", 0), Probe("a.Calc", 70), Probe("b.Other", 3))
         val tests =
             listOf(
-                TestCoverage(TestId("a.CalcTest"), setOf(probes[1], probes[2]), 1234567.nanoseconds),
+                TestCoverage(
+                    TestId("a.CalcTest"),
+                    setOf(probes[1], probes[2]),
+                    1234567.nanoseconds,
+                    setOf("a.Calc", "c.Plain"),
+                ),
                 TestCoverage(TestId("b.Empty"), emptySet(), 0.nanoseconds),
             )
         val reply = ForkReply.Result(Outcome.Survived, 7L, coverage = Coverage(tests, setOf(probes[0])))

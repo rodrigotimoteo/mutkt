@@ -38,6 +38,8 @@ class JUnitTestExecutorCoverageTest {
         val expected = listOf(TestId("ATest") to setOf(ADD), TestId("BTest") to setOf(SUB), TestId("CTest") to setOf())
         assertEquals(expected, coverage.hits())
         assertEquals(emptySet<Probe>(), coverage.global)
+        val reached = coverage.tests.map { it.test.className to it.reached }
+        assertEquals(listOf("ATest" to setOf("Calc"), "BTest" to setOf("Calc"), "CTest" to setOf()), reached)
     }
 
     @Test

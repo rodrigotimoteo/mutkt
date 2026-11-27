@@ -21,7 +21,6 @@ import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -112,9 +111,6 @@ class EndToEndTest {
                 "empty-returns",
             )
 
-        // Compiler jars (kctfork is the jar named core-<version>) serve compileKotlin only, not the code under test.
-        val COMPILER_JARS = Regex("kotlin-compiler-embeddable|^core-\\d")
-
         // Hand-computed from the fixture, in discovery order (class name, then operator order, then bytecode order).
         // "ifle" in isPositive and "if_icmplt" in grade are what `n > 0` and `score >= 60` compile to (jump to the else
         // branch). The one SURVIVED boundary per method is the weak test (isPositive) or the untested edge (grade 60).
@@ -154,19 +150,5 @@ class EndToEndTest {
                 // Grade returns null; gradesBands
                 "null-returns Grader.grade #0 areturn -> null" to KILLED,
             )
-
-        // The test JVM's jars, as the Gradle task will pass them. Directories are left out on purpose: they hold
-        // this module's own classes and the other modules' build output, while the fixture exists only as bytes.
-        fun runtimeJars(): List<Path> =
-            System
-                .getProperty("java.class.path")
-                .split(File.pathSeparator)
-                .map(Paths::get)
-                .filter(Files::isRegularFile)
-                .filterNot { COMPILER_JARS.containsMatchIn(it.fileName.toString()) }
-
-        // Dependency types (Kotlin stdlib, Jupiter) for frame computation come from the test JVM's own classpath.
-        fun systemClass(internalName: String): ByteArray? =
-            ClassLoader.getSystemResourceAsStream("$internalName.class")?.use { it.readBytes() }
     }
 }
