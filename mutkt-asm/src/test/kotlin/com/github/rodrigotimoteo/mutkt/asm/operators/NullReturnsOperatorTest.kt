@@ -65,13 +65,21 @@ private val SOURCE =
     suspend fun suspendingNothing(): Box? = null
 
     fun maybeUnit(a: Boolean): Unit? = if (a) Unit else null
+    fun anyUnit(): Any = Unit
+    fun anyOrUnit(a: Boolean): Any = if (a) "x" else Unit
+    val unitBlock: suspend () -> Unit = { println("s") }
+    val textBlock: suspend () -> String = { "s" }
     class Person(val name: String)
     """.trimIndent()
 
 class NullReturnsOperatorTest {
     private val classes = compileKotlin(SOURCE)
     private val file = classes.getValue("SourceKt")
-    private val noLookup: Hierarchy = { null }
+
+    // anyOrUnit joins String with kotlin/Unit, so frames need the stdlib from the test classpath.
+    private val classpath: Hierarchy = {
+        ClassLoader.getSystemResourceAsStream("$it.class")?.use { s -> s.readBytes() }
+    }
 
     private fun sites(method: String) = discover(file, NullReturnsOperator).filter { it.methodName == method }
 
@@ -82,7 +90,7 @@ class NullReturnsOperatorTest {
     ): Map<String, ByteArray> {
         val candidates = sites(method)
         val found = candidates.single { it.ordinal == ordinal && (descriptor == null || it.descriptor == descriptor) }
-        return classes + ("SourceKt" to mutate(file, NullReturnsOperator, found, noLookup))
+        return classes + ("SourceKt" to mutate(file, NullReturnsOperator, found, classpath))
     }
 
     private fun verify(bytes: ByteArray) =
@@ -142,7 +150,7 @@ class NullReturnsOperatorTest {
     fun `an instance method mutant is seen as null by its caller`() {
         val greeter = classes.getValue("Greeter")
         val found = discover(greeter, NullReturnsOperator).single { it.methodName == "hi" }
-        val changed = mutate(greeter, NullReturnsOperator, found, noLookup)
+        val changed = mutate(greeter, NullReturnsOperator, found, classpath)
 
         assertEquals("hi", loadAndInvoke(classes, "SourceKt", "callHi"))
         assertNull(loadAndInvoke(classes + ("Greeter" to changed), "SourceKt", "callHi"))
@@ -194,10 +202,40 @@ class NullReturnsOperatorTest {
     }
 
     @Test
+    fun `a return of exactly Unit INSTANCE from an Object method is not a site`() {
+        assertEquals(listOf("()Ljava/lang/Object;"), descriptors(file, "anyUnit"))
+        assertEquals(emptyList<Any>(), sites("anyUnit"))
+    }
+
+    @Test
+    fun `the trailing Unit of a suspend lambda is not a site`() {
+        val block = classes.getValue("SourceKt\$unitBlock\$1")
+        assertEquals(listOf("(Ljava/lang/Object;)Ljava/lang/Object;"), descriptors(block, "invokeSuspend"))
+        val found = discover(block, NullReturnsOperator).filter { it.methodName == "invokeSuspend" }
+
+        assertEquals(emptyList<Any>(), found)
+    }
+
+    @Test
+    fun `a suspend lambda returning a value is still a site`() {
+        val block = classes.getValue("SourceKt\$textBlock\$1")
+        val found = discover(block, NullReturnsOperator).single { it.methodName == "invokeSuspend" }
+
+        assertEquals("", verify(mutate(block, NullReturnsOperator, found, classpath)))
+    }
+
+    @Test
+    fun `a Unit arm merging with another value is still a site`() {
+        assertEquals(1, sites("anyOrUnit").size)
+        assertEquals("x", loadAndInvoke(classes, "SourceKt", "anyOrUnit", true))
+        assertNull(loadAndInvoke(mutant("anyOrUnit"), "SourceKt", "anyOrUnit", true))
+    }
+
+    @Test
     fun `a Kotlin property getter is a site`() {
         val person = classes.getValue("Person")
         val found = discover(person, NullReturnsOperator).single()
-        val changed = mutate(person, NullReturnsOperator, found, noLookup)
+        val changed = mutate(person, NullReturnsOperator, found, classpath)
 
         assertEquals("getName", found.methodName)
         assertEquals("", verify(changed))
