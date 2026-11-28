@@ -56,7 +56,8 @@ class DataClassMembersTest {
                 .flatMap { discover(classes.getValue("Plain"), it) }
                 .filter { it.methodName == "copy" }
 
-        assertEquals(setOf("(I)LPlain;", "()LPlain;"), copies.map { it.descriptor }.toSet())
+        // kotlinc 2.4 emits the no-argument overload without line numbers, so it is generated code with no sites.
+        assertEquals(setOf("(I)LPlain;"), copies.map { it.descriptor }.toSet())
     }
 
     // Same lineless members as a data class, but without kotlin.Metadata the class is not Kotlin's.

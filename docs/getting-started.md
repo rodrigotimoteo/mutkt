@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- JDK 17 or 21, Gradle 8.10 or later, including 9.x.
+- JDK 17 or 21, Gradle 8.11 or later, including 9.x.
 - The `java`, `kotlin("jvm")` or an Android plugin (AGP 8.4 to 9.x, see [Android](#android)); MutKt fails the build without one.
 - Tests on the JUnit Platform. Jupiter runs by default; JUnit 4 tests need `engines` (see [dsl.md](dsl.md)).
 - A green test suite: MutKt runs it once on the original classes first and stops if anything fails.
@@ -48,7 +48,7 @@ If the launcher cannot be resolved (offline, for instance), the mutants run on t
 ./gradlew mutkt
 ```
 
-MutKt mutates the `main` classes with the six default operators and runs the `test` classes against each mutant, in child JVMs set up like the `test` task. The build log shows the counts per status, the score, a table per class and every survivor with its source line:
+MutKt mutates the `main` classes with the six default operators and runs the `test` classes against each mutant, in child JVMs set up like the `test` task. The build log shows the counts per status, the score, a table per class and the survivors grouped by method, with their source lines, covering test classes and a hint per operator:
 
 ```text
 Mutation report
@@ -58,6 +58,7 @@ Mutants: 16
   TIMEOUT      1
   NO_COVERAGE  0
   ERROR        0
+Killed 13 (assertions 11, exceptions 2)
 Score: 87.5%
 ```
 
@@ -71,13 +72,41 @@ All in `build/reports/mutkt/`, rewritten on every run (a run that fails before s
 |---|---|
 | `mutation-report.html` | One offline page: source with each mutant and its status |
 | `mutation-report.json` | Stryker mutation-testing-elements schema 2, sources included |
+| `mutation-report.sarif` | SARIF 2.1.0: survivors and uncovered mutants at their source lines, for code scanning |
 | `mutkt.txt` | The summary printed in the build log |
 
 The task is up to date until classes, sources, the test classpath or the settings change; an up-to-date run prints nothing.
 
+## GitHub Actions
+
+On a GitHub runner (`GITHUB_ACTIONS=true`) the task logs the first 50 survivors as warning annotations, which show on the pull request diff; an up-to-date run logs none. To list survivors and uncovered mutants under code scanning alerts too, upload the SARIF file:
+
+```yaml
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: ./gradlew mutkt
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: build/reports/mutkt/mutation-report.sarif
+          category: mutkt
+```
+
+`if: always()` uploads the report when `failBelowScore` fails the build; a red baseline writes no report, so that step fails too. Paths in the file are relative to the checkout (`GITHUB_WORKSPACE`), so a module in a subdirectory works as is: point `sarif_file` at that module's `build/reports/mutkt/`, and give each module's upload its own `category`.
+
 ## Android
 
-MutKt runs on Android application and library modules (`com.android.application`, `com.android.library`) with AGP 8.4 through 9.x and Gradle 8.10 or later, including 9.x (AGP 9 itself needs Gradle 9.1 or later). CI tests AGP 8.4.2, 8.13.2 and 9.5.3.
+MutKt runs on Android application and library modules (`com.android.application`, `com.android.library`) with AGP 8.4 through 9.x and Gradle 8.11 or later, including 9.x (AGP 9 itself needs Gradle 9.1 or later). CI tests AGP 8.4.2, 8.13.2 and 9.5.3.
 
 It mutates the classes of one variant (Kotlin and Java, as AGP compiled them) and runs that variant's local unit tests (`src/test`) against each mutant. The test classes, classpath (Android library modules and AAR dependencies included) and JVM settings (`unitTests.all { }`) come from the variant's unit-test task, `test<Variant>UnitTest`; MutKt reads them without running that task.
 

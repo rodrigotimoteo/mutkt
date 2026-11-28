@@ -1,24 +1,30 @@
 [versions]
-kotlin = "2.1.10"
-asm = "9.8"
+kotlin = "2.4.20"
+# The Kotlin Android plugin of agpTest and the Android sample: KGP 2.4 needs AGP 8.5.2, above the minimum AGP below.
+kotlinAndroid = "2.1.10"
+# The stdlib the published modules depend on: the one of their apiVersion 2.0 (mutkt.published-library).
+kotlinStdlib = "2.0.21"
+asm = "9.11.1"
 junit = "5.10.2"
 # A second Jupiter/Platform line, only for the opt-in forked-executor compatibility test (mutkt-junit).
 junitOther = "5.11.4"
-mockk = "1.14.9"
+mockk = "1.14.12"
 ktlintGradle = "12.3.0"
 ktlint = "1.5.0"
 detekt = "1.23.8"
-kover = "0.9.1"
-kctfork = "0.7.1"
-konsist = "0.17.3"
-coroutines = "1.10.2"
+# The Kotlin that detekt 1.23.8 is built with; see mutkt.quality.
+detektKotlin = "2.0.21"
+kover = "0.9.11"
+kctfork = "0.15.0"
+konsist = "0.18.1"
+coroutines = "1.11.0"
 # Test scope only: parses the JSON reports the writers produce.
-jackson = "2.21.3"
+jackson = "2.23.0"
 # Test support only (mutkt-testing): the runtime Compose fixtures compile against; its Kotlin metadata must stay
 # readable by the kotlin version above.
 composeRuntime = "1.7.3"
 pluginPublish = "2.2.1"
-dokka = "2.1.0"
+dokka = "2.3.0"
 # The minimum supported AGP (docs/adr/0006-android.md): compiled against, never a newer one.
 agp = "8.4.2"
 # Only the Android sample (samples/android).
@@ -29,7 +35,7 @@ junit4 = "4.13.2"
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintGradle" }
 pluginPublish = { id = "com.gradle.plugin-publish", version.ref = "pluginPublish" }
 android-library = { id = "com.android.library", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlinAndroid" }
 
 [libraries]
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -47,6 +53,7 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 ktlint-gradle-plugin = { module = "org.jlleitschuh.gradle:ktlint-gradle", version.ref = "ktlintGradle" }
+kotlin-stdlib-detekt = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "detektKotlin" }
 detekt-gradle-plugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detekt" }
 konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 kover-gradle-plugin = { module = "org.jetbrains.kotlinx:kover-gradle-plugin", version.ref = "kover" }

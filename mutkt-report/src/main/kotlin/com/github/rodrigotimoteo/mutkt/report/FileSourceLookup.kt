@@ -30,6 +30,12 @@ public class FileSourceLookup(
             Files.newInputStream(file).reader(StandardCharsets.UTF_8).use { it.readLines().joinToString("\n") }
         }
 
+    /** The file [sourceText] reads, or null when it is not found. */
+    public fun sourcePath(
+        className: String,
+        sourceFile: String?,
+    ): Path? = locate(className, sourceFile)
+
     private fun locate(
         className: String,
         sourceFile: String?,

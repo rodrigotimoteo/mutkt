@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.application
 import com.github.rodrigotimoteo.mutkt.application.port.Baseline
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
 import com.github.rodrigotimoteo.mutkt.application.port.CoverageInstrumenter
+import com.github.rodrigotimoteo.mutkt.application.port.HistoryEntry
 import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
@@ -25,8 +26,10 @@ import kotlin.time.Duration
 
 /**
  * Discovers mutants, runs the tests that reach each one (all of them when coverage cannot tell) and writes the report.
- * Holds no state between runs.
+ * With [history] it reuses the last run's KILLED, SURVIVED and TIMEOUT results of mutants whose key did not change, and
+ * stores this run's results for the next one.
  */
+@Suppress("LongParameterList")
 public class RunMutationAnalysis(
     private val classSource: ClassSource,
     private val generator: MutantGenerator,
@@ -34,6 +37,7 @@ public class RunMutationAnalysis(
     private val executor: TestExecutor,
     private val writer: ReportWriter,
     private val config: AnalysisConfig,
+    private val history: HistoryReuse? = null,
 ) {
     /**
      * Runs the analysis; [onDeadlineCap] is called once before any mutant when timeoutMs cuts the derived deadline,
@@ -46,6 +50,8 @@ public class RunMutationAnalysis(
         progress: (MutantResult) -> Unit = {},
     ): MutationReport {
         val filters = config.filters
+        // Read first so a corrupt history fails before the baseline.
+        val stored = history?.history?.read()
         val classes = classSource.classes()
         val targets = classes.filter { filters.acceptsClass(it.name) }
         val (mutants, omitted) =
@@ -63,8 +69,12 @@ public class RunMutationAnalysis(
                 .takeIf { needed > config.timeout }
                 ?.also(onDeadlineCap)
         val map = CoverageMap(instrumented.probes, baseline.coverage, config.timeout, minOf(config.timeout, needed))
-        val results = analyse(mutants, map, progress)
-        return MutationReport(results, omitted, cap).also(writer::write)
+        val reuse =
+            history?.let { ResultReuse(stored, it, classes, baseline.coverage, instrumented.unprobed) }
+        val confirmation = KillConfirmation(executor, classes.associate { it.name to it.bytes })
+        val evaluated = analyse(mutants, map, reuse, confirmation, progress)
+        reuse?.let { history?.history?.write(it.next(evaluated)) }
+        return MutationReport(evaluated.map { it.result }, omitted, cap).also(writer::write)
     }
 
     // The green baseline, with coverage when the instrumented classes pass too. Probes must not change behavior, but if
@@ -97,19 +107,23 @@ public class RunMutationAnalysis(
     private fun analyse(
         mutants: List<Mutant>,
         map: CoverageMap,
+        reuse: ResultReuse?,
+        confirmation: KillConfirmation,
         progress: (MutantResult) -> Unit,
-    ): List<MutantResult> {
+    ): List<Keyed> {
         val pool = Executors.newFixedThreadPool(config.parallelism)
         try {
-            val completion = ExecutorCompletionService<IndexedValue<MutantResult>>(pool)
+            val completion = ExecutorCompletionService<IndexedValue<Keyed>>(pool)
             for ((index, mutant) in mutants.withIndex()) {
-                completion.submit(Callable { IndexedValue(index, evaluate(mutant, map.selection(mutant))) })
+                completion.submit(
+                    Callable { IndexedValue(index, evaluate(mutant, map.selection(mutant), reuse, confirmation)) },
+                )
             }
-            val byIndex = mutableMapOf<Int, MutantResult>()
+            val byIndex = mutableMapOf<Int, Keyed>()
             repeat(mutants.size) {
-                val (index, result) = completion.take().getOrRethrowCause()
-                byIndex[index] = result
-                progress(result)
+                val (index, keyed) = completion.take().getOrRethrowCause()
+                byIndex[index] = keyed
+                progress(keyed.result)
             }
             return mutants.indices.map { byIndex.getValue(it) }
         } finally {
@@ -123,25 +137,46 @@ public class RunMutationAnalysis(
     private fun evaluate(
         mutant: Mutant,
         selection: Selection,
+        reuse: ResultReuse?,
+        confirmation: KillConfirmation,
+    ): Keyed {
+        val covering = selection.tests?.map { it.className }
+        var key: String? = null
+        val result =
+            try {
+                if (covering?.isEmpty() == true) {
+                    MutantResult(mutant, MutantStatus.NO_COVERAGE, coveredBy = covering)
+                } else {
+                    val bytes = generator.materialize(mutant)
+                    key = reuse?.key(mutant, bytes, selection.tests)
+                    // A reused kill was confirmed when it was stored.
+                    key?.let { reuse?.reusable(mutant.id, it) }?.toResult(mutant, covering)
+                        ?: runFresh(mutant, bytes, selection, confirmation)
+                }
+            } catch (e: TestExecutionStopped) {
+                throw e
+            } catch (e: Exception) {
+                val detail = cause(e.message?.takeIf(String::isNotBlank) ?: e.toString())
+                MutantResult(mutant, MutantStatus.ERROR, detail, coveredBy = covering)
+            } catch (e: LinkageError) {
+                // The message of a LinkageError is often just a class name.
+                MutantResult(mutant, MutantStatus.ERROR, cause(e.toString()), coveredBy = covering)
+            }
+        return Keyed(result, key)
+    }
+
+    private fun runFresh(
+        mutant: Mutant,
+        bytes: ByteArray,
+        selection: Selection,
+        confirmation: KillConfirmation,
     ): MutantResult {
         val covering = selection.tests?.map { it.className }
-        return try {
-            if (covering?.isEmpty() == true) {
-                MutantResult(mutant, MutantStatus.NO_COVERAGE, coveredBy = covering)
-            } else {
-                executor
-                    .run(mutant, generator.materialize(mutant), selection.deadline, selection.tests)
-                    .toResult(mutant, covering)
-            }
-        } catch (e: TestExecutionStopped) {
-            throw e
-        } catch (e: Exception) {
-            val detail = cause(e.message?.takeIf(String::isNotBlank) ?: e.toString())
-            MutantResult(mutant, MutantStatus.ERROR, detail, coveredBy = covering)
-        } catch (e: LinkageError) {
-            // The message of a LinkageError is often just a class name.
-            MutantResult(mutant, MutantStatus.ERROR, cause(e.toString()), coveredBy = covering)
-        }
+        val outcome = executor.run(mutant, bytes, selection.deadline, selection.tests)
+        return confirmation
+            .flakyKiller(outcome, mutant, selection.deadline)
+            ?.let { MutantResult(mutant, MutantStatus.ERROR, "flaky test $it", coveredBy = covering) }
+            ?: outcome.toResult(mutant, covering)
     }
 }
 
@@ -197,12 +232,19 @@ private fun problem(
         Outcome.Survived, Outcome.NoTests -> null
     }
 
+private fun HistoryEntry.toResult(
+    mutant: Mutant,
+    covering: List<String>?,
+): MutantResult =
+    MutantResult(mutant, status, killedBy = killedBy, coveredBy = covering, killKind = killKind, reused = true)
+
 private fun Outcome.toResult(
     mutant: Mutant,
     covering: List<String>?,
 ): MutantResult =
     when (this) {
-        is Outcome.Killed -> MutantResult(mutant, MutantStatus.KILLED, killedBy = by, coveredBy = covering)
+        is Outcome.Killed ->
+            MutantResult(mutant, MutantStatus.KILLED, killedBy = by, coveredBy = covering, killKind = kind)
         Outcome.Survived -> MutantResult(mutant, MutantStatus.SURVIVED, coveredBy = covering)
         Outcome.Timeout -> MutantResult(mutant, MutantStatus.TIMEOUT, coveredBy = covering)
         Outcome.NoTests -> MutantResult(mutant, MutantStatus.NO_COVERAGE, coveredBy = emptyList())

@@ -27,7 +27,7 @@
             }
           },
           "status": "Killed",
-          "statusReason": "Killed by demo.CalcTest.adds()",
+          "statusReason": "Killed by demo.CalcTest.adds() (assertion)",
           "killedBy": [
             "demo.CalcTest.adds()"
           ],
@@ -83,6 +83,7 @@
             }
           },
           "status": "Survived",
+          "statusReason": "No test checks what happens on both sides of the condition",
           "coveredBy": [
             "demo.MaxTest",
             "demo.CalcTest"
@@ -119,7 +120,8 @@
               "column": 2
             }
           },
-          "status": "Survived"
+          "status": "Survived",
+          "statusReason": "No test asserts on the computed value"
         }
       ]
     },
@@ -141,7 +143,8 @@
               "column": 2
             }
           },
-          "status": "Survived"
+          "status": "Survived",
+          "statusReason": "No test asserts on the computed value"
         }
       ]
     }

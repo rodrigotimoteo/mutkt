@@ -6,7 +6,7 @@ Mutation testing for Kotlin/JVM and Android. Add the Gradle plugin, run your exi
 
 ## Quick start
 
-Supported: JDK 17 and 21, Gradle 8.10 or later (including 9.x), and Android unit tests on AGP 8.4 through 9.x ([Android setup](docs/getting-started.md#android)). Instrumented Android tests are not supported.
+Supported: JDK 17 and 21, Gradle 8.11 or later (including 9.x), and Android unit tests on AGP 8.4 through 9.x ([Android setup](docs/getting-started.md#android)). Instrumented Android tests are not supported.
 
 In `build.gradle.kts` of a project that applies `kotlin("jvm")`, `java` or an Android plugin and has JUnit 5 tests:
 
@@ -20,7 +20,7 @@ plugins {
 ./gradlew mutkt
 ```
 
-The score and the surviving mutants are printed in the build log. Reports land in `build/reports/mutkt/`: `mutation-report.html` (one offline page), `mutation-report.json` (Stryker schema) and `mutkt.txt` (the printed summary).
+The score and the surviving mutants are printed in the build log. Reports land in `build/reports/mutkt/`: `mutation-report.html` (one offline page), `mutation-report.json` (Stryker schema), `mutation-report.sarif` (SARIF 2.1.0, for GitHub code scanning) and `mutkt.txt` (the printed summary).
 
 ## Benchmark
 

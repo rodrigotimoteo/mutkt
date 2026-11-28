@@ -2,23 +2,34 @@ package com.github.rodrigotimoteo.mutkt.report
 
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
+import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import java.util.Locale
 
-/** Writes a plain-text summary, per-class table and survivor list to [out]. */
+private const val STATUS_WIDTH = 13
+private const val LINE_WIDTH = 4
+private const val MAX_ERRORS = 10
+private const val MAX_METHODS = 10
+private const val MAX_SURVIVORS_PER_METHOD = 5
+private const val MAX_TESTS = 3
+private const val PERCENT = 100
+
+/** Writes a plain-text summary, per-class table and the survivors grouped by method, with hints, to [out]. */
 public class ConsoleReportWriter(
     private val out: Appendable,
     private val sources: SourceLookup,
 ) : ReportWriter {
     override fun write(report: MutationReport) {
         out.appendLine("Mutation report")
-        out.appendLine("Mutants: ${report.results.size}")
+        out.appendLine("Mutants: ${report.results.size}${if (report.reused == 0) "" else " (${report.reused} reused)"}")
         MutantStatus.entries.forEach { status ->
             val count = report.results.count { it.status == status }
             out.appendLine("  ${status.name.padEnd(STATUS_WIDTH)}$count")
         }
+        killSplit(report)?.let { out.appendLine(it) }
         out.appendLine("Score: ${percent(report.score)}${omission(report)}")
         report.deadlineCap?.let { out.appendLine(deadlineWarning(it)) }
         classTable(report)
@@ -42,26 +53,44 @@ public class ConsoleReportWriter(
     }
 
     private fun survivors(report: MutationReport) {
-        val survivors =
-            report.results
-                .filter { it.status == MutantStatus.SURVIVED }
-                .sortedWith(
-                    compareBy(
-                        { it.mutant.className },
-                        { it.mutant.line ?: Int.MAX_VALUE },
-                        { it.mutant.id.toString() },
-                    ),
-                )
-        if (survivors.isEmpty()) return
+        val groups = survivorsByMethod(report.results)
+        if (groups.isEmpty()) return
+        val shown = groups.take(MAX_METHODS)
+        val rest = groups.drop(MAX_METHODS)
         out.appendLine()
-        out.appendLine("Survivors (${survivors.size})")
-        survivors.forEach { survivor ->
+        out.appendLine("Survivors (${groups.sumOf { it.survivors.size }} in ${count(groups.size, "method")})")
+        shown.forEach(::method)
+        if (rest.isNotEmpty()) {
+            val survivors = count(rest.sumOf { it.survivors.size }, "survivor")
+            out.appendLine("... and ${count(rest.size, "more method")} ($survivors) in the HTML report")
+        }
+        hints(shown.flatMap { it.survivors.take(MAX_SURVIVORS_PER_METHOD) })
+    }
+
+    private fun method(group: MethodSurvivors) {
+        val survivors = count(group.survivors.size, "survivor")
+        out.appendLine("${group.method}  $survivors" + tests(group.coveredBy).orEmpty())
+        group.survivors.take(MAX_SURVIVORS_PER_METHOD).forEach { survivor ->
             val mutant = survivor.mutant
-            val location = mutant.line?.let { "${mutant.className}:$it" } ?: mutant.className
-            val method = "${mutant.className}.${mutant.methodName}${mutant.methodDescriptor}"
-            out.appendLine("$method ($location)  ${mutant.operator}  ${mutant.description}")
+            val line = mutant.line?.let { "line $it" } ?: "no line"
+            out.appendLine("  $line  ${mutant.operator}  ${mutant.description}")
             mutant.line?.let { snippet(mutant, it) }
         }
+        val hidden = group.survivors.size - MAX_SURVIVORS_PER_METHOD
+        if (hidden > 0) out.appendLine("  ... and $hidden more")
+    }
+
+    private fun hints(survivors: List<MutantResult>) {
+        val hints =
+            survivors
+                .map { it.mutant.operator }
+                .distinct()
+                .sortedBy { it.value }
+                .mapNotNull { operator -> operatorHint(operator)?.let { "  $operator: $it" } }
+        if (hints.isEmpty()) return
+        out.appendLine()
+        out.appendLine("Hints")
+        hints.forEach { out.appendLine(it) }
     }
 
     private fun errors(report: MutationReport) {
@@ -80,29 +109,47 @@ public class ConsoleReportWriter(
         for (n in line - 1..line + 1) {
             val text = sources.lineText(mutant.className, mutant.sourceFile, n) ?: continue
             val marker = if (n == line) ">" else " "
-            out.appendLine("  $marker ${n.toString().padStart(LINE_WIDTH)} | $text")
+            out.appendLine("    $marker ${n.toString().padStart(LINE_WIDTH)} | $text")
         }
     }
-
-    private fun detected(report: MutationReport): String {
-        val found = report.results.count { it.status == MutantStatus.KILLED || it.status == MutantStatus.TIMEOUT }
-        return "$found/${report.results.count { it.status != MutantStatus.ERROR }}"
-    }
-
-    private fun omission(report: MutationReport): String =
-        if (report.omitted == 0) "" else " (${report.results.size} evaluated, ${report.omitted} omitted by the cap)"
-
-    private fun percent(score: Double?): String =
-        score?.let { String.format(Locale.ROOT, "%.1f%%", it * PERCENT) } ?: "n/a"
 
     private fun Appendable.appendLine(text: String = "") {
         append(text).append('\n')
     }
+}
 
-    private companion object {
-        const val STATUS_WIDTH = 13
-        const val LINE_WIDTH = 4
-        const val MAX_ERRORS = 10
-        const val PERCENT = 100
+// A survivor always had a test run, so an empty list is not expected; it gets no clause rather than an empty one.
+private fun tests(coveredBy: List<String>?): String? =
+    when {
+        coveredBy == null -> ", covered by the whole suite"
+        coveredBy.isEmpty() -> null
+        coveredBy.size > MAX_TESTS ->
+            ", covered by ${coveredBy.take(MAX_TESTS).joinToString(", ")} and ${coveredBy.size - MAX_TESTS} more"
+        else -> ", covered by ${coveredBy.joinToString(", ")}"
+    }
+
+private fun count(
+    n: Int,
+    noun: String,
+): String = if (n == 1) "1 $noun" else "$n ${noun}s"
+
+private fun percent(score: Double?): String = score?.let { String.format(Locale.ROOT, "%.1f%%", it * PERCENT) } ?: "n/a"
+
+private fun detected(report: MutationReport): String {
+    val found = report.results.count { it.status == MutantStatus.KILLED || it.status == MutantStatus.TIMEOUT }
+    return "$found/${report.results.count { it.status != MutantStatus.ERROR }}"
+}
+
+// A kill without a recorded kind is left out of the split rather than guessed.
+private fun killSplit(report: MutationReport): String? {
+    val assertions = report.results.count { it.killKind == KillKind.ASSERTION }
+    val exceptions = report.results.count { it.killKind == KillKind.EXCEPTION }
+    return if (assertions + exceptions == 0) {
+        null
+    } else {
+        "Killed ${assertions + exceptions} (assertions $assertions, exceptions $exceptions)"
     }
 }
+
+private fun omission(report: MutationReport): String =
+    if (report.omitted == 0) "" else " (${report.results.size} evaluated, ${report.omitted} omitted by the cap)"

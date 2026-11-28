@@ -5,10 +5,11 @@ plugins {
 description = "Isolated JUnit Platform test executor of MutKt."
 
 // Jupiter and Platform of a second version line, as a project on other JUnit than the bundled one would have them.
-val otherPlatform by configurations.creating {
-    isCanBeConsumed = false
-    isCanBeResolved = true
-}
+val otherPlatform =
+    configurations.create("otherPlatform") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+    }
 
 dependencies {
     implementation(project(":mutkt-core"))
@@ -38,7 +39,7 @@ kover {
 }
 
 // Needs the network to resolve the second version line, so it is not in check; CI runs it as its own job.
-val platformCompatTest by tasks.registering(Test::class) {
+tasks.register<Test>("platformCompatTest") {
     description = "Runs the forked executor on a second JUnit Platform version (libs.versions.junitOther)."
     group = "verification"
     val testSources = sourceSets.test.get()

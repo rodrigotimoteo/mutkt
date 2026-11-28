@@ -200,7 +200,7 @@ public class JUnitTestExecutor(
             coverage?.testClass = type.name
             if (coverage == null) launcher.execute(plan, listener) else launcher.execute(plan, listener, coverage)
             testsStarted += listener.started
-            listener.killedBy?.let { return Outcome.Killed(it, listener.cause) }
+            listener.killedBy?.let { return Outcome.Killed(it, listener.kind, listener.cause, TestId(type.name)) }
         }
         return if (testsStarted == 0) Outcome.NoTests else Outcome.Survived
     }

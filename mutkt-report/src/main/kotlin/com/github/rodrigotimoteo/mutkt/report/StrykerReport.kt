@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.report
 
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
@@ -17,8 +18,8 @@ internal fun strykerReport(
     buildMap {
         put("schemaVersion", SCHEMA_VERSION)
         put("thresholds", mapOf("high" to HIGH_THRESHOLD, "low" to LOW_THRESHOLD))
-        // The schema leaves config free-form; this keeps the cap omission and a capped deadline visible outside the
-        // console summary.
+        // The schema leaves config free-form; this keeps the cap omission, a capped deadline and the results reused
+        // from history visible outside the console summary.
         config(report).takeIf { it.isNotEmpty() }?.let { put("config", it) }
         put(
             "files",
@@ -41,6 +42,7 @@ private fun testFiles(report: MutationReport): Map<String, Any> =
 private fun config(report: MutationReport): Map<String, Any> =
     buildMap {
         if (report.omitted > 0) put("omittedByCap", report.omitted)
+        if (report.reused > 0) put("reused", report.reused)
         report.deadlineCap?.let { cap ->
             put("deadlineCappedAtMs", cap.timeout.inWholeMilliseconds)
             put("baselineMs", cap.baseline.inWholeMilliseconds)
@@ -49,7 +51,7 @@ private fun config(report: MutationReport): Map<String, Any> =
     }
 
 // A class without a SourceFile attribute has no file to show; its path is the class name so it still gets an entry.
-private fun filePath(result: MutantResult): String {
+internal fun filePath(result: MutantResult): String {
     val mutant = result.mutant
     val directory = mutant.className.substringBeforeLast('.', "").replace('.', '/')
     return mutant.sourceFile?.let { if (directory.isEmpty()) it else "$directory/$it" }
@@ -85,11 +87,22 @@ private fun mutant(
         put("description", mutant.description)
         put("location", location(mutant.line, lines))
         put("status", status(result.status))
-        (result.detail ?: result.killedBy?.let { "Killed by $it" })?.let { put("statusReason", it) }
+        (
+            result.detail ?: result.killedBy?.let {
+                "Killed by $it${kind(result)}"
+            } ?: hint(result)
+        )?.let { put("statusReason", it) }
         result.killedBy?.let { put("killedBy", listOf(it)) }
         result.coveredBy?.let { put("coveredBy", it) }
     }
 }
+
+// The viewer shows statusReason with the mutant, so a survivor's hint lands there without custom HTML.
+private fun hint(result: MutantResult): String? =
+    result.mutant.operator
+        .takeIf { result.status == MutantStatus.SURVIVED }
+        ?.let(::operatorHint)
+        ?.replaceFirstChar(Char::uppercaseChar)
 
 // Bytecode only knows the line, so the mutant spans that line's text, at least one column (end is exclusive). A
 // missing line, a missing source (one empty line) or a line past the end is clamped so the viewer can place it.
@@ -105,6 +118,13 @@ private fun location(
         "end" to mapOf("line" to clamped, "column" to maxOf(start + 1, text.length + 1)),
     )
 }
+
+private fun kind(result: MutantResult): String =
+    when (result.killKind) {
+        KillKind.ASSERTION -> " (assertion)"
+        KillKind.EXCEPTION -> " (exception)"
+        null -> ""
+    }
 
 private fun status(status: MutantStatus): String =
     when (status) {

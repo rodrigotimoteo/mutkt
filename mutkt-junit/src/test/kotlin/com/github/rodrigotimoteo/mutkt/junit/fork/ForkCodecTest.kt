@@ -5,6 +5,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.Probe
 import com.github.rodrigotimoteo.mutkt.application.port.TestCoverage
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -118,7 +119,12 @@ class ForkCodecTest {
                 ),
                 TestCoverage(TestId("b.Empty"), emptySet(), 0.nanoseconds),
             )
-        val reply = ForkReply.Result(Outcome.Survived, 7L, coverage = Coverage(tests, setOf(probes[0])))
+        val reply =
+            ForkReply.Result(
+                Outcome.Survived,
+                7L,
+                coverage = Coverage(tests, setOf(probes[0]), setOf("d.Discovery")),
+            )
         assertEquals(reply, roundTrip(reply))
     }
 
@@ -166,9 +172,11 @@ class ForkCodecTest {
     @Test
     fun `every outcome round-trips`() {
         listOf(
-            Outcome.Killed("a.CalcTest.adds"),
-            Outcome.Killed(""),
-            Outcome.Killed("a.CalcTest.adds", "java.lang.AssertionError: expected: <5>"),
+            Outcome.Killed("a.CalcTest.adds", KillKind.EXCEPTION),
+            Outcome.Killed("", KillKind.EXCEPTION),
+            Outcome.Killed("a.CalcTest.adds", KillKind.ASSERTION, "java.lang.AssertionError: expected: <5>"),
+            Outcome.Killed("a.CalcTest.adds", KillKind.ASSERTION),
+            Outcome.Killed("a.CalcTest.adds", KillKind.ASSERTION, null, TestId("a.CalcTest")),
             Outcome.Survived,
             Outcome.NoTests,
             Outcome.LoadError("bad é class"),

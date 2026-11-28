@@ -121,7 +121,18 @@ public abstract class MutKtTask : DefaultTask() {
     @get:Input
     public abstract val testJavaExecutable: Property<String>
 
-    /** Receives `mutkt.txt` (the console summary), `mutation-report.json` and `mutation-report.html`. */
+    /** Directory the SARIF and annotation paths are relative to: `GITHUB_WORKSPACE` when set, else the project. */
+    @get:Input
+    public abstract val repositoryRoot: Property<String>
+
+    /** Whether survivors are logged as GitHub Actions annotations (`GITHUB_ACTIONS=true`). */
+    @get:Internal
+    public abstract val githubAnnotations: Property<Boolean>
+
+    /**
+     * Receives `mutkt.txt` (the console summary), `mutation-report.json`, `mutation-report.html` and
+     * `mutation-report.sarif`.
+     */
     @get:OutputDirectory
     public abstract val reportsDir: DirectoryProperty
 
@@ -129,16 +140,16 @@ public abstract class MutKtTask : DefaultTask() {
     @TaskAction
     public fun analyse() {
         val dir = reportsDir.get().asFile.also(File::mkdirs)
-        val reports = listOf("mutkt.txt", "mutation-report.json", "mutation-report.html").map { File(dir, it) }
+        val names = listOf("mutkt.txt", "mutation-report.json", "mutation-report.html", "mutation-report.sarif")
+        val reports = names.map { File(dir, it) }
         // A run that fails before writing (a red baseline) must not leave the last run's reports looking current.
         reports.forEach(File::delete)
-        val (file, json, html) = reports
         val result = runAnalysis()
         val (summary, score) = result
-        file.writeText(summary)
-        json.writeText(result.json)
-        html.writeText(result.html)
+        val texts = listOf(summary, result.json, result.html, result.sarif)
+        reports.zip(texts).forEach { (file, text) -> file.writeText(text) }
         if (consoleReport.get()) logger.lifecycle(summary.trimEnd())
+        if (githubAnnotations.get()) result.annotations.lines().forEach { if (it.isNotEmpty()) logger.warn(it) }
         // Every error is a mutant the tests never ran against: not a clean build.
         if (result.mutants > 0 && result.errors == result.mutants) {
             throw GradleException("All ${result.mutants} mutants ended in ERROR: none loaded or ran, see the report")
@@ -147,6 +158,6 @@ public abstract class MutKtTask : DefaultTask() {
             val note = if (failBelowScore.isPresent) "; failBelowScore is not applied" else ""
             logger.warn("No mutants were generated or scored, so there is no mutation score$note")
         }
-        thresholdFailure(score, failBelowScore.orNull, file.path)?.let { throw GradleException(it) }
+        thresholdFailure(score, failBelowScore.orNull, reports.first().path)?.let { throw GradleException(it) }
     }
 }

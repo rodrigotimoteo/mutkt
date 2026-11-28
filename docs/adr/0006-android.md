@@ -72,7 +72,7 @@ Other:
 | ROD-128 | Default exclude globs (R, BuildConfig, Hilt/Dagger, ViewBinding/DataBinding, Compose singletons), applied only when an Android plugin is present, replaceable and extendable; one match and one non-match test per glob | Annotation-based detection |
 | ROD-129 | `samples/android` on a local publication, not `includeBuild`: Gradle 9.6 can't build the repo from source with Kotlin 2.1; Robolectric test with killed and surviving mutants; CI job; docs "Android" section | |
 
-Instrumented tests (`connectedAndroidTest`, devices, emulators) are out of scope for P5 and have no planned task.
+Instrumented tests (`connectedAndroidTest`, devices, emulators) are out of scope for P5 and have no planned task. Their status after P5 is decided in [0012](0012-android-instrumented-tests.md): out of scope for 0.6.0.
 
 ## KMP android target (P7)
 
@@ -85,18 +85,18 @@ Instrumented tests (`connectedAndroidTest`, devices, emulators) are out of scope
 
 - Incubating APIs: `compileClasspath`, `configureTestTask` and `withTestTaskProvider` may change. Only `compileClasspath` is called; the `latest` CI cell catches breakage.
 - The task name `test<Variant>UnitTest` is a convention, not API.
-- Gradle 9: the plugin's TestKit suite runs on Gradle 9 since ROD-210; the build itself still uses an 8.x wrapper.
+- Gradle 9: the plugin's TestKit suite runs on Gradle 9 since ROD-210, and the build itself on a 9.x wrapper since ROD-222.
 - Android TestKit tests need an Android SDK (`ANDROID_HOME`, preinstalled on GitHub's Ubuntu runners) and network access to google(). They run in their own `agpTest` task in `mutkt-gradle`, like `matrixTest`, excluded from `build` and Kover. They resolve into a fixed TestKit dir, `mutkt-gradle/build/testkit`, whose dependency cache CI keeps between runs.
 
 ## CI (AGP versions tested)
 
 | Cell | AGP | Gradle | JDK |
 |---|---|---|---|
-| min | 8.4.2 | 8.6 | 17, 21 |
+| min | 8.4.2 | 8.11.1 | 17, 21 |
 | latest 8.x | 8.13.2 | 8.14.3 | 17 |
 | latest | 9.5.3 | 9.6.0 | 17, 21 |
 
-A dedicated CI job (`android`) runs `agpTest` on these cells with the runner's Android SDK, passing `-Pmutkt.agp` and `-Pmutkt.agpGradle` (defaults: the `min` cell). ROD-129 runs the sample on `min` and `latest`. The `latest` row moves with each stable AGP; `min` moves only through a new ADR.
+A dedicated CI job (`android`) runs `agpTest` on these cells with the runner's Android SDK, passing `-Pmutkt.agp` and `-Pmutkt.agpGradle` (defaults: the `min` cell). ROD-129 runs the sample on `min` and `latest`. The `latest` row moves with each stable AGP; `min` moves only through a new ADR; its Gradle moved from 8.6 to 8.11.1 with MutKt's minimum Gradle (ADR 0005, amended 2026-11-27).
 
 ## Consequences
 

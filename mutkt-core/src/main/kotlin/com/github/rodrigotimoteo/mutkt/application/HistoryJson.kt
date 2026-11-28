@@ -2,15 +2,16 @@ package com.github.rodrigotimoteo.mutkt.application
 
 import com.github.rodrigotimoteo.mutkt.application.port.History
 import com.github.rodrigotimoteo.mutkt.application.port.HistoryEntry
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 
 /** Version of the history file format; a file of another version is ignored. */
-internal const val HISTORY_FORMAT_VERSION: Int = 1
+internal const val HISTORY_FORMAT_VERSION: Int = 2
 
 /**
  * The history file as a JSON tree of maps, lists, strings and numbers, for any JSON writer:
- * `{"version": 1, "fingerprint": "…", "mutants": [{"id": "…", "key": "…", "status": "KILLED", "killedBy": "…"}]}`,
- * where killedBy is absent unless set.
+ * `{"version": 2, "fingerprint": "…", "mutants": [{"id": "…", "key": "…", "status": "KILLED", "killedBy": "…",
+ * "killKind": "ASSERTION"}]}`, where killedBy and killKind are absent unless set.
  */
 public fun History.toJson(): Map<String, Any?> =
     mapOf(
@@ -19,7 +20,7 @@ public fun History.toJson(): Map<String, Any?> =
         MUTANTS to
             entries.map { entry ->
                 mapOf(ID to entry.mutant, KEY to entry.key, STATUS to entry.status.name) +
-                    listOfNotNull(entry.killedBy?.let { KILLED_BY to it })
+                    listOfNotNull(entry.killedBy?.let { KILLED_BY to it }, entry.killKind?.let { KILL_KIND to it.name })
             },
     )
 
@@ -47,7 +48,10 @@ private fun entry(item: Any?): HistoryEntry {
     require(item is Map<*, *>) { "entry is not an object: $item" }
     val killedBy = item[KILLED_BY]
     require(killedBy == null || killedBy is String) { "entry has a non-text killedBy: $item" }
-    return HistoryEntry(item.string(ID), item.string(KEY), MutantStatus.valueOf(item.string(STATUS)), killedBy)
+    val killKind = item[KILL_KIND]?.let { kind -> KillKind.entries.firstOrNull { it.name == kind } }
+    require(killKind != null || item[KILL_KIND] == null) { "entry has an unknown killKind: $item" }
+    val status = MutantStatus.valueOf(item.string(STATUS))
+    return HistoryEntry(item.string(ID), item.string(KEY), status, killedBy, killKind)
 }
 
 private fun Map<*, *>.string(name: String): String =
@@ -60,3 +64,4 @@ private const val ID = "id"
 private const val KEY = "key"
 private const val STATUS = "status"
 private const val KILLED_BY = "killedBy"
+private const val KILL_KIND = "killKind"

@@ -30,6 +30,16 @@ class FileSourceLookupTest {
     }
 
     @Test
+    fun `names the file it reads, or null when there is none`() {
+        source(dir, "com/acme/Foo.kt", "one\n")
+        val lookup = FileSourceLookup(listOf(dir))
+
+        assertEquals(dir.toAbsolutePath().resolve("com/acme/Foo.kt"), lookup.sourcePath("com.acme.Foo", "Foo.kt"))
+        assertNull(lookup.sourcePath("com.acme.Bar", "Bar.kt"))
+        assertNull(lookup.sourcePath("com.acme.Foo", null))
+    }
+
+    @Test
     fun `finds a line in a java file`() {
         source(dir, "com/acme/Foo.java", "class Foo {}\n")
         assertEquals("class Foo {}", FileSourceLookup(listOf(dir)).lineText("com.acme.Foo", "Foo.java", 1))

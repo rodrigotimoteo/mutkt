@@ -58,7 +58,7 @@ class SurvivorSourceTest {
         write("shop/Prices.kt", prices)
         write("shop/PricesKt.kt", decoy)
         val text = report("Prices.kt", prices)
-        assertTrue("shop.PricesKt.total(II)I (shop.PricesKt:3)" in text, text)
+        assertTrue("shop.PricesKt.total(II)I  " in text && "\n  line 3  " in text, text)
         assertTrue(Regex(">\\s+3 \\| fun total\\(a: Int, b: Int\\) = a \\+ b").containsMatchIn(text), text)
         assertFalse("decoy" in text, text)
     }
@@ -69,7 +69,7 @@ class SurvivorSourceTest {
         write("shop/Prices.kt", source)
         write("shop/Money.kt", decoy)
         val text = report("Prices.kt", source)
-        assertTrue("shop.Money.total(II)I (shop.Money:5)" in text, text)
+        assertTrue("shop.Money.total(II)I  " in text && "\n  line 5  " in text, text)
         assertTrue("fun total(a: Int, b: Int) = a + b" in text, text)
         assertFalse("decoy" in text, text)
     }
@@ -80,7 +80,7 @@ class SurvivorSourceTest {
         write("shop/Items.kt", source)
         write("shop/Order.kt", decoy)
         val text = report("Items.kt", source)
-        assertTrue("shop.Order.total(II)I (shop.Order:4)" in text, text)
+        assertTrue("shop.Order.total(II)I  " in text && "\n  line 4  " in text, text)
         assertTrue("    fun total(a: Int, b: Int) = a + b" in text, text)
         assertFalse("decoy" in text, text)
     }
@@ -89,7 +89,7 @@ class SurvivorSourceTest {
     fun `missing source leaves the location without a snippet`() {
         write("shop/PricesKt.kt", decoy)
         val text = report("Prices.kt", prices)
-        assertTrue("shop.PricesKt.total(II)I (shop.PricesKt:3)" in text, text)
+        assertTrue("shop.PricesKt.total(II)I  " in text && "\n  line 3  " in text, text)
         assertFalse(" | " in text, text)
         assertEquals(1, Regex("Survivors \\(").findAll(text).count())
     }

@@ -1,6 +1,8 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.junit.CALC
 import com.github.rodrigotimoteo.mutkt.junit.CALC_MUTANT
 import com.github.rodrigotimoteo.mutkt.junit.IMPORTS
@@ -18,6 +20,8 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+
+private val KILLED = Outcome.Killed("CalcTest.adds", KillKind.ASSERTION, test = TestId("CalcTest"))
 
 @Timeout(30)
 class ForkLoopTest {
@@ -55,7 +59,7 @@ class ForkLoopTest {
     @Test
     fun `announces readiness, then answers a killed mutant`() {
         assertEquals(
-            listOf(ForkReply.Ready(), ForkReply.Started, ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0)),
+            listOf(ForkReply.Ready(), ForkReply.Started, ForkReply.Result(KILLED, 0)),
             replies(run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )
     }
@@ -68,7 +72,7 @@ class ForkLoopTest {
                 ForkReply.Started,
                 ForkReply.Result(Outcome.Survived, 0),
                 ForkReply.Started,
-                ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0),
+                ForkReply.Result(KILLED, 0),
             ),
             replies(run(mutantBytes(CALC)), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )
@@ -82,7 +86,7 @@ class ForkLoopTest {
                 ForkReply.Started,
                 ForkReply.Result(Outcome.Survived, 0),
                 ForkReply.Started,
-                ForkReply.Result(Outcome.Killed("CalcTest.adds"), 0),
+                ForkReply.Result(KILLED, 0),
             ),
             replies(ForkRequest.Baseline(10_000), run(mutantBytes(CALC_MUTANT)), ForkRequest.Shutdown),
         )

@@ -25,6 +25,15 @@ class MutationReportTest {
     }
 
     @Test
+    fun `reused counts the results taken from history and does not change the score`() {
+        val fresh = result(MutantStatus.SURVIVED)
+        val reused = result(MutantStatus.KILLED, ordinal = 1).copy(reused = true)
+
+        assertEquals(1, MutationReport(listOf(fresh, reused)).reused)
+        assertEquals(0.5, MutationReport(listOf(fresh, reused)).score)
+    }
+
+    @Test
     fun `empty report has no score`() = assertNull(MutationReport(emptyList()).score)
 
     @Test

@@ -2,7 +2,7 @@
 
 Mutation testing for Kotlin/JVM and Android. Add the Gradle plugin, run your existing JUnit tests against mutated bytecode, get a mutation score. No test changes.
 
-Supported: JDK 17 and 21, Gradle 8.10 or later (including 9.x), and Android unit tests on AGP 8.4 through 9.x. Instrumented Android tests are not supported.
+Supported: JDK 17 and 21, Gradle 8.11 or later (including 9.x), and Android unit tests on AGP 8.4 through 9.x. Instrumented Android tests are not supported.
 
 ## Quick start
 
@@ -18,7 +18,7 @@ plugins {
 ./gradlew mutkt
 ```
 
-The score and the surviving mutants are printed in the build log. Reports land in `build/reports/mutkt/`: `mutation-report.html` (one offline page), `mutation-report.json` (Stryker schema) and `mutkt.txt` (the printed summary).
+The score and the surviving mutants are printed in the build log. Reports land in `build/reports/mutkt/`: `mutation-report.html` (one offline page), `mutation-report.json` (Stryker schema), `mutation-report.sarif` (SARIF 2.1.0, for GitHub code scanning) and `mutkt.txt` (the printed summary).
 
 ## Next
 

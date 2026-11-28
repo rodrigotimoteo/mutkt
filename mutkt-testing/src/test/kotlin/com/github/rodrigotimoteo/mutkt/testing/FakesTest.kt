@@ -8,6 +8,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.HistoryEntry
 import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
@@ -51,9 +52,9 @@ class FakesTest {
 
     @Test
     fun `executor returns scripted outcomes and records runs`() {
-        val executor = FakeTestExecutor(mapOf(first to Outcome.Killed("FooTest")))
+        val executor = FakeTestExecutor(mapOf(first to Outcome.Killed("FooTest", KillKind.EXCEPTION)))
 
-        assertEquals(Outcome.Killed("FooTest"), executor.run(first, byteArrayOf(1), 5.seconds))
+        assertEquals(Outcome.Killed("FooTest", KillKind.EXCEPTION), executor.run(first, byteArrayOf(1), 5.seconds))
         assertEquals(Outcome.Survived, executor.run(second, byteArrayOf(2), 1.seconds, listOf(TestId("BTest"))))
         assertEquals(listOf(first, second), executor.runs.map { it.first })
         assertArrayEquals(byteArrayOf(1), executor.runs[0].second)
@@ -64,9 +65,10 @@ class FakesTest {
 
     @Test
     fun `executor answers the baseline with its scripted outcome and records the deadline`() {
-        val executor = FakeTestExecutor(baseline = Outcome.Killed("FooTest"), baselineElapsed = 2.seconds)
+        val executor =
+            FakeTestExecutor(baseline = Outcome.Killed("FooTest", KillKind.EXCEPTION), baselineElapsed = 2.seconds)
 
-        assertEquals(Baseline(Outcome.Killed("FooTest"), 2.seconds), executor.baseline(3.seconds))
+        assertEquals(Baseline(Outcome.Killed("FooTest", KillKind.EXCEPTION), 2.seconds), executor.baseline(3.seconds))
         assertEquals(listOf(3.seconds), executor.baselines)
         assertEquals(emptyList<Any>(), executor.runs)
     }

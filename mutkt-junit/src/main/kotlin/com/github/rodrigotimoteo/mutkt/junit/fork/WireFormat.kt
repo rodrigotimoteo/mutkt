@@ -1,6 +1,8 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -68,6 +70,9 @@ internal fun DataOutputStream.writeOutcome(outcome: Outcome) {
             writeString(outcome.by)
             writeBoolean(outcome.cause != null)
             outcome.cause?.let(::writeString)
+            writeByte(outcome.kind.ordinal)
+            writeBoolean(outcome.test != null)
+            outcome.test?.let { writeString(it.className) }
         }
         Outcome.Survived -> writeByte(OUTCOME_SURVIVED)
         Outcome.NoTests -> writeByte(OUTCOME_NO_TESTS)
@@ -81,10 +86,20 @@ internal fun DataOutputStream.writeOutcome(outcome: Outcome) {
 
 internal fun DataInputStream.readOutcome(): Outcome =
     when (val tag = readUnsignedByte()) {
-        OUTCOME_KILLED -> Outcome.Killed(readString(), if (readBoolean()) readString() else null)
+        OUTCOME_KILLED -> readKilled()
         OUTCOME_SURVIVED -> Outcome.Survived
         OUTCOME_NO_TESTS -> Outcome.NoTests
         OUTCOME_LOAD_ERROR -> Outcome.LoadError(readString())
         OUTCOME_TIMEOUT -> Outcome.Timeout
         else -> throw ForkProtocolException("Unknown outcome tag $tag")
     }
+
+private fun DataInputStream.readKilled(): Outcome.Killed {
+    val by = readString()
+    val cause = if (readBoolean()) readString() else null
+    val kind = readKillKind()
+    return Outcome.Killed(by, kind, cause, if (readBoolean()) TestId(readString()) else null)
+}
+
+private fun DataInputStream.readKillKind(): KillKind =
+    readUnsignedByte().let { KillKind.entries.getOrNull(it) ?: throw ForkProtocolException("Unknown kill kind $it") }

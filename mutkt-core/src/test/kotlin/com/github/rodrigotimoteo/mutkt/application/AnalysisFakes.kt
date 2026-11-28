@@ -5,11 +5,13 @@ import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
 import com.github.rodrigotimoteo.mutkt.application.port.Coverage
 import com.github.rodrigotimoteo.mutkt.application.port.CoverageInstrumenter
+import com.github.rodrigotimoteo.mutkt.application.port.History
 import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.Probe
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
+import com.github.rodrigotimoteo.mutkt.application.port.ResultHistory
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
@@ -63,6 +65,7 @@ internal class FakeGenerator(
 /** Returns [probes] as the instrumented classes' map and records what it was asked to instrument. */
 internal class FakeInstrumenter(
     private val probes: Map<MutantId, Probe> = emptyMap(),
+    private val unprobed: Set<String> = emptySet(),
 ) : CoverageInstrumenter {
     val calls = ConcurrentLinkedQueue<Pair<List<String>, List<Mutant>>>()
     val made = ConcurrentLinkedQueue<Instrumented>()
@@ -72,17 +75,19 @@ internal class FakeInstrumenter(
         mutants: List<Mutant>,
     ): Instrumented {
         calls += classes.map { it.name } to mutants
-        return Instrumented(emptyList(), probes).also { made += it }
+        return Instrumented(emptyList(), probes, unprobed).also { made += it }
     }
 }
 
 // The default baseline time is longer than any configured timeout, so mutants get the timeout unless a test sets it.
-// A baseline on instrumented classes answers [instrumentedBaseline] (else [baseline]) with [coverage].
+// A baseline on instrumented classes answers [instrumentedBaseline] (else [baseline]) with [coverage]. A run that gets
+// the original bytes of the mutant's class (see [classFile]) answers [original].
 internal class FakeExecutor(
     private val baseline: () -> Outcome = { Outcome.Survived },
     private val baselineElapsed: Duration = 1.minutes,
     private val coverage: Coverage? = null,
     private val instrumentedBaseline: () -> Outcome = baseline,
+    private val original: (List<TestId>?) -> Outcome = { Outcome.Survived },
     private val behavior: (Mutant) -> Outcome = { Outcome.Survived },
 ) : TestExecutor {
     val baselines = ConcurrentLinkedQueue<Duration>()
@@ -100,7 +105,7 @@ internal class FakeExecutor(
         threads += Thread.currentThread()
         received += Triple(mutant, String(bytes), deadline)
         selections += mutant to tests
-        return behavior(mutant)
+        return if (String(bytes) == mutant.className) original(tests) else behavior(mutant)
     }
 
     override fun baseline(
@@ -111,6 +116,19 @@ internal class FakeExecutor(
         baselineInputs += instrumented
         if (instrumented == null) return Baseline(baseline(), baselineElapsed)
         return Baseline(instrumentedBaseline(), baselineElapsed, coverage)
+    }
+}
+
+/** Reads the last history written, else [stored]. */
+internal class MemoryHistory(
+    private val stored: History? = null,
+) : ResultHistory {
+    val written = ConcurrentLinkedQueue<History>()
+
+    override fun read(): History? = written.lastOrNull() ?: stored
+
+    override fun write(history: History) {
+        written += history
     }
 }
 
