@@ -59,7 +59,11 @@ private val Row.inGeneratedEnumMember get() = inClass("Color", "Dir") && inMetho
 private const val ENUM_MEMBER_REASON =
     "legacy mutates the members kotlinc generates for an enum; the rebuild skips them"
 
-private val LATEINIT_CLASSES = arrayOf("ParityIdioms", "Holder")
+// kotlinc's @NotNull on the method, read from the compiled parity fixture.
+private val Row.returnsNonNull get() =
+    parityClasses.values.firstNotNullOfOrNull { it[className] }?.let(::parse)?.methods.orEmpty().any {
+        it.name + it.desc == method && it.returnsNonNull()
+    }
 
 private val COLLECTIONS = setOf("Ljava/util/List;", "Ljava/util/Set;", "Ljava/util/Map;", "Ljava/util/Collection;")
 
@@ -125,13 +129,12 @@ internal object Deviations {
             legacyOnly(
                 "D2d",
                 "null-returns",
-                "legacy fires on a literal null return (null to null), including the unreachable one after the " +
-                    "throw of a lateinit getter; the rebuild skips it as equivalent",
+                "legacy fires on a literal null return (null to null); the rebuild skips it as equivalent",
             ) {
-                it.inMethod("literalNull") ||
-                    (it.inMethod("orNull") && it.line == 11) ||
-                    // Same line and opcode as the reachable ARETURN: only the surplus legacy row is left to match.
-                    (it.opcode == "ARETURN" && it.inClass(*LATEINIT_CLASSES) && it.inMethod("getTitle", "getValue"))
+                it.inMethod("literalNull") || (it.inMethod("orNull") && it.line == 11)
+            },
+            legacyOnly("D2e", "null-returns", "legacy nulls non-null Kotlin returns, lateinit getters too") {
+                it.returnsNonNull
             },
             newOnly(
                 "D3a",
@@ -146,6 +149,9 @@ internal object Deviations {
                 "legacy empties an already empty return; the rebuild skips it (empty factory, new T[0])",
             ) {
                 it.inMethod("alreadyEmptyList", "alreadyEmptySet", "alreadyEmptyMap", "emptyIntArray", "emptyStrings")
+            },
+            newOnly("D3c", "empty-returns", "the rebuild returns \"\" from a non-null String method") {
+                it.returnType == "Ljava/lang/String;"
             },
             legacyOnly(
                 "D4",

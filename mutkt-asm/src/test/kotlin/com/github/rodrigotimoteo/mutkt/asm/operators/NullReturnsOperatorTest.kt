@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutkt.asm.Hierarchy
 import com.github.rodrigotimoteo.mutkt.asm.discover
 import com.github.rodrigotimoteo.mutkt.asm.mutate
 import com.github.rodrigotimoteo.mutkt.asm.parse
+import com.github.rodrigotimoteo.mutkt.testing.buildClass
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import com.github.rodrigotimoteo.mutkt.testing.loadAndInvoke
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.objectweb.asm.ClassReader
+import org.objectweb.asm.Opcodes.ARETURN
 import org.objectweb.asm.util.CheckClassAdapter
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -25,15 +27,24 @@ private val SOURCE =
 
     fun str(a: String): String = a + "x"
     fun boxed(a: Int): Any = a
-    fun boxedInt(a: Int): Int? = if (a > 0) a else null
     fun box(a: Int) = Box(a)
-    fun maybe(a: String?): String? = a
-    fun <T> ident(a: T): T = a
     fun color(a: Int) = if (a > 0) Color.GREEN else Color.RED
     fun point(a: Int) = Point(a, a).copy(y = 7)
-    fun over(a: String): String = a
-    fun over(a: Int): String = "n" + a
-    fun two(a: Int): String {
+    fun <T : Any> identNonNull(a: T): T = a
+    fun lambda(): () -> String = { "x" }
+
+    fun boxedInt(a: Int): Int? = if (a > 0) a else null
+    fun maybe(a: String?): String? = a
+    fun <T> ident(a: T): T = a
+    fun maybeBox(a: Int): Box? = Box(a)
+    fun maybeColor(a: Int): Color? = if (a > 0) Color.GREEN else Color.RED
+    fun maybePoint(a: Int): Point? = Point(a, a).copy(y = 7)
+    fun platform(a: Int) = java.lang.String.valueOf(a)
+    private fun priv(a: Int): String = "p" + a
+    fun callPriv(a: Int): String? = priv(a)
+    fun over(a: String): String? = a
+    fun over(a: Int): String? = "n" + a
+    fun two(a: Int): String? {
         if (a < 0) return "neg"
         return "pos"
     }
@@ -42,7 +53,7 @@ private val SOURCE =
     fun callOverInt(): String? = over(1)
     fun callOverString(): String? = over("s")
 
-    class Greeter { fun hi(): String = "hi" }
+    class Greeter { fun hi(): String? = "hi" }
 
     fun nothing(): String? = null
     fun nothingBox(): Box? = null
@@ -59,17 +70,19 @@ private val SOURCE =
     fun ints(): IntArray = intArrayOf(1)
     fun strings(): Array<String> = arrayOf("a")
     fun matrix(): Array<IntArray> = arrayOf(intArrayOf(1))
-    fun arrayList(): ArrayList<Int> = arrayListOf(1)
+    fun arrayList(): ArrayList<Int>? = arrayListOf(1)
 
-    suspend fun suspending(a: Int): String = a.toString()
+    suspend fun suspending(a: Int): String? = a.toString()
     suspend fun suspendingNothing(): Box? = null
 
     fun maybeUnit(a: Boolean): Unit? = if (a) Unit else null
-    fun anyUnit(): Any = Unit
-    fun anyOrUnit(a: Boolean): Any = if (a) "x" else Unit
+    // Any? so that the Unit rule, not the non-null rule, decides these.
+    fun anyUnit(): Any? = Unit
+    fun anyOrUnit(a: Boolean): Any? = if (a) "x" else Unit
     val unitBlock: suspend () -> Unit = { println("s") }
     val textBlock: suspend () -> String = { "s" }
-    class Person(val name: String)
+    class Person(val name: String?)
+    class Named(val name: String)
     """.trimIndent()
 
 class NullReturnsOperatorTest {
@@ -97,9 +110,9 @@ class NullReturnsOperatorTest {
         StringWriter().also { CheckClassAdapter.verify(ClassReader(bytes), false, PrintWriter(it)) }.toString()
 
     @ParameterizedTest
-    @ValueSource(strings = ["str", "boxed", "boxedInt", "box", "maybe", "ident", "color", "point"])
-    fun `object returns of any type become null`(method: String) {
-        val arg: Any = if (method == "maybe" || method == "str") "a" else 1
+    @ValueSource(strings = ["boxedInt", "maybe", "ident", "maybeBox", "maybeColor", "maybePoint", "platform"])
+    fun `nullable and unknown object returns become null`(method: String) {
+        val arg: Any = if (method == "maybe") "a" else 1
         val site = sites(method).single()
         val changed = mutant(method)
 
@@ -107,6 +120,36 @@ class NullReturnsOperatorTest {
         assertNull(loadAndInvoke(changed, "SourceKt", method, arg), "$method mutant")
         assertEquals("areturn -> null", site.description)
         assertEquals("", verify(changed.getValue("SourceKt")))
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["str", "boxed", "box", "color", "point", "identNonNull", "lambda"])
+    fun `a return Kotlin declares non-null has no site`(method: String) {
+        assertEquals(emptyList<Any>(), sites(method))
+    }
+
+    @Test
+    fun `a private function carries no nullability annotation, so its return stays a site`() {
+        val found = sites("priv").single()
+        val changed = classes + ("SourceKt" to mutate(file, NullReturnsOperator, found, classpath))
+
+        assertEquals("p1", loadAndInvoke(classes, "SourceKt", "callPriv", 1))
+        assertNull(loadAndInvoke(changed, "SourceKt", "callPriv", 1))
+    }
+
+    @Test
+    fun `a method without Kotlin annotations, as javac emits, is a site`() {
+        val java =
+            buildClass("JavaLike", "name", "()Ljava/lang/String;") {
+                visitLdcInsn("j")
+                visitInsn(ARETURN)
+            }
+        val found = discover(java, NullReturnsOperator).single()
+
+        val changed = mutate(java, NullReturnsOperator, found, classpath)
+
+        assertEquals("j", loadAndInvoke(mapOf("JavaLike" to java), "JavaLike", "name"))
+        assertNull(loadAndInvoke(mapOf("JavaLike" to changed), "JavaLike", "name"))
     }
 
     @Test
@@ -232,13 +275,14 @@ class NullReturnsOperatorTest {
     }
 
     @Test
-    fun `a Kotlin property getter is a site`() {
+    fun `a nullable property getter is a site, a non-null one is not`() {
         val person = classes.getValue("Person")
         val found = discover(person, NullReturnsOperator).single()
         val changed = mutate(person, NullReturnsOperator, found, classpath)
 
         assertEquals("getName", found.methodName)
         assertEquals("", verify(changed))
+        assertEquals(emptyList<Any>(), discover(classes.getValue("Named"), NullReturnsOperator))
     }
 
     private fun descriptors(

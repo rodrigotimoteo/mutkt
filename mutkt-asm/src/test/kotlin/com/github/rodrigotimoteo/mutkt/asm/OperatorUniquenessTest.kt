@@ -25,7 +25,7 @@ internal class OperatorUniquenessTest {
         val seen = mutableMapOf<ByteBuffer, Pair<Operator, String>>()
         return operators.flatMap { op ->
             corpus.values.flatMap { bytes ->
-                discover(bytes, op).mapNotNull { site ->
+                discover(bytes, op, hierarchy = hierarchy).mapNotNull { site ->
                     val mutant = ByteBuffer.wrap(mutate(bytes, op, site, hierarchy))
                     val other = seen.putIfAbsent(mutant, op to site.toString())
                     other?.takeIf { it.first != op }?.let { "${it.first.id} at ${it.second} and ${op.id} at $site" }
@@ -39,7 +39,7 @@ internal class OperatorUniquenessTest {
     private fun sharedInstructions(operators: List<Operator>): List<String> =
         corpus.values.flatMap { bytes ->
             val node = parse(bytes)
-            val cls = node.info()
+            val cls = node.info(hierarchy)
             node.mutableMethods().flatMap { method ->
                 val claims =
                     operators.flatMap { op ->

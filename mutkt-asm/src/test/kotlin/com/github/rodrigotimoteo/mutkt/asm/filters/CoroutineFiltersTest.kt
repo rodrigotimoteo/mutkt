@@ -28,7 +28,7 @@ class CoroutineFiltersTest {
             suspend fun tailUnit(n: Int) { store(n) }
             fun runTwice(n: Int): Int = runBlocking { twice(n) }
             fun launched(n: Int): Int = runBlocking { launch { if (n > 2) sink = leaf(n) * 2 }.join(); sink }
-            fun unitValue(): Any = Unit
+            fun unitValue(): Any? = Unit
             suspend fun anyUnit(n: Int): Any { leaf(n); return Unit }
             suspend fun same(a: Any, b: Any): Boolean { leaf(1); return a === b }
             class Owner {
