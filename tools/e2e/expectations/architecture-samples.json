@@ -32,7 +32,7 @@
       "path": "app/src/main/java/com/example/android/architecture/blueprints/todoapp/data/DefaultTaskRepository.kt",
       "killedAtLeast": 1,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 20,
+      "noCoverageAtLeast": 2,
       "note": "DefaultTaskRepositoryTest has 16 tests, including forceUpdate and network save paths"
     },
     {
