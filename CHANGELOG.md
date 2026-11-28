@@ -40,6 +40,25 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 - A `test` task on a JDK 8 or 11 toolchain fails `mutkt` at once with a message naming that Java version and asking for a Java 17 or newer launcher, instead of a baseline failure with an `UnsupportedClassVersionError` from the child JVMs.
 - Docs: mutants reached only through another project's classes on the test classpath (its test fixtures, for instance) are killed, as they have been since 0.5.0 loads each run in one class loader. The known-gap note is gone, and a multi-module build now tests it.
 
+### Benchmark
+
+Release-gate run on 10 open-source projects (MacBook, 11 cores); every project passes its expectations. Full table: [docs/benchmark.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/benchmark.md).
+
+| Project | Mutants | Score | Wall time (0.5.0 → 0.6.0-rc.1) |
+|---|---|---|---|
+| strikt | 425 | 82.6% | 1m25s → 39s |
+| http4k | 71 | 84.5% | 1m3s → 53s |
+| spring-petclinic-kotlin | 61 | 77.0% | 4m07s → 1m31s |
+| architecture-samples | 161 | 52.2% | 50s → 38s |
+| nowinandroid | 50 | 50.0% | 1m → 42s |
+| chucker | 812 | 38.8% | 8m47s → 5m1s |
+| tusky | 757 | 28.0% | 6m41s → 5m56s |
+| diffuse | 288 | 24.0% | 11s → 10s |
+| gradle-semver-plugin | 182 | 16.5% | 17s → 15s |
+| pluto | 352 | 1.1% | 54s → 28s |
+
+Scores move against 0.5.0 mostly because mutants that tested nothing are gone: kills that only came from returning null where Kotlin forbids it, and survivors on code kotlinc or the Compose compiler generates.
+
 ## [0.5.0] - 2026-11-27
 
 Android support, and mutants that run only the tests that reach them.
