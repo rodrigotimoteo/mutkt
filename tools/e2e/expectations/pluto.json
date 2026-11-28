@@ -28,11 +28,6 @@
       "path": "src/main/java/com/pluto/core/applifecycle/AppLifecycle.kt",
       "killedAtLeast": 1,
       "note": "activityCount == 1 and == 0 checks in onActivityStarted/Stopped are covered by AppLifecycleTest"
-    },
-    {
-      "path": "src/main/java/com/pluto/Pluto.kt",
-      "killedAtLeast": 1,
-      "note": "open() with a null identifier is asserted to start SelectorActivity in PlutoTest"
     }
   ],
   "risks": [
