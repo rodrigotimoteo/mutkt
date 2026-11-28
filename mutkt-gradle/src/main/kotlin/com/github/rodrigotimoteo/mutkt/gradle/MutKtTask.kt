@@ -128,6 +128,10 @@ public abstract class MutKtTask : DefaultTask() {
     @get:Input
     public abstract val testJavaRuntime: Property<String>
 
+    /** Language version of that Java runtime; the child JVMs need 17 or newer. */
+    @get:Input
+    public abstract val testJavaVersion: Property<Int>
+
     /** See [MutKtExtension.historyFile]. Local state rather than an output, so no build cache ever restores it. */
     @get:LocalState
     public abstract val historyFile: RegularFileProperty

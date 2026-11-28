@@ -29,6 +29,7 @@ import java.nio.file.Path
 import kotlin.time.Duration.Companion.milliseconds
 
 internal fun MutKtTask.runAnalysis(): AnalysisResult {
+    checkTestJava()
     checkThresholdRange(failBelowScore.orNull)
     val production = stage(classesDirs.files, File(temporaryDir, "classes"))
     val tests = stage(testClassesDirs.files, File(temporaryDir, "test-classes"))
