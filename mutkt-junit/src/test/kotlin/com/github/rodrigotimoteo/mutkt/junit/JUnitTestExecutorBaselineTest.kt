@@ -1,8 +1,11 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
+import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
+import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.KillKind
+import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -87,6 +90,31 @@ class JUnitTestExecutorBaselineTest {
         val slow = "class CalcTest { @Test fun slow() { Thread.sleep(500) } }"
         val elapsed = executor(slow).baseline(deadline).elapsed
         assertTrue(elapsed >= 500.milliseconds && elapsed < deadline, "elapsed $elapsed")
+    }
+
+    // Main's Calc fails when run; the test sources define their own Calc, which is the one the tests load.
+    private fun shadowed(): Pair<ClassFile, JUnitTestExecutor> {
+        val failing = compileKotlin("class Calc { fun add(a: Int, b: Int): Int = error(\"main\") }")
+        val main = ClassFile("Calc", failing.getValue("Calc"))
+        val test = "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
+        val (_, testClasses) = splitClasses("$IMPORTS$CALC\n$test", production = emptySet())
+        return main to JUnitTestExecutor(listOf(main), testClasses, runtimeJars()).also { executors += it }
+    }
+
+    @Test
+    fun `a probed main class never replaces the test class it shadows`() {
+        val (main, executor) = shadowed()
+        val baseline = executor.baseline(deadline, Instrumented(listOf(main), emptyMap()))
+        assertEquals(Outcome.Survived, baseline.outcome)
+        // One entry for the class and one for its method: neither reached the shadowed main class.
+        assertEquals(true, baseline.coverage?.tests?.all { it.reached.isEmpty() })
+        assertEquals(true, baseline.coverage?.tests?.isNotEmpty())
+    }
+
+    @Test
+    fun `a mutant of a main class shadowed by a test class reaches no test`() {
+        val (main, executor) = shadowed()
+        assertEquals(Outcome.NoTests, executor.run(mutantOf(), main.bytes, deadline))
     }
 
     @Test

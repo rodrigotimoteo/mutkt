@@ -36,6 +36,7 @@ internal const val JUPITER_ENGINE = "junit-jupiter"
  *
  * Each run executes on its own daemon thread and the deadline starts once the tests are discovered.
  * A baseline on instrumented classes reads their probes after each test class (see [CoverageListener]).
+ * A test class shadows the project class of the same name: the tests load it, so that class is never probed or mutated.
  * Loading, linking and discovery are unbounded here: only a forked child limits them (ForkSettings.prepareMillis).
  * On timeout the thread is interrupted and abandoned: an uninterruptible loop keeps burning a core and its
  * class loader stays in memory until the JVM exits. Only a forked JVM can kill it for real (ROD-104).
@@ -93,6 +94,7 @@ public class JUnitTestExecutor(
         onExecuting: () -> Unit,
     ): TimedOutcome {
         tests?.forEach { require(it.className in testNameSet) { "No test class ${it.className}" } }
+        if (mutant.className in testNameSet) return TimedOutcome(Outcome.NoTests, Duration.ZERO)
         val request = Request(mutant.id.toString(), classes + (mutant.className to bytes), mutant.className, tests)
         return launch(request, deadline, onExecuting).let { TimedOutcome(it.outcome, it.elapsed) }
     }
@@ -102,8 +104,9 @@ public class JUnitTestExecutor(
         instrumented: Instrumented?,
         onExecuting: () -> Unit,
     ): Baseline {
-        val probed = instrumented?.classes.orEmpty().associate { it.name to it.bytes }
-        return launch(Request("the baseline", classes + probed, instrumented = instrumented), deadline, onExecuting)
+        val probed = instrumented?.classes?.filterNot { it.name in testNameSet }
+        val loaded = classes + probed.orEmpty().associate { it.name to it.bytes }
+        return launch(Request("the baseline", loaded, probed = probed?.map { it.name }), deadline, onExecuting)
     }
 
     private fun launch(
@@ -156,7 +159,7 @@ public class JUnitTestExecutor(
         closed = true
     }
 
-    // The coverage is null unless the request has instrumented classes.
+    // The coverage is null unless the request has probed classes.
     private fun execute(
         request: Request,
         loader: MutantClassLoader,
@@ -174,10 +177,7 @@ public class JUnitTestExecutor(
             } catch (e: LinkageError) {
                 return Outcome.LoadError(e.toString()) to null
             }
-        val coverage =
-            request.instrumented?.let { instrumented ->
-                CoverageListener(ProbeReader(instrumented.classes.map { it.name }))
-            }
+        val coverage = request.probed?.let { CoverageListener(ProbeReader(it)) }
         return runTests(types, executing, coverage) to coverage?.coverage()
     }
 
@@ -218,13 +218,13 @@ public class JUnitTestExecutor(
     }
 
     // [linked] is the mutated class, linked before the tests run; null when nothing is replaced. [tests] are the tests
-    // to run, in order (all when null); probes are read only with [instrumented].
+    // to run, in order (all when null); the probes of [probed] are read, and only when it is not null.
     private data class Request(
         val label: String,
         val loaded: Map<String, ByteArray>,
         val linked: String? = null,
         val tests: List<TestId>? = null,
-        val instrumented: Instrumented? = null,
+        val probed: List<String>? = null,
     )
 
     // A test class to run: all of it when [methods] (engine unique ids) is empty.
