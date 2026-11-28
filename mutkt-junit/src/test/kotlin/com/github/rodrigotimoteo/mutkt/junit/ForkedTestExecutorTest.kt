@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -199,9 +200,9 @@ class ForkedTestExecutorTest {
             assertEquals(
                 listOf(
                     Outcome.Survived,
-                    Outcome.Killed("CalcTest.adds", KillKind.ASSERTION),
+                    Outcome.Killed("CalcTest.adds", KillKind.ASSERTION, test = TestId("CalcTest")),
                     Outcome.Survived,
-                    Outcome.Killed("CalcTest.adds", KillKind.ASSERTION),
+                    Outcome.Killed("CalcTest.adds", KillKind.ASSERTION, test = TestId("CalcTest")),
                 ),
                 results.map { it.withoutCause() },
             )
@@ -303,7 +304,12 @@ class ForkedTestExecutorTest {
             "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } " +
                 "@Tag(\"slow\") @Test fun unrelated() { fail<Unit>(\"red\") } }"
         assertEquals(
-            Outcome.Killed("CalcTest.unrelated", KillKind.ASSERTION, "org.opentest4j.AssertionFailedError: red"),
+            Outcome.Killed(
+                "CalcTest.unrelated",
+                KillKind.ASSERTION,
+                "org.opentest4j.AssertionFailedError: red",
+                TestId("CalcTest"),
+            ),
             executor(testSource = test).baseline(LONG).outcome,
         )
         val excluded = executor(testSource = test) { it.copy(excludeTags = listOf("slow")) }

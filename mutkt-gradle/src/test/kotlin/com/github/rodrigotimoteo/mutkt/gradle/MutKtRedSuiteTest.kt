@@ -39,7 +39,7 @@ class MutKtRedSuiteTest {
         val project = TestKitProject(dir, version)
         project.setUp("mutkt { excludeTags.add('flaky') }", sources, tests)
         project.build()
-        val names = listOf("mutkt.txt", "mutation-report.json", "mutation-report.html")
+        val names = listOf("mutkt.txt", "mutation-report.json", "mutation-report.html", "mutation-report.sarif")
         val reports = names.map(project.report::resolveSibling)
         assertTrue(reports.all(File::isFile), "the green run writes every report")
 

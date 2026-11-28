@@ -42,6 +42,7 @@ class MutKtTaskRunTest {
         assertTrue("Score: 100.0%" in summary, summary)
         assertTrue("\"schemaVersion\": \"2\"" in result.json && "\"demo/Source.kt\"" in result.json, result.json)
         assertTrue("\"status\": \"Killed\"" in result.json && "class Calc" in result.json, result.json)
+        assertTrue("\"version\": \"2.1.0\"" in result.sarif && "\"results\": []" in result.sarif, result.sarif)
         // The bundle fills most of the page; its tail holds the report data.
         val page = result.html.takeLast(PAGE_TAIL)
         assertTrue("<mutation-test-report-app>" in result.html, "No viewer element in the HTML report: $page")

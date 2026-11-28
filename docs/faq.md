@@ -13,7 +13,7 @@ The other statuses:
 | SURVIVED | Every test that ran passed | not detected |
 | TIMEOUT | The tests did not finish within the mutant's deadline | detected |
 | NO_COVERAGE | No test reaches the mutated code, so none ran against it; also when `includeTags` or `engines` select no test | not detected |
-| ERROR | The mutant could not be loaded or run (a `VerifyError`, a child JVM that died before the tests started) | left out |
+| ERROR | The mutant could not be loaded or run (a `VerifyError`, a child JVM that died before the tests started), or its killing test is flaky (`flaky test <name>`) | left out |
 
 Score = (KILLED + TIMEOUT) / (all mutants − ERROR).
 
@@ -33,7 +33,7 @@ If many mutants end in TIMEOUT, the suite is too slow for the deadline. When `ti
 
 Before any mutant, MutKt runs the selected tests once on the original classes. If anything fails there, the task fails with `The tests fail on the original classes, so no mutant was scored` and writes no report (the reports of an earlier run stay in place), so a red suite can never count as kills.
 
-That baseline runs once, so it does not catch flakiness. A flaky test that fails during a mutant's run kills that mutant and inflates the score. Tag such tests and leave them out:
+That baseline runs once, so it does not catch flakiness. Instead, kills are confirmed: the first time a test class kills a mutant, it runs once more on the original classes. If it passes there, its kills count; if it fails there too, that mutant and every later one it kills are ERROR with the cause `flaky test <name>` instead of KILLED, so they are left out of the score. Each test class is confirmed at most once per run, so this costs one test class run per distinct killing class. A kill by a JVM exit names no test class and is not rerun. This catches a test that fails when run alone or fails every time, not every intermittent flake: one that passes its single confirmation by luck keeps its kills. Tag tests known to be flaky and leave them out:
 
 ```kotlin
 mutkt { excludeTags.add("flaky") }
@@ -93,7 +93,7 @@ AGP 9 turns on `android.onlyEnableUnitTestForTheTestedBuildType` by default, so 
 
 ## Android: can MutKt run instrumented tests?
 
-No. MutKt runs a variant's local unit tests (`src/test`, on the JVM, Robolectric included). Instrumented tests (`src/androidTest`, `connectedAndroidTest`) need a device or an emulator and are not supported.
+No. MutKt runs a variant's local unit tests (`src/test`, on the JVM, Robolectric included). Instrumented tests (`src/androidTest`, `connectedAndroidTest`) need a device or an emulator and are not supported: running them per mutant means one APK install per mutant. See [ADR 0012](adr/0012-android-instrumented-tests.md) for the cost estimate and what would reopen it.
 
 ## Android: why are R, BuildConfig or binding classes not mutated?
 
@@ -101,7 +101,7 @@ An Android module starts `excludedClasses` with globs for the classes the build 
 
 ## Where are the reports, and why is there no output?
 
-`build/reports/mutkt/` of the project (of each module, on Android too) holds `mutation-report.html`, `mutation-report.json` (Stryker schema) and `mutkt.txt`. An up-to-date run prints nothing: the reports from the last run are still there. `reports.console = false` keeps the summary out of the build log; the files are written on every run that gets past the baseline.
+`build/reports/mutkt/` of the project (of each module, on Android too) holds `mutation-report.html`, `mutation-report.json` (Stryker schema), `mutation-report.sarif` (SARIF 2.1.0) and `mutkt.txt`. An up-to-date run prints nothing: the reports from the last run are still there. `reports.console = false` keeps the summary out of the build log; the files are written on every run that gets past the baseline.
 
 ## Why doesn't `check` run it?
 

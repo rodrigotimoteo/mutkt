@@ -105,9 +105,20 @@ class MutKtTaskTest {
                 "testWorkingDir",
                 "testJavaExecutable",
                 "testJavaRuntime",
+                "repositoryRoot",
             ),
             task.inputs.properties.keys,
         )
+    }
+
+    // Read from the environment, so the expectation holds on a GitHub runner too.
+    @Test
+    fun `report paths start at GITHUB_WORKSPACE or the project and annotations follow GITHUB_ACTIONS`() {
+        val project = project("java")
+        val task = project.task()
+
+        assertEquals(System.getenv("GITHUB_WORKSPACE") ?: project.projectDir.absolutePath, task.repositoryRoot.get())
+        assertEquals(System.getenv("GITHUB_ACTIONS") == "true", task.githubAnnotations.get())
     }
 
     @Test

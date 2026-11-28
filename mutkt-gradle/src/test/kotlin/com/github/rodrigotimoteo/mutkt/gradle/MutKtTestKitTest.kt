@@ -30,6 +30,10 @@ class MutKtTestKitTest {
         val json = project.report.resolveSibling("mutation-report.json").readText()
         assertTrue("\"schemaVersion\": \"2\"" in json && "\"status\": \"Killed\"" in json, json)
         assertTrue("<mutation-test-report-app>" in project.report.resolveSibling("mutation-report.html").readText())
+        val sarif = project.report.resolveSibling("mutation-report.sarif").readText()
+        assertTrue("\"version\": \"2.1.0\"" in sarif, sarif)
+        val version = System.getProperty("mutkt.pluginVersion")
+        assertTrue("\"name\": \"MutKt\",\n" + " ".repeat(10) + "\"version\": \"$version\"" in sarif, sarif)
 
         val second = project.build()
         assertEquals(TaskOutcome.UP_TO_DATE, second.task(":mutkt")?.outcome, second.output)

@@ -29,11 +29,24 @@ gradlePlugin {
     }
 }
 
+// The SARIF report names the plugin version, read from this manifest at run time.
+tasks.jar {
+    manifest {
+        attributes("Implementation-Version" to project.version)
+    }
+}
+
+// TestKit loads the plugin from its jar, as a build that applies it does, so the manifest version resolves.
+tasks.pluginUnderTestMetadata {
+    pluginClasspath.setFrom(tasks.jar, configurations.runtimeClasspath)
+}
+
 tasks.withType<Test>().configureEach {
     val dslDoc = rootProject.layout.projectDirectory.file("docs/dsl.md")
     systemProperty("mutkt.dslDoc", dslDoc.asFile.absolutePath)
     val readme = rootProject.layout.projectDirectory.file("README.md")
     systemProperty("mutkt.readme", readme.asFile.absolutePath)
+    systemProperty("mutkt.pluginVersion", project.version.toString())
     // Absolute paths in system properties are not tracked, so a docs-only change would leave the tests up to date.
     inputs
         .files(readme, rootProject.layout.projectDirectory.dir("docs"))

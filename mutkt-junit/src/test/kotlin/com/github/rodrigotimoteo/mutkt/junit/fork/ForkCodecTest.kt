@@ -176,6 +176,7 @@ class ForkCodecTest {
             Outcome.Killed("", KillKind.EXCEPTION),
             Outcome.Killed("a.CalcTest.adds", KillKind.ASSERTION, "java.lang.AssertionError: expected: <5>"),
             Outcome.Killed("a.CalcTest.adds", KillKind.ASSERTION),
+            Outcome.Killed("a.CalcTest.adds", KillKind.ASSERTION, null, TestId("a.CalcTest")),
             Outcome.Survived,
             Outcome.NoTests,
             Outcome.LoadError("bad é class"),

@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -52,6 +53,22 @@ class JUnitTestExecutorKilledByTest {
         val outcome = killedBy(tests)
         assertKilledBy("CalcTest", outcome)
         assertEquals(KillKind.EXCEPTION, (outcome as Outcome.Killed).kind)
+    }
+
+    // The class is what a run selects, so a failure in a @Nested class names its enclosing class.
+    @Test
+    fun `a kill names the selectable test class that failed, enclosing a nested one`() {
+        val tests =
+            "class CalcTest { @Nested inner class Sums { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } } }"
+        assertEquals(TestId("CalcTest"), (killedBy(tests) as Outcome.Killed).test)
+    }
+
+    @Test
+    fun `an inherited test names the class that ran it`() {
+        val tests =
+            "abstract class BaseTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } } " +
+                "class CalcTest : BaseTest()"
+        assertEquals(TestId("CalcTest"), (killedBy(tests) as Outcome.Killed).test)
     }
 
     @Test

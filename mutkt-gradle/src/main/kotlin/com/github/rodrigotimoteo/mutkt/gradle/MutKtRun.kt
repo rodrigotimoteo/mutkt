@@ -9,6 +9,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.asm.AsmCoverageInstrumenter
 import com.github.rodrigotimoteo.mutkt.asm.AsmMutantGenerator
+import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
 import com.github.rodrigotimoteo.mutkt.junit.ForkSettings
@@ -17,6 +18,8 @@ import com.github.rodrigotimoteo.mutkt.junit.PROBE_REGISTRY
 import com.github.rodrigotimoteo.mutkt.junit.derivedEngineClasspath
 import com.github.rodrigotimoteo.mutkt.report.ConsoleReportWriter
 import com.github.rodrigotimoteo.mutkt.report.FileSourceLookup
+import com.github.rodrigotimoteo.mutkt.report.GithubAnnotationWriter
+import com.github.rodrigotimoteo.mutkt.report.SarifReportWriter
 import com.github.rodrigotimoteo.mutkt.report.StrykerReportWriter
 import com.github.rodrigotimoteo.mutkt.report.deadlineWarning
 import org.gradle.api.GradleException
@@ -35,10 +38,8 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
     val dependencies = testRuntimeClasspath.files.filterNot { it in classDirs }.map(File::toPath)
     val config = analysisConfig(DirectoryClassSource(production.dir))
     val history = historyReuse(production, projectClasses, tests, dependencies, config)
-    val summary = StringBuilder()
-    val json = StringBuilder()
-    val html = StringBuilder()
-    val writer = reportWriter(summary, json, html)
+    val texts = ReportTexts()
+    val writer = reportWriter(texts)
     // The generator resolves supertypes of the analysed classes, including the ones the filters left out. The compile
     // classpath comes last, so runtime versions win and compileOnly types still resolve for frame computation.
     val compileOnly = compileClasspath.files.map(File::toPath)
@@ -59,27 +60,64 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
                 }
             }
         }
-    return AnalysisResult(
-        summary.toString(),
-        report.score,
-        report.results.size,
-        report.results.count { it.status == MutantStatus.ERROR },
-        json.toString(),
-        html.toString(),
-    )
+    return texts.result(report)
 }
 
-private fun MutKtTask.reportWriter(
-    summary: Appendable,
-    json: Appendable,
-    html: Appendable,
-): ReportWriter {
+// What the report writers fill during a run.
+private class ReportTexts {
+    val summary = StringBuilder()
+    val json = StringBuilder()
+    val html = StringBuilder()
+    val sarif = StringBuilder()
+    val annotations = StringBuilder()
+
+    fun result(report: MutationReport) =
+        AnalysisResult(
+            summary.toString(),
+            report.score,
+            report.results.size,
+            report.results.count { it.status == MutantStatus.ERROR },
+            json.toString(),
+            html.toString(),
+            sarif.toString(),
+            annotations.toString(),
+        )
+}
+
+private fun MutKtTask.reportWriter(texts: ReportTexts): ReportWriter {
     val lookup = FileSourceLookup(sourceDirs.files.map(File::toPath))
-    val writers = listOf(ConsoleReportWriter(summary, lookup), StrykerReportWriter(json, html, lookup))
+    val paths = repositoryPaths(lookup, Path.of(repositoryRoot.get()))
+    // Read from the plugin jar's manifest; classes run from a directory (the plugin's own tests) have no version.
+    val version = MutKtTask::class.java.`package`?.implementationVersion
+    val writers =
+        listOf(
+            ConsoleReportWriter(texts.summary, lookup),
+            StrykerReportWriter(texts.json, texts.html, lookup),
+            SarifReportWriter(texts.sarif, version, paths),
+            GithubAnnotationWriter(texts.annotations, paths),
+        )
     return object : ReportWriter {
         override fun write(report: MutationReport) = writers.forEach { it.write(report) }
     }
 }
+
+// A file outside the root has no repository path: GitHub could not place it. Real paths, so a symlinked workspace
+// (macOS /tmp, a runner's work directory) still contains its sources.
+internal fun repositoryPaths(
+    lookup: FileSourceLookup,
+    root: Path,
+): (Mutant) -> String? {
+    val base = root.real()
+    return { mutant ->
+        lookup
+            .sourcePath(mutant.className, mutant.sourceFile)
+            ?.real()
+            ?.takeIf { it.startsWith(base) }
+            ?.let { base.relativize(it).joinToString("/") }
+    }
+}
+
+private fun Path.real(): Path = runCatching { toRealPath() }.getOrElse { toAbsolutePath().normalize() }
 
 private fun MutKtTask.generator(loader: ClassLoader) =
     try {
