@@ -6,7 +6,8 @@ import kotlin.time.Duration
 /** Runs the project's tests against a mutant; throws [TestExecutionStopped] when it cannot continue. */
 public interface TestExecutor {
     /**
-     * Runs the test classes in [tests], in that order (all when null), with [bytes] replacing the mutant's class.
+     * Runs the tests in [tests], class by class in that order (all when null), with [bytes] replacing the mutant's
+     * class.
      * [deadline] is a timeout measured from the start of test execution, not class loading.
      */
     public fun run(

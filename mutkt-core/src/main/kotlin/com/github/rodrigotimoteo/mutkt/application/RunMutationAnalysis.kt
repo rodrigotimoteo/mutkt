@@ -140,7 +140,7 @@ public class RunMutationAnalysis(
         reuse: ResultReuse?,
         confirmation: KillConfirmation,
     ): Keyed {
-        val covering = selection.tests?.map { it.className }
+        val covering = selection.tests?.map { it.className }?.distinct()
         var key: String? = null
         val result =
             try {
@@ -171,7 +171,7 @@ public class RunMutationAnalysis(
         selection: Selection,
         confirmation: KillConfirmation,
     ): MutantResult {
-        val covering = selection.tests?.map { it.className }
+        val covering = selection.tests?.map { it.className }?.distinct()
         val outcome = executor.run(mutant, bytes, selection.deadline, selection.tests)
         return confirmation
             .flakyKiller(outcome, mutant, selection.deadline)

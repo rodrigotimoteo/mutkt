@@ -1,6 +1,5 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
-import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -29,7 +28,7 @@ internal fun writeRequest(
             writeMutant(request.mutant)
             writeByteArray(request.bytes)
             writeLong(request.timeoutMillis)
-            writeOptional(request.tests) { tests -> writeList(tests) { writeString(it.className) } }
+            writeOptional(request.tests) { tests -> writeList(tests) { writeTestId(it) } }
         }
         is ForkRequest.Baseline -> {
             writeByte(REQUEST_BASELINE)
@@ -49,7 +48,7 @@ internal fun readRequest(input: DataInputStream): ForkRequest? =
                     readMutant(),
                     readByteArray(),
                     readLong(),
-                    readOptional { readList { TestId(readString()) } },
+                    readOptional { readList { readTestId() } },
                 )
             REQUEST_BASELINE ->
                 ForkRequest.Baseline(
