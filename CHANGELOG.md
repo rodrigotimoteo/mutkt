@@ -4,8 +4,13 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 ## [Unreleased]
 
+## [0.6.0-rc.1] - 2026-11-28
+
 ### Changed
 
+- A Jupiter mutant runs only the test methods that reached it, not their whole classes; a class reached outside its methods (`@BeforeAll`, nested set-up), a class with shared per-class state (`@TestInstance(PER_CLASS)`, `@TestMethodOrder`) and other engines (JUnit 4, Robolectric, Kotest, Spek) still run whole. On spring-petclinic-kotlin the run takes 108 s instead of 166 s.
+- Mutants no test can reach are NO_COVERAGE rather than SURVIVED: a mutant whose class has coverage probes but was never entered during the baseline (a `lazy { }` in an untouched object, an unused interface default method) is no longer run against the whole suite. Interfaces with code now get probes ([ADR 0010](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/adr/0010-per-test-coverage.md)).
+- `null-returns` no longer turns a returned `Unit` into null (the trailing `Unit` of a lambda or suspend block): Kotlin never reads that value, so the mutant was equivalent.
 - `null-safety` no longer removes the `Intrinsics.checkNotNullParameter` checks kotlinc inserts for non-null parameters: Kotlin callers cannot pass null, so these mutants were equivalent unless Java called in (524 survivors and no kills on the e2e corpus). `!!`, platform-type and `lateinit` checks are still mutated.
 - Breaking: Gradle 8.10 is no longer supported; the minimum is Gradle 8.11. MutKt is now built with Kotlin 2.4, which compiles for Kotlin 2.0 at the oldest, and Gradle 8.11 is the first Gradle with Kotlin 2.0 ([ADR 0005](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/adr/0005-support-matrix.md)).
 - A Jupiter project no longer has to declare `junit-platform-launcher` (Gradle 9 adds none): when the test runtime classpath has `junit-platform-engine` but no launcher, `mutkt` resolves the launcher at the engine's version from the project's repositories, so the mutants run on the project's JUnit Platform rather than MutKt's 1.10.2. Android variants get the same lookup. If it cannot be resolved (offline), the bundled Platform is used as before and the build logs a warning naming the dependency to add.
@@ -14,6 +19,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 - Fewer mutants in code kotlinc generates: the coroutine state machine (`COROUTINE_SUSPENDED` checks and returns, the `Unit` result of a Unit suspend function, the continuation prologue and re-entry), enum `values`/`valueOf`/`getEntries`, and SAM adapter classes. On the ten release-check projects this removes 437 of 4891 mutants, including 49 of the 77 timeouts ([operators](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md#generated-code-on-the-e2e-corpus)).
 - Breaking (scores change): `null-returns` mutates only returns that may be null in Kotlin. A method of a Kotlin class that kotlinc declares non-null (`@NotNull`) has no null mutant any more, since its callers fail with an NPE at once and the kill tests nothing; a non-null `String` method gets an `empty-returns` mutant that returns `""` instead (not for value-class-mangled methods). Private members, generic `T` and platform-typed methods carry no annotation, and Java methods are not trusted even when annotated, so all of them keep their null mutants. The opt-in `non-void-method-calls` likewise replaces a call by null only when its callee is not declared non-null ([operators](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md#reference)).
 - Fewer mutants in code the Compose compiler plugin inserts into `@Composable` functions and lambdas: `Composer` calls (groups, `changed`, `getSkipping`, tracing, `updateScope`), the `$changed`/`$default`/`$dirty` bit tests, the `remember` cache around the user's calculation, and the generated restart lambdas. The user's own branches and calls stay ([operators](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md#noise-filters)).
+
 ### Added
 
 - Survivor baseline: `./gradlew mutktUpdateBaseline` writes the current survivors to a committed `mutkt-baseline.json`, and with `failOnNewSurvivors = true` `mutkt` fails only on survivors that file does not accept. An entry is the mutant id and a digest of its method's code without line numbers, so moving lines keeps it and any other change to the method asks for a review ([ADR 0013](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/adr/0013-survivor-baseline.md)).
@@ -27,10 +33,31 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 - Opt-in operator `extreme`: replaces a whole method body with a default return (nothing, false, 0, `""`, empty, `this` for a builder, else null), one mutant per method, as Descartes does. A survivor marks a pseudo-tested method: tests run it, but none depends on what it does.
 - Classes compiled from sources under `build/generated` (KSP, kapt, AGP: Room's `_Impl`, Moshi adapters) are skipped by default, found by their `SourceFile` rather than by name; a class is still mutated when a file of that name exists anywhere in the main source directories. `excludedClasses` starts with `<generated>`. A JVM build that sets `excludedClasses` with `=` (or `set`) drops the default `<generated>` entry and so still mutates generated classes; use `excludedClasses.add(...)` to keep it.
 - Survivor triage: the console summary groups survivors by method, the method with the most first, names the test classes that reached them and ends with a one-line hint per operator; it lists at most 10 methods and 5 survivors per method, the rest are in the HTML report. The JSON and HTML reports put the hint in each survivor's `statusReason`.
+
 ### Fixed
 
+- A test class that defines a class with the same name as a main class (tusky's test `TuskyApplication`) is no longer replaced by the main one during the coverage baseline; the main class is neither probed nor mutated, since the tests load the test version.
 - A `test` task on a JDK 8 or 11 toolchain fails `mutkt` at once with a message naming that Java version and asking for a Java 17 or newer launcher, instead of a baseline failure with an `UnsupportedClassVersionError` from the child JVMs.
 - Docs: mutants reached only through another project's classes on the test classpath (its test fixtures, for instance) are killed, as they have been since 0.5.0 loads each run in one class loader. The known-gap note is gone, and a multi-module build now tests it.
+
+### Benchmark
+
+Release-gate run on 10 open-source projects (MacBook, 11 cores); every project passes its expectations. Full table: [docs/benchmark.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/benchmark.md).
+
+| Project | Mutants | Score | Wall time (0.5.0 → 0.6.0-rc.1) |
+|---|---|---|---|
+| strikt | 425 | 82.6% | 1m25s → 39s |
+| http4k | 71 | 84.5% | 1m3s → 53s |
+| spring-petclinic-kotlin | 61 | 77.0% | 4m07s → 1m31s |
+| architecture-samples | 161 | 52.2% | 50s → 38s |
+| nowinandroid | 50 | 50.0% | 1m → 42s |
+| chucker | 812 | 38.8% | 8m47s → 5m1s |
+| tusky | 757 | 28.0% | 6m41s → 5m56s |
+| diffuse | 288 | 24.0% | 11s → 10s |
+| gradle-semver-plugin | 182 | 16.5% | 17s → 15s |
+| pluto | 352 | 1.1% | 54s → 28s |
+
+Scores move against 0.5.0 mostly because mutants that tested nothing are gone: kills that only came from returning null where Kotlin forbids it, and survivors on code kotlinc or the Compose compiler generates.
 
 ## [0.5.0] - 2026-11-27
 

@@ -1,18 +1,18 @@
 {
-  "version": "0.5.0",
-  "commit": "1a545ac",
-  "date": "2026-11-27",
+  "version": "0.6.0-rc.1",
+  "commit": "5722635",
+  "date": "2026-11-28",
   "machine": "MacBook, 11 cores",
   "wallTime": {
-    "nowinandroid": "1m",
-    "architecture-samples": "50s",
-    "tusky": "6m41s",
-    "chucker": "8m47s",
-    "pluto": "54s",
-    "strikt": "1m25s",
-    "spring-petclinic-kotlin": "4m07s",
-    "gradle-semver-plugin": "17s",
-    "http4k": "1m3s",
-    "diffuse": "11s"
+    "nowinandroid": "42s",
+    "architecture-samples": "38s",
+    "tusky": "5m56s",
+    "chucker": "5m1s",
+    "pluto": "28s",
+    "strikt": "39s",
+    "spring-petclinic-kotlin": "1m31s",
+    "gradle-semver-plugin": "15s",
+    "http4k": "53s",
+    "diffuse": "10s"
   }
 }
