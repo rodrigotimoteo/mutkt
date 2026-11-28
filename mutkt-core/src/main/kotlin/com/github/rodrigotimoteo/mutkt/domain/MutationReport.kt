@@ -16,6 +16,9 @@ public data class MutationReport(
             if (scorable == 0) null else detected.toDouble() / scorable
         }
 
+    /** How many results were taken from the last run's history. */
+    val reused: Int = results.count { it.reused }
+
     // Lazy: eager construction would recurse into sub-reports forever.
 
     /** Sub-reports keyed by the mutated class name. */

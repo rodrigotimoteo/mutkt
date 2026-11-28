@@ -61,6 +61,19 @@ class StrykerReportWriterTest {
     }
 
     @Test
+    fun `results reused from history are counted in the config and still validate`() {
+        val fixture = fixtureReport(dir)
+        val report = fixture.copy(results = fixture.results.mapIndexed { i, result -> result.copy(reused = i < 2) })
+        val json = render(report)
+
+        assertEquals(emptyList<String>(), SchemaValidator(schemaText()).validate(json))
+        assertEquals(
+            mapOf("omittedByCap" to 2, "reused" to 2),
+            ObjectMapper().readValue(json, Map::class.java)["config"],
+        )
+    }
+
+    @Test
     fun `coveredBy lists the covering test classes and testFiles defines each one for the viewer`() {
         val json = ObjectMapper().readTree(render(fixtureReport(dir)))
         val coveredBy =
