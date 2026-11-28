@@ -24,7 +24,7 @@ If applicable, add screenshots to help explain your problem.
 - OS: [e.g., Ubuntu 22.04]
 - Java version: [e.g., 21]
 - Kotlin version: [e.g., 2.1.10]
-- Gradle version: [e.g., 8.10]
+- Gradle version: [e.g., 8.11.1]
 - Plugin version: [e.g., 0.2.0]
 
 **Additional context**

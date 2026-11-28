@@ -4,11 +4,12 @@ plugins {
 }
 
 // Dokka HTML fills the published javadoc jar. Its own jar task keeps Dokka, which resolves from the network, out of assemble.
-val dokkaJavadocJar by tasks.registering(Jar::class) {
-    archiveClassifier = "javadoc"
-    destinationDirectory = layout.buildDirectory.dir("dokka-javadoc")
-    from(tasks.named("dokkaGeneratePublicationHtml"))
-}
+val dokkaJavadocJar =
+    tasks.register<Jar>("dokkaJavadocJar") {
+        archiveClassifier = "javadoc"
+        destinationDirectory = layout.buildDirectory.dir("dokka-javadoc")
+        from(tasks.named("dokkaGeneratePublicationHtml"))
+    }
 
 configurations.named("javadocElements") {
     outgoing.artifacts.clear()

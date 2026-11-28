@@ -149,6 +149,22 @@ class SuppressionTest {
     }
 
     @Test
+    fun `lambdas three levels deep in a suppressed function are suppressed with it`() {
+        val result =
+            operatorsByMethod(
+                """
+                class C {
+                    @SuppressMutations
+                    fun f(n: Int): () -> Int = { val a: () -> Int = { val b: () -> Int = { n + 3 }; b() + 2 }; a() + 1 }
+                    fun g(n: Int) = n + 1
+                }
+                """.trimIndent(),
+            )
+
+        assertEquals(setOf("C.g"), result.keys)
+    }
+
+    @Test
     fun `annotating one overload leaves its siblings mutated`() {
         val mutants =
             AsmMutantGenerator(operators, ::error) { null }.discover(

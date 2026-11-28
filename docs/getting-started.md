@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- JDK 17 or 21, Gradle 8.10 or later, including 9.x.
+- JDK 17 or 21, Gradle 8.11 or later, including 9.x.
 - The `java`, `kotlin("jvm")` or an Android plugin (AGP 8.4 to 9.x, see [Android](#android)); MutKt fails the build without one.
 - Tests on the JUnit Platform. Jupiter runs by default; JUnit 4 tests need `engines` (see [dsl.md](dsl.md)).
 - A green test suite: MutKt runs it once on the original classes first and stops if anything fails.
@@ -78,7 +78,7 @@ The task is up to date until classes, sources, the test classpath or the setting
 
 ## Android
 
-MutKt runs on Android application and library modules (`com.android.application`, `com.android.library`) with AGP 8.4 through 9.x and Gradle 8.10 or later, including 9.x (AGP 9 itself needs Gradle 9.1 or later). CI tests AGP 8.4.2, 8.13.2 and 9.5.3.
+MutKt runs on Android application and library modules (`com.android.application`, `com.android.library`) with AGP 8.4 through 9.x and Gradle 8.11 or later, including 9.x (AGP 9 itself needs Gradle 9.1 or later). CI tests AGP 8.4.2, 8.13.2 and 9.5.3.
 
 It mutates the classes of one variant (Kotlin and Java, as AGP compiled them) and runs that variant's local unit tests (`src/test`) against each mutant. The test classes, classpath (Android library modules and AAR dependencies included) and JVM settings (`unitTests.all { }`) come from the variant's unit-test task, `test<Variant>UnitTest`; MutKt reads them without running that task.
 

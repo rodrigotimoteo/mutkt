@@ -13,13 +13,6 @@ dependencies {
     implementation(libs.kctfork.core)
 }
 
-// kctfork 0.7.1 asks for a newer Kotlin than the one the fixtures are meant to be compiled with.
-configurations.all {
-    resolutionStrategy.eachDependency {
-        if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-stdlib")) useVersion(libs.versions.kotlin.get())
-    }
-}
-
 application {
     mainClass = "ParityLegacyKt"
 }
