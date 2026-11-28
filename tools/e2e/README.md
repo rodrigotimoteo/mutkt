@@ -32,7 +32,7 @@ The init script adds `build/e2e-repo`, the Plugin Portal, Google and Maven Centr
 - `init-script`: adds `mutkt-gradle` to the root project's buildscript classpath and applies MutKt by id to `module` once its Java or Android plugin is applied. It never reads another project's model, so it works under isolated projects.
 - `patch`: applies `patch` (a path relative to the corpus file) with `git apply`; the patch adds `id("io.github.rodrigotimoteo.mutkt") version "0.0.0-e2e"` to the module's `plugins { }` block.
 
-Both modes then set the entry's `mutkt` values (`targetClasses`, `threads`, `timeoutMs`), `variant`, and `engines` from `tests`: `jupiter` is `junit-jupiter`, `vintage` and `robolectric` are `junit-vintage`, `kotest` is `kotest`.
+Both modes then set the entry's `mutkt` values (`targetClasses`, `threads`, `timeoutMs`, `operators`), `variant`, and `engines` from `tests`: `jupiter` is `junit-jupiter`, `vintage` and `robolectric` are `junit-vintage`, `kotest` is `kotest`.
 
 MutKt sees AGP's classes only when AGP is declared in the same or a parent `plugins { }` scope. Init-script mode puts MutKt in the root's class loader, so it works when the root declares AGP (`alias(libs.plugins.android.application) apply false`, as most Android projects do) or the module is the root. When only the module declares AGP, the run fails with `MutKt cannot load the Android Gradle plugin's classes` and the table says so: switch that entry to patch mode. Make the patch from a clean checkout of the pinned commit (`git diff > tools/e2e/patches/<name>.patch`).
 

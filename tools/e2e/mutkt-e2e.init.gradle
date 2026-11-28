@@ -32,6 +32,7 @@ def configure = { mutkt ->
     if (settings.targetClasses) mutkt.targetClasses.set(settings.targetClasses)
     if (settings.threads != null) mutkt.threads.set(settings.threads as Integer)
     if (settings.timeoutMs != null) mutkt.timeoutMs.set(settings.timeoutMs as Long)
+    if (settings.operators) mutkt.operators.set(settings.operators as Set)
     if (entry.variant) mutkt.variant.set(entry.variant)
     def engines = (entry.tests ?: []).collect { engineIds[it] }.findAll { it } as Set
     if (engines) mutkt.engines.set(engines)
