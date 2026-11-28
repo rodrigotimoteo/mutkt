@@ -80,6 +80,19 @@ class StrykerReportWriterTest {
     }
 
     @Test
+    fun `a survivor's status reason is the hint of its operator`() {
+        val reasons =
+            ObjectMapper().readTree(render(fixtureReport(dir))).get("files").flatMap { it.get("mutants") }.associate {
+                it.get("description").asText() to it.get("statusReason")?.asText()
+            }
+
+        assertEquals("No test checks what happens on both sides of the condition", reasons["Negated conditional"])
+        assertEquals("No test asserts on the computed value", reasons["No debug info"])
+        assertEquals("Killed by demo.CalcTest.adds() (assertion)", reasons["Replaced + with -"])
+        assertEquals(null, reasons["Replaced return value"])
+    }
+
+    @Test
     fun `a report without coverage has no testFiles`() {
         val report = fixtureReport(dir).let { r -> r.copy(results = r.results.map { it.copy(coveredBy = null) }) }
 
