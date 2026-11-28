@@ -1,6 +1,6 @@
 # 0012 Android instrumented tests
 
-Status: proposed (2026-11-28, ROD-256). The owner decides. Until then [0006](0006-android.md) and the FAQ describe the scope.
+Status: accepted (2026-11-28, ROD-256, owner).
 
 ## Context
 
