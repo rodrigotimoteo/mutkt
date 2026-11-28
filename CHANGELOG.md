@@ -7,9 +7,12 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 ### Changed
 
 - A Jupiter project no longer has to declare `junit-platform-launcher` (Gradle 9 adds none): when the test runtime classpath has `junit-platform-engine` but no launcher, `mutkt` resolves the launcher at the engine's version from the project's repositories, so the mutants run on the project's JUnit Platform rather than MutKt's 1.10.2. Android variants get the same lookup. If it cannot be resolved (offline), the bundled Platform is used as before and the build logs a warning naming the dependency to add.
+- Fewer mutants in code kotlinc generates: the coroutine state machine (`COROUTINE_SUSPENDED` checks and returns, the `Unit` result of a Unit suspend function, the continuation prologue and re-entry), enum `values`/`valueOf`/`getEntries`, and SAM adapter classes. On the ten release-check projects this removes 437 of 4891 mutants, including 49 of the 77 timeouts ([operators](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md#generated-code-on-the-e2e-corpus)).
 ### Added
 
+- Opt-in `when-switch` operator: a `when` over Int, Char or String constants sends one case to the else branch, or the else branch to the first case ([docs/operators.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md)).
 - Opt-in operator `remove-negation`: removes a unary minus (`INEG`/`LNEG`/`FNEG`/`DNEG`), so `-x` becomes `x`, as PIT's negation mutator does.
+- Classes compiled from sources under `build/generated` (KSP, kapt, AGP: Room's `_Impl`, Moshi adapters) are skipped by default, found by their `SourceFile` rather than by name; a class is still mutated when a file of that name exists anywhere in the main source directories. `excludedClasses` starts with `<generated>`. A JVM build that sets `excludedClasses` with `=` (or `set`) drops the default `<generated>` entry and so still mutates generated classes; use `excludedClasses.add(...)` to keep it.
 ### Fixed
 
 - Docs: mutants reached only through another project's classes on the test classpath (its test fixtures, for instance) are killed, as they have been since 0.5.0 loads each run in one class loader. The known-gap note is gone, and a multi-module build now tests it.

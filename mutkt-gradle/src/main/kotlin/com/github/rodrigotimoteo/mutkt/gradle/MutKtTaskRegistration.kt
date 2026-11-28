@@ -66,6 +66,7 @@ internal fun <T : MutKtTask> Project.registerMutkt(
                     ?.absolutePath ?: currentJava()
             },
         )
+        task.generatedSourcesDir.set(layout.buildDirectory.dir("generated"))
         task.reportsDir.set(layout.buildDirectory.dir("reports/mutkt"))
     }
 

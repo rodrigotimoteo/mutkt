@@ -11,9 +11,13 @@ public data class Coverage(
     val global: Set<Probe>,
 )
 
-/** The probes [test] reached and how long it ran. */
+/**
+ * The site probes [test] reached, how long it ran and the probed classes it [reached] (entered any method of), which
+ * the result history keys on.
+ */
 public data class TestCoverage(
     val test: TestId,
     val hits: Set<Probe>,
     val elapsed: Duration,
+    val reached: Set<String> = emptySet(),
 )

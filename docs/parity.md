@@ -55,6 +55,11 @@ Every documented difference, from `mutkt-asm/src/test/kotlin/com/github/rodrigot
 | D16d | null-returns | legacy only | Mutates the members kotlinc generates for the data classes `Point` and `Pair2` (the returns of the generated `toString`, `copy` and object `componentN`; legacy rows without a line) | Generated, so the rebuild skips them (see Noise filters in `docs/operators.md`) |
 | D16e | null-safety | legacy only | Mutates the members kotlinc generates for the data classes `Point` and `Pair2` (the parameter check of the generated `copy`; legacy rows without a line) | Generated, so the rebuild skips them (see Noise filters in `docs/operators.md`) |
 | D16f | return-vals | legacy only | Mutates the members kotlinc generates for the data classes `Point` and `Pair2` (the returns of the generated `hashCode` and numeric `componentN`; legacy rows without a line) | Generated, so the rebuild skips them (see Noise filters in `docs/operators.md`) |
+| D17a | arithmetic | legacy only | Mutates the `label - MIN_VALUE` of a suspend function's continuation prologue (`fetchTwice`, `chain`; legacy rows without a line) | Generated state machine, dropped by `ContinuationFilter` (see Noise filters in `docs/operators.md`) |
+| D17b | negate-conditionals | legacy only | Negates the continuation prologue tests (`instanceof`, `label & MIN_VALUE`; no line) and the `COROUTINE_SUSPENDED` comparisons in `fetchTwice`, `chain` and the `generate`/`runIt` lambdas | The prologue tests are dropped by `ContinuationFilter`, the comparisons by `SuspendMarkerFilter` |
+| D18a | empty-returns | legacy only | Empties the return of the `values()` kotlinc generates for the enums `Color` and `Dir` | Generated, so the rebuild skips `values`, `valueOf` and `getEntries` of a Kotlin enum (see Noise filters in `docs/operators.md`) |
+| D18b | non-void-method-calls | legacy only | Mutates the `clone` and `Enum.valueOf` calls of the generated `values()` and `valueOf` | As D18a |
+| D18c | null-returns | legacy only | Nulls the returns of the generated `valueOf` and `getEntries` | As D18a |
 
 The legacy COROUTINE row has no line, so it pairs with one of the two suspend calls of `chain` (same site, any line) and D11 explains the other: the marker row itself is not matched by a rebuild site.
 

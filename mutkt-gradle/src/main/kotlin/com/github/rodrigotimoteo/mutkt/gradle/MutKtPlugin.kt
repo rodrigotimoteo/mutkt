@@ -12,6 +12,8 @@ public class MutKtPlugin : Plugin<Project> {
         mutkt.engines.convention(DEFAULT_ENGINES)
         mutkt.reports.console.convention(true)
         mutkt.variant.convention("debug")
+        // A value rather than a convention, so add() extends it and set() replaces it, as on Android.
+        mutkt.excludedClasses.add(GENERATED_SOURCES)
 
         // Only `java` creates source sets: a java-base-only project passes the check below but has no model.
         project.pluginManager.withPlugin("java") {

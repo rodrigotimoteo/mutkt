@@ -36,7 +36,7 @@ internal object StringWhenFilter : SiteFilter {
             .toSet()
 
     private fun plumbing(switch: AbstractInsnNode): List<AbstractInsnNode> {
-        val hash = realBefore(switch)?.takeIf { it.isString("hashCode", "()I") } ?: return emptyList()
+        val hash = realBefore(switch)?.takeIf { it.isStringCall("hashCode", "()I") } ?: return emptyList()
         val subject = subjectOf(hash)
         val chains = subject?.let { local -> targets(switch).map { equalsChain(it, local, defaultOf(switch)) } }
         return if (chains != null && chains.all { it.isNotEmpty() }) listOf(hash) + chains.flatten() else emptyList()
@@ -71,7 +71,7 @@ internal object StringWhenFilter : SiteFilter {
     ): List<AbstractInsnNode> =
         generateSequence<AbstractInsnNode>(target) { it.next }
             .takeWhile { it.opcode != GOTO }
-            .filter { it.isString("equals", "(Ljava/lang/Object;)Z") && isGuard(it, subject, default) }
+            .filter { it.isStringCall("equals", "(Ljava/lang/Object;)Z") && isGuard(it, subject, default) }
             .toList()
 
     private fun isGuard(
@@ -91,15 +91,16 @@ internal object StringWhenFilter : SiteFilter {
         this is JumpInsnNode && opcode == GOTO && this.label === label
 
     private fun AbstractInsnNode?.isLoad(local: Int) = this is VarInsnNode && opcode == ALOAD && `var` == local
+}
 
-    private fun AbstractInsnNode.isString(
-        name: String,
-        desc: String,
-    ): Boolean {
-        val call = this as? MethodInsnNode ?: return false
-        return call.opcode == INVOKEVIRTUAL &&
-            call.owner == "java/lang/String" &&
-            call.name == name &&
-            call.desc == desc
-    }
+/** True for a call of the String method [name] with descriptor [desc]. */
+internal fun AbstractInsnNode?.isStringCall(
+    name: String,
+    desc: String,
+): Boolean {
+    val call = this as? MethodInsnNode ?: return false
+    return call.opcode == INVOKEVIRTUAL &&
+        call.owner == "java/lang/String" &&
+        call.name == name &&
+        call.desc == desc
 }

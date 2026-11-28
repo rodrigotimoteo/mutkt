@@ -10,7 +10,7 @@ Requires the Java, Kotlin JVM or Android plugin. A test fails when this table dr
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | `targetClasses` | List<String> | empty (all) | Class globs to mutate |
-| `excludedClasses` | List<String> | empty (Android: the generated-class globs below) | Class globs never mutated |
+| `excludedClasses` | List<String> | `<generated>` (Android: also the generated-class globs below) | Class globs never mutated; `<generated>` skips classes compiled from generated sources (below) |
 | `excludedMethods` | List<String> | empty | `method` or `pkg.Class#method` entries to skip |
 | `operators` | Set<String> | empty (default operators) | Operator ids to enable, from [operators.md](operators.md); empty runs the six default-on operators, a non-empty set runs exactly those ids (list every id to run all); an unknown id fails the run and lists the valid ones |
 | `threads` | Int | unset (available processors, resolved at run time) | Parallel test runs; more than the cores can cause false TIMEOUTs, since deadlines scale from a baseline run alone |
@@ -27,6 +27,10 @@ Requires the Java, Kotlin JVM or Android plugin. A test fails when this table dr
 | Property | Type | Default | Meaning |
 |---|---|---|---|
 | `console` | Boolean | true | Print the summary to the build log |
+
+### Generated sources
+
+`excludedClasses` starts with `<generated>`, which matches no class name: it skips each class whose compiled `SourceFile`, read under its package directory, is a file under the module's `build/generated` (where KSP, kapt, Java annotation processors and AGP write, so Room's `_Impl` classes and Moshi's `JsonAdapter`s) and no file of that name exists anywhere in the main source directories (when in doubt, the class is mutated). Nested and anonymous classes go with their file. `excludedClasses.add(...)` keeps it; `excludedClasses = [...]` (or `set`) without `<generated>` mutates those classes again. A class compiled without the attribute is never skipped this way. With `--info` the task logs how many classes it skipped.
 
 ### Android generated classes
 

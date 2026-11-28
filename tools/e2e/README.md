@@ -53,6 +53,10 @@ MutKt sees AGP's classes only when AGP is declared in the same or a parent `plug
 
 `python3 -I tools/e2e/e2e.py compare <old report> <new report>` matches mutants by id and prints how many kept their status, how many went from Survived to NoCoverage and how many ran the whole suite (no `coveredBy`), then one line per other change with the mutant's `coveredBy` and its old `killedBy`. It exits 1 when there is such a line.
 
+## Operator statistics
+
+`python3 -I tools/e2e/e2e.py operators <reports dir> [--sample N]` reads every `*.json` Stryker report in a directory (one per repo, for instance copied from a release gate run) and prints one row per operator: its mutants, the Killed, Survived, NoCoverage, Timeout and RuntimeError counts, and its share of all mutants in the directory. Rows are sorted by mutant count, with an `all` row for the totals. `--sample N` adds N random Survived mutants per operator with their repo, file, line and source line, for labelling equivalent mutants by hand.
+
 ## Self-test
 
 `selftest/run.sh` turns `selftest/fixture` (a Kotlin JVM build with a `:lib` module) into a git repo with this repository's wrapper and runs `selftest/corpus.json` against it in a temporary cache with isolated projects on: `fixture-broken` (its build fails) must fail without stopping the run, `fixture-pass` must pass, `fixture-fail` (every expectation wrong) must fail, `fixture-leak` (its log fakes a scan upload) must fail with `build scan published`, and running `fixture-pass` alone must pass.
