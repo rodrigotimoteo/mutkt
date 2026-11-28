@@ -57,27 +57,32 @@ internal class TestKitProject(
     /** Whether the `test` task wrote a result for [testClass], that is, it ran its tests. */
     fun ranTests(testClass: String): Boolean = dir.resolve("build/test-results/test/TEST-$testClass.xml").isFile
 
-    fun build(task: String = "mutkt"): BuildResult = runner(task).build()
+    fun build(
+        task: String = "mutkt",
+        configurationCache: Boolean = true,
+    ): BuildResult = runner(task, configurationCache).build()
 
     fun buildAndFail(): BuildResult = runner("mutkt").buildAndFail()
 
-    private fun runner(task: String) =
-        GradleRunner
-            .create()
-            .withProjectDir(dir)
-            .withPluginClasspath()
-            // File system watching lets a loaded daemon start the next build before the event for a just-rewritten
-            // build.gradle arrives, so the configuration cache is reused stale; without it every build rehashes.
-            // Deprecation warnings fail the build: the next major Gradle turns them into errors.
-            .withArguments(
-                task,
-                "--configuration-cache",
-                "--no-watch-fs",
-                "--console=plain",
-                "--offline",
-                "--stacktrace",
-                "--warning-mode=fail",
-            ).also { runner -> version?.let(runner::withGradleVersion) }
+    private fun runner(
+        task: String,
+        configurationCache: Boolean = true,
+    ) = GradleRunner
+        .create()
+        .withProjectDir(dir)
+        .withPluginClasspath()
+        // File system watching lets a loaded daemon start the next build before the event for a just-rewritten
+        // build.gradle arrives, so the configuration cache is reused stale; without it every build rehashes.
+        // Deprecation warnings fail the build: the next major Gradle turns them into errors.
+        .withArguments(
+            task,
+            if (configurationCache) "--configuration-cache" else "--no-configuration-cache",
+            "--no-watch-fs",
+            "--console=plain",
+            "--offline",
+            "--stacktrace",
+            "--warning-mode=fail",
+        ).also { runner -> version?.let(runner::withGradleVersion) }
 
     /** The jars of this JVM's classpath whose file name matches [pattern], as quoted Groovy strings. */
     fun jars(pattern: Regex): String =

@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -39,14 +40,17 @@ class ForkedSandboxCacheTest {
     @Test
     fun `a Robolectric jar on the classpath gives every mutant a fresh child`() {
         val jar = writeJar(dir.resolve("robolectric.jar"), sandboxManager)
-        assertEquals(listOf(Outcome.Killed("CalcTest.adds"), Outcome.Survived) to 3, flow(SANDBOX_TEST, listOf(jar)))
+        assertEquals(
+            listOf(Outcome.Killed("CalcTest.adds", KillKind.ASSERTION), Outcome.Survived) to 3,
+            flow(SANDBOX_TEST, listOf(jar)),
+        )
     }
 
     @Test
     fun `a Robolectric class directory on the classpath gives every mutant a fresh child`() {
         val classes = writeClasses(dir.resolve("robolectric"), sandboxManager.map { ClassFile(it.key, it.value) })
         assertEquals(
-            listOf(Outcome.Killed("CalcTest.adds"), Outcome.Survived) to 3,
+            listOf(Outcome.Killed("CalcTest.adds", KillKind.ASSERTION), Outcome.Survived) to 3,
             flow(SANDBOX_TEST, listOf(classes)),
         )
     }
@@ -54,7 +58,10 @@ class ForkedSandboxCacheTest {
     @Test
     fun `without Robolectric one child serves every mutant`() {
         val test = "class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }"
-        assertEquals(listOf(Outcome.Killed("CalcTest.adds"), Outcome.Survived) to 1, flow(test))
+        assertEquals(
+            listOf(Outcome.Killed("CalcTest.adds", KillKind.ASSERTION), Outcome.Survived) to 1,
+            flow(test),
+        )
     }
 
     private companion object {

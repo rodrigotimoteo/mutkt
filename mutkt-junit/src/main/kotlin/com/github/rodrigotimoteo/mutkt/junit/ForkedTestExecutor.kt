@@ -297,4 +297,4 @@ private fun removeShutdownHook(hook: Thread) {
 }
 
 private fun ForkReply.Result.mayBeLeftover(): Boolean =
-    outcome == Outcome.Timeout || outcome == Outcome.Killed(OUT_OF_MEMORY)
+    outcome == Outcome.Timeout || (outcome is Outcome.Killed && outcome.by == OUT_OF_MEMORY && outcome.cause == null)
