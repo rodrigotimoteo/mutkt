@@ -11,6 +11,8 @@ public sealed interface Outcome {
         val kind: KillKind,
         /** The first failure's `toString()` on one line, capped; null when a child process died. */
         val cause: String? = null,
+        /** The test class that failed; null when none is known, as when a child process died. */
+        val test: TestId? = null,
     ) : Outcome
 
     public data object Survived : Outcome

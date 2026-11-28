@@ -252,4 +252,16 @@ class RunMutationAnalysisHistoryTest {
         assertEquals(all.toSet(), run(fingerprint = null).ran)
         assertTrue(history.written.isEmpty())
     }
+
+    @Test
+    fun `a reused kill is not confirmed again`() {
+        val byClass = Outcome.Killed("ATest.adds", KillKind.ASSERTION, test = TestId("ATest"))
+        val confirmed: (Mutant) -> Outcome = { if (it == foo) byClass else behavior(it) }
+        val first = run(behavior = confirmed)
+        val second = run(behavior = confirmed)
+
+        assertEquals(1, first.executor.received.count { it.second == foo.className })
+        assertEquals(MutantStatus.KILLED, second.report.results[0].status)
+        assertTrue(second.executor.received.isEmpty())
+    }
 }

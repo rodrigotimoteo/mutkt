@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -42,6 +43,7 @@ class JUnitTestExecutorBaselineTest {
                 "CalcTest.unrelated",
                 KillKind.ASSERTION,
                 "org.opentest4j.AssertionFailedError: red",
+                TestId("CalcTest"),
             )
         assertEquals(killed, executor(tests).baseline(deadline).outcome)
     }

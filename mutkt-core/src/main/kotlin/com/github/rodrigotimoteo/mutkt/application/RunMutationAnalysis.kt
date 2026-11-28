@@ -71,7 +71,8 @@ public class RunMutationAnalysis(
         val map = CoverageMap(instrumented.probes, baseline.coverage, config.timeout, minOf(config.timeout, needed))
         val reuse =
             history?.let { ResultReuse(stored, it, classes, baseline.coverage, instrumented.unprobed) }
-        val evaluated = analyse(mutants, map, reuse, progress)
+        val confirmation = KillConfirmation(executor, classes.associate { it.name to it.bytes })
+        val evaluated = analyse(mutants, map, reuse, confirmation, progress)
         reuse?.let { history?.history?.write(it.next(evaluated)) }
         return MutationReport(evaluated.map { it.result }, omitted, cap).also(writer::write)
     }
@@ -107,13 +108,16 @@ public class RunMutationAnalysis(
         mutants: List<Mutant>,
         map: CoverageMap,
         reuse: ResultReuse?,
+        confirmation: KillConfirmation,
         progress: (MutantResult) -> Unit,
     ): List<Keyed> {
         val pool = Executors.newFixedThreadPool(config.parallelism)
         try {
             val completion = ExecutorCompletionService<IndexedValue<Keyed>>(pool)
             for ((index, mutant) in mutants.withIndex()) {
-                completion.submit(Callable { IndexedValue(index, evaluate(mutant, map.selection(mutant), reuse)) })
+                completion.submit(
+                    Callable { IndexedValue(index, evaluate(mutant, map.selection(mutant), reuse, confirmation)) },
+                )
             }
             val byIndex = mutableMapOf<Int, Keyed>()
             repeat(mutants.size) {
@@ -134,6 +138,7 @@ public class RunMutationAnalysis(
         mutant: Mutant,
         selection: Selection,
         reuse: ResultReuse?,
+        confirmation: KillConfirmation,
     ): Keyed {
         val covering = selection.tests?.map { it.className }
         var key: String? = null
@@ -144,8 +149,9 @@ public class RunMutationAnalysis(
                 } else {
                     val bytes = generator.materialize(mutant)
                     key = reuse?.key(mutant, bytes, selection.tests)
+                    // A reused kill was confirmed when it was stored.
                     key?.let { reuse?.reusable(mutant.id, it) }?.toResult(mutant, covering)
-                        ?: executor.run(mutant, bytes, selection.deadline, selection.tests).toResult(mutant, covering)
+                        ?: runFresh(mutant, bytes, selection, confirmation)
                 }
             } catch (e: TestExecutionStopped) {
                 throw e
@@ -157,6 +163,20 @@ public class RunMutationAnalysis(
                 MutantResult(mutant, MutantStatus.ERROR, cause(e.toString()), coveredBy = covering)
             }
         return Keyed(result, key)
+    }
+
+    private fun runFresh(
+        mutant: Mutant,
+        bytes: ByteArray,
+        selection: Selection,
+        confirmation: KillConfirmation,
+    ): MutantResult {
+        val covering = selection.tests?.map { it.className }
+        val outcome = executor.run(mutant, bytes, selection.deadline, selection.tests)
+        return confirmation
+            .flakyKiller(outcome, mutant, selection.deadline)
+            ?.let { MutantResult(mutant, MutantStatus.ERROR, "flaky test $it", coveredBy = covering) }
+            ?: outcome.toResult(mutant, covering)
     }
 }
 
