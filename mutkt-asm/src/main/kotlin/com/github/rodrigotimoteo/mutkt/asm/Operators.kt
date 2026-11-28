@@ -6,6 +6,7 @@ import com.github.rodrigotimoteo.mutkt.asm.operators.ConstructorCallsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.CoroutineOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.DataClassCopyOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.EmptyReturnsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.ExtremeOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.FalseReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.IncrementsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.NegateConditionalsOperator
@@ -47,6 +48,7 @@ internal object Operators {
             WhenSwitchOperator,
             RemoveNegationOperator,
             StdlibSwapOperator,
+            ExtremeOperator,
         )
 
     /** Every operator, in the order they are applied and reported. */
