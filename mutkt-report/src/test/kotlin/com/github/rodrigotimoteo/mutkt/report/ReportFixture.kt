@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.report
 
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
@@ -27,7 +28,7 @@ internal fun fixtureReport(root: Path): MutationReport {
     return MutationReport(
         listOf(
             result(MutantStatus.KILLED, "arithmetic", "add", 4, "Replaced + with -", killedBy = "demo.CalcTest.adds()")
-                .copy(coveredBy = listOf("demo.CalcTest")),
+                .copy(coveredBy = listOf("demo.CalcTest"), killKind = KillKind.ASSERTION),
             result(MutantStatus.SURVIVED, "negate-conditionals", "max", 7, "Negated conditional")
                 .copy(coveredBy = listOf("demo.MaxTest", "demo.CalcTest")),
             result(MutantStatus.TIMEOUT, "arithmetic", "add", 4, "Replaced + with *", ordinal = 1),
