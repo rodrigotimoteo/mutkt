@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.junit
 
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import org.junit.platform.engine.TestExecutionResult
 import org.junit.platform.engine.UniqueId
 import org.junit.platform.engine.support.descriptor.ClassSource
@@ -17,6 +18,8 @@ internal class OutcomeListener : TestExecutionListener {
         private set
     var cause: String? = null
         private set
+    var kind: KillKind = KillKind.EXCEPTION
+        private set
 
     override fun executionStarted(id: TestIdentifier) {
         if (id.isTest) started++
@@ -29,8 +32,19 @@ internal class OutcomeListener : TestExecutionListener {
         if (result.status == TestExecutionResult.Status.FAILED && killedBy == null) {
             killedBy = label(name(id))
             cause = result.throwable.map { describe(it) }.orElse(null)
+            kind = kindOf(result.throwable.orElse(null))
         }
     }
+
+    // AssertionError is a bootstrap class, so the test loader's subclasses (opentest4j, kotlin.test, AssertJ, Truth,
+    // Kotest, Mockito verification) all match it. Wrappers (an ExecutionException from a future) hide it in the cause
+    // chain, which is walked to a bound because a chain can loop.
+    private fun kindOf(throwable: Throwable?): KillKind =
+        if (generateSequence(throwable) { it.cause }.take(MAX_CAUSE_DEPTH).any { it is AssertionError }) {
+            KillKind.ASSERTION
+        } else {
+            KillKind.EXCEPTION
+        }
 
     private fun name(id: TestIdentifier): String =
         when (val source = id.source.orElse(null)) {
@@ -63,3 +77,5 @@ private val WHITESPACE = Regex("\\s+")
 private const val MAX_LABEL = 200
 
 private const val MAX_CAUSE = 200
+
+private const val MAX_CAUSE_DEPTH = 32

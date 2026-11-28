@@ -4,8 +4,10 @@ import org.gradle.api.file.Directory
 import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.tasks.Internal
+import org.gradle.work.DisableCachingByDefault
 
 /** `mutkt` on Android: AGP's `toGet` fills these two lists, which [classesDirs] reads. */
+@DisableCachingByDefault(because = "The result is a console report; tests run in forked JVMs")
 internal abstract class MutKtAndroidTask : MutKtTask() {
     // Tracked through classesDirs.
     @get:Internal

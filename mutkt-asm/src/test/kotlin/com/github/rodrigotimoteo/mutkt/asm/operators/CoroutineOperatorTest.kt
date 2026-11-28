@@ -204,7 +204,7 @@ class CoroutineOperatorTest {
             listOf("launch\$default", "join", "async\$default", "await", "withContext", "delay"),
             descriptions("invokeSuspend", lambda).map { it.substringAfter('.') },
         )
-        assertEquals(listOf("BuildersKt.runBlocking\$default"), descriptions("builders"))
+        assertEquals(listOf("BuildersKt.runBlockingK\$default"), descriptions("builders"))
     }
 
     @Test

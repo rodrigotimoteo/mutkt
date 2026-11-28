@@ -6,7 +6,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import java.nio.file.Path
 
-internal const val PROTOCOL_VERSION: Int = 7
+internal const val PROTOCOL_VERSION: Int = 8
 
 internal sealed interface ForkRequest {
     /**

@@ -128,7 +128,7 @@ class MutKtTaskRunTest {
         val result = task.runAnalysis()
 
         assertTrue("KILLED       2" in result.summary && "ERROR        0" in result.summary, result.summary)
-        assertTrue("\"statusReason\": \"Killed by JVM exit 7\"" in result.json, result.json)
+        assertTrue("\"statusReason\": \"Killed by JVM exit 7 (exception)\"" in result.json, result.json)
     }
 
     @Test
