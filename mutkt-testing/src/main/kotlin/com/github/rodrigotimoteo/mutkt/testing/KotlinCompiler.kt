@@ -1,5 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.testing
 
+import androidx.compose.compiler.plugins.kotlin.ComposePluginRegistrar
+import androidx.compose.runtime.Composer
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
 import org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi
@@ -28,6 +30,26 @@ fun compileKotlin(
     fileName: String = "Source.kt",
     classpath: List<Path> = emptyList(),
     kotlincArguments: List<String> = emptyList(),
+): Map<String, ByteArray> =
+    compile(source, fileName) {
+        this.inheritClassPath = inheritClassPath
+        classpaths = classpath.map(Path::toFile)
+        this.kotlincArguments = kotlincArguments
+    }
+
+/** Compiles [source] like [compileKotlin], through the Compose compiler plugin and against the Compose runtime. */
+@OptIn(ExperimentalCompilerApi::class)
+fun compileCompose(source: String): Map<String, ByteArray> =
+    compile(source, "Source.kt") {
+        classpaths = listOf(codeSourceOf(Composer::class.java).toFile())
+        compilerPluginRegistrars = listOf(ComposePluginRegistrar())
+    }
+
+@OptIn(ExperimentalCompilerApi::class)
+private fun compile(
+    source: String,
+    fileName: String,
+    configure: KotlinCompilation.() -> Unit,
 ): Map<String, ByteArray> {
     val workDir = Files.createTempDirectory("mutkt-kotlin")
     try {
@@ -38,9 +60,7 @@ fun compileKotlin(
                     sources = listOf(SourceFile.kotlin(fileName, source))
                     jvmTarget = "17"
                     verbose = false
-                    this.inheritClassPath = inheritClassPath
-                    classpaths = classpath.map(Path::toFile)
-                    this.kotlincArguments = kotlincArguments
+                    configure()
                 }.compile()
         check(result.exitCode == KotlinCompilation.ExitCode.OK) { "Kotlin compilation failed: ${result.messages}" }
         val root = result.outputDirectory.toPath()

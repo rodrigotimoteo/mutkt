@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.asm
 
+import com.github.rodrigotimoteo.mutkt.asm.filters.ComposeFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.ContinuationFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.InlinedBodyFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.InlinedClassFilter
@@ -12,6 +13,7 @@ import com.github.rodrigotimoteo.mutkt.asm.filters.WhenMappingsFilter
 internal object SiteFilters {
     val all: List<SiteFilter> =
         listOf(
+            ComposeFilter,
             ContinuationFilter,
             InlinedBodyFilter,
             InlinedClassFilter,
