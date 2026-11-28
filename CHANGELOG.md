@@ -12,6 +12,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 - Opt-in `when-switch` operator: a `when` over Int, Char or String constants sends one case to the else branch, or the else branch to the first case ([docs/operators.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md)).
 - Opt-in operator `remove-negation`: removes a unary minus (`INEG`/`LNEG`/`FNEG`/`DNEG`), so `-x` becomes `x`, as PIT's negation mutator does.
+- Opt-in operator `extreme`: replaces a whole method body with a default return (nothing, false, 0, `""`, empty, `this` for a builder, else null), one mutant per method, as Descartes does. A survivor marks a pseudo-tested method: tests run it, but none depends on what it does.
 - Classes compiled from sources under `build/generated` (KSP, kapt, AGP: Room's `_Impl`, Moshi adapters) are skipped by default, found by their `SourceFile` rather than by name; a class is still mutated when a file of that name exists anywhere in the main source directories. `excludedClasses` starts with `<generated>`. A JVM build that sets `excludedClasses` with `=` (or `set`) drops the default `<generated>` entry and so still mutates generated classes; use `excludedClasses.add(...)` to keep it.
 ### Fixed
 
