@@ -4,11 +4,12 @@ import kotlin.time.Duration
 
 /**
  * The probes the baseline reached, per test class in run order; [global] were hit outside any test class (discovery,
- * engine start), so no test class owns them.
+ * engine start), so no test class owns them, and [globalReach] names the probed classes entered there.
  */
 public data class Coverage(
     val tests: List<TestCoverage>,
     val global: Set<Probe>,
+    val globalReach: Set<String> = emptySet(),
 )
 
 /**

@@ -93,7 +93,7 @@ AGP 9 turns on `android.onlyEnableUnitTestForTheTestedBuildType` by default, so 
 
 ## Android: can MutKt run instrumented tests?
 
-No. MutKt runs a variant's local unit tests (`src/test`, on the JVM, Robolectric included). Instrumented tests (`src/androidTest`, `connectedAndroidTest`) need a device or an emulator and are not supported.
+No. MutKt runs a variant's local unit tests (`src/test`, on the JVM, Robolectric included). Instrumented tests (`src/androidTest`, `connectedAndroidTest`) need a device or an emulator and are not supported: running them per mutant means one APK install per mutant. See [ADR 0012](adr/0012-android-instrumented-tests.md) for the cost estimate and what would reopen it.
 
 ## Android: why are R, BuildConfig or binding classes not mutated?
 

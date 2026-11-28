@@ -5,11 +5,13 @@ import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
 import com.github.rodrigotimoteo.mutkt.application.port.Coverage
 import com.github.rodrigotimoteo.mutkt.application.port.CoverageInstrumenter
+import com.github.rodrigotimoteo.mutkt.application.port.History
 import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.MutantGenerator
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.Probe
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
+import com.github.rodrigotimoteo.mutkt.application.port.ResultHistory
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
@@ -63,6 +65,7 @@ internal class FakeGenerator(
 /** Returns [probes] as the instrumented classes' map and records what it was asked to instrument. */
 internal class FakeInstrumenter(
     private val probes: Map<MutantId, Probe> = emptyMap(),
+    private val unprobed: Set<String> = emptySet(),
 ) : CoverageInstrumenter {
     val calls = ConcurrentLinkedQueue<Pair<List<String>, List<Mutant>>>()
     val made = ConcurrentLinkedQueue<Instrumented>()
@@ -72,7 +75,7 @@ internal class FakeInstrumenter(
         mutants: List<Mutant>,
     ): Instrumented {
         calls += classes.map { it.name } to mutants
-        return Instrumented(emptyList(), probes).also { made += it }
+        return Instrumented(emptyList(), probes, unprobed).also { made += it }
     }
 }
 
@@ -113,6 +116,19 @@ internal class FakeExecutor(
         baselineInputs += instrumented
         if (instrumented == null) return Baseline(baseline(), baselineElapsed)
         return Baseline(instrumentedBaseline(), baselineElapsed, coverage)
+    }
+}
+
+/** Reads the last history written, else [stored]. */
+internal class MemoryHistory(
+    private val stored: History? = null,
+) : ResultHistory {
+    val written = ConcurrentLinkedQueue<History>()
+
+    override fun read(): History? = written.lastOrNull() ?: stored
+
+    override fun write(history: History) {
+        written += history
     }
 }
 

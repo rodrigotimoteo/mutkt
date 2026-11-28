@@ -1,5 +1,6 @@
 package com.github.rodrigotimoteo.mutkt.application.port
 
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 
@@ -23,18 +24,20 @@ public data class History(
 }
 
 /**
- * The [status] of [mutant] (its id text) when its key was [key]; [killedBy] as in MutantResult. ERROR may be
- * transient and NO_COVERAGE comes fresh from every baseline, so neither is kept.
+ * The [status] of [mutant] (its id text) when its key was [key]; [killedBy] and [killKind] as in MutantResult.
+ * ERROR may be transient and NO_COVERAGE comes fresh from every baseline, so neither is kept.
  */
 public data class HistoryEntry(
     val mutant: String,
     val key: String,
     val status: MutantStatus,
     val killedBy: String? = null,
+    val killKind: KillKind? = null,
 ) {
     init {
         require(status in REUSABLE) { "Only $REUSABLE results are kept, not $status" }
         require(killedBy == null || status == MutantStatus.KILLED) { "killedBy is only set for KILLED, not $status" }
+        require(killKind == null || status == MutantStatus.KILLED) { "killKind is only set for KILLED, not $status" }
     }
 }
 

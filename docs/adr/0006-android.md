@@ -72,7 +72,7 @@ Other:
 | ROD-128 | Default exclude globs (R, BuildConfig, Hilt/Dagger, ViewBinding/DataBinding, Compose singletons), applied only when an Android plugin is present, replaceable and extendable; one match and one non-match test per glob | Annotation-based detection |
 | ROD-129 | `samples/android` on a local publication, not `includeBuild`: Gradle 9.6 can't build the repo from source with Kotlin 2.1; Robolectric test with killed and surviving mutants; CI job; docs "Android" section | |
 
-Instrumented tests (`connectedAndroidTest`, devices, emulators) are out of scope for P5 and have no planned task.
+Instrumented tests (`connectedAndroidTest`, devices, emulators) are out of scope for P5 and have no planned task. Their status after P5 is decided in [0012](0012-android-instrumented-tests.md): out of scope for 0.6.0.
 
 ## KMP android target (P7)
 

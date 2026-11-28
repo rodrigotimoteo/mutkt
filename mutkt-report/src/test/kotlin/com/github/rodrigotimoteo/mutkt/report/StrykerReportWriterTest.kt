@@ -61,6 +61,19 @@ class StrykerReportWriterTest {
     }
 
     @Test
+    fun `results reused from history are counted in the config and still validate`() {
+        val fixture = fixtureReport(dir)
+        val report = fixture.copy(results = fixture.results.mapIndexed { i, result -> result.copy(reused = i < 2) })
+        val json = render(report)
+
+        assertEquals(emptyList<String>(), SchemaValidator(schemaText()).validate(json))
+        assertEquals(
+            mapOf("omittedByCap" to 2, "reused" to 2),
+            ObjectMapper().readValue(json, Map::class.java)["config"],
+        )
+    }
+
+    @Test
     fun `coveredBy lists the covering test classes and testFiles defines each one for the viewer`() {
         val json = ObjectMapper().readTree(render(fixtureReport(dir)))
         val coveredBy =
@@ -77,6 +90,19 @@ class StrykerReportWriterTest {
                 """"demo.MaxTest":{"tests":[{"id":"demo.MaxTest","name":"demo.MaxTest"}]}}""",
             json.get("testFiles").toString(),
         )
+    }
+
+    @Test
+    fun `a survivor's status reason is the hint of its operator`() {
+        val reasons =
+            ObjectMapper().readTree(render(fixtureReport(dir))).get("files").flatMap { it.get("mutants") }.associate {
+                it.get("description").asText() to it.get("statusReason")?.asText()
+            }
+
+        assertEquals("No test checks what happens on both sides of the condition", reasons["Negated conditional"])
+        assertEquals("No test asserts on the computed value", reasons["No debug info"])
+        assertEquals("Killed by demo.CalcTest.adds() (assertion)", reasons["Replaced + with -"])
+        assertEquals(null, reasons["Replaced return value"])
     }
 
     @Test

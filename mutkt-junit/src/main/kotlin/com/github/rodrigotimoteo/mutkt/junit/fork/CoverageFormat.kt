@@ -28,10 +28,11 @@ internal fun Coverage.fitting(limit: Int = MAX_FRAME_BYTES - RESULT_HEADROOM): C
 // MAX_FRAME_BYTES.
 internal fun DataOutputStream.writeCoverage(coverage: Coverage) {
     val hit = (coverage.global + coverage.tests.flatMap { it.hits }).map { it.className }
-    val names = (hit + coverage.tests.flatMap { it.reached }).distinct()
+    val names = (hit + coverage.globalReach + coverage.tests.flatMap { it.reached }).distinct()
     val index = names.withIndex().associate { it.value to it.index }
     writeList(names) { writeString(it) }
     writeHits(coverage.global, index)
+    writeList(coverage.globalReach) { writeInt(index.getValue(it)) }
     writeList(coverage.tests) {
         writeString(it.test.className)
         writeLong(it.elapsed.inWholeNanoseconds)
@@ -43,6 +44,7 @@ internal fun DataOutputStream.writeCoverage(coverage: Coverage) {
 internal fun DataInputStream.readCoverage(): Coverage {
     val names = readList { readString() }
     val global = readHits(names)
+    val globalReach = readList { names.className(readInt()) }.toSet()
     val tests =
         readList {
             val test = TestId(readString())
@@ -50,7 +52,7 @@ internal fun DataInputStream.readCoverage(): Coverage {
             val hits = readHits(names)
             TestCoverage(test, hits, elapsed, readList { names.className(readInt()) }.toSet())
         }
-    return Coverage(tests, global)
+    return Coverage(tests, global, globalReach)
 }
 
 private fun DataOutputStream.writeHits(

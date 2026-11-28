@@ -13,9 +13,9 @@ import kotlin.time.Duration.Companion.nanoseconds
 
 /**
  * Attributes probe hits and reached classes to test classes: what a root test class (a container right under its
- * engine) reaches while it runs is that class's; any other hit (discovery, engine start and stop) is global, and any
- * other reach is dropped. Set [testClass] before executing its plan; a plan's time counts as its class's. A class with
- * no root container in its plan (a helper in the test sources) is left out.
+ * engine) reaches while it runs is that class's; anything else (discovery, engine start and stop) is global. Set
+ * [testClass] before executing its plan; a plan's time counts as its class's. A class with no root container in its
+ * plan (a helper in the test sources) is left out.
  */
 internal class CoverageListener(
     private val probes: ProbeReader,
@@ -24,19 +24,20 @@ internal class CoverageListener(
     private lateinit var plan: TestPlan
     private var start = 0L
     private val global = mutableSetOf<Probe>()
+    private val globalReach = mutableSetOf<String>()
     private val hits = LinkedHashMap<String, MutableSet<Probe>>()
     private val reached = mutableMapOf<String, MutableSet<String>>()
     private val elapsed = mutableMapOf<String, Duration>()
 
     override fun testPlanExecutionStarted(plan: TestPlan) {
         this.plan = plan
-        global += probes.drain().hits
+        drainGlobal()
         start = System.nanoTime()
     }
 
     override fun executionStarted(id: TestIdentifier) {
         if (!isRootClass(id)) return
-        global += probes.drain().hits
+        drainGlobal()
         hits.getOrPut(testClass) { mutableSetOf() }
         reached.getOrPut(testClass) { mutableSetOf() }
     }
@@ -52,13 +53,13 @@ internal class CoverageListener(
     }
 
     override fun testPlanExecutionFinished(plan: TestPlan) {
-        global += probes.drain().hits
+        drainGlobal()
         if (testClass in hits) elapsed.merge(testClass, (System.nanoTime() - start).nanoseconds, Duration::plus)
     }
 
     /** What the plans executed so far reached, in execution order. */
     fun coverage(): Coverage {
-        global += probes.drain().hits
+        drainGlobal()
         val tests =
             hits.map { (name, hit) ->
                 TestCoverage(
@@ -68,7 +69,13 @@ internal class CoverageListener(
                     reached.getValue(name).toSet(),
                 )
             }
-        return Coverage(tests, global.toSet())
+        return Coverage(tests, global.toSet(), globalReach.toSet())
+    }
+
+    private fun drainGlobal() {
+        val drained = probes.drain()
+        global += drained.hits
+        globalReach += drained.reached
     }
 
     private fun isRootClass(id: TestIdentifier) = plan.getParent(id).map { !it.parentId.isPresent }.orElse(false)
