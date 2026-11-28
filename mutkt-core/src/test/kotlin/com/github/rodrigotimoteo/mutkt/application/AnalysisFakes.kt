@@ -77,12 +77,14 @@ internal class FakeInstrumenter(
 }
 
 // The default baseline time is longer than any configured timeout, so mutants get the timeout unless a test sets it.
-// A baseline on instrumented classes answers [instrumentedBaseline] (else [baseline]) with [coverage].
+// A baseline on instrumented classes answers [instrumentedBaseline] (else [baseline]) with [coverage]. A run that gets
+// the original bytes of the mutant's class (see [classFile]) answers [original].
 internal class FakeExecutor(
     private val baseline: () -> Outcome = { Outcome.Survived },
     private val baselineElapsed: Duration = 1.minutes,
     private val coverage: Coverage? = null,
     private val instrumentedBaseline: () -> Outcome = baseline,
+    private val original: (List<TestId>?) -> Outcome = { Outcome.Survived },
     private val behavior: (Mutant) -> Outcome = { Outcome.Survived },
 ) : TestExecutor {
     val baselines = ConcurrentLinkedQueue<Duration>()
@@ -100,7 +102,7 @@ internal class FakeExecutor(
         threads += Thread.currentThread()
         received += Triple(mutant, String(bytes), deadline)
         selections += mutant to tests
-        return behavior(mutant)
+        return if (String(bytes) == mutant.className) original(tests) else behavior(mutant)
     }
 
     override fun baseline(

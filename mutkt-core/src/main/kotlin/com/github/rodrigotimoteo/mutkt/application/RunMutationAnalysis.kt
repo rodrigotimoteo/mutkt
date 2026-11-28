@@ -9,6 +9,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutor
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
@@ -63,7 +64,8 @@ public class RunMutationAnalysis(
                 .takeIf { needed > config.timeout }
                 ?.also(onDeadlineCap)
         val map = CoverageMap(instrumented.probes, baseline.coverage, config.timeout, minOf(config.timeout, needed))
-        val results = analyse(mutants, map, progress)
+        val originals = classes.associate { it.name to it.bytes }
+        val results = analyse(mutants, map, Confirmation(originals), progress)
         return MutationReport(results, omitted, cap).also(writer::write)
     }
 
@@ -97,13 +99,16 @@ public class RunMutationAnalysis(
     private fun analyse(
         mutants: List<Mutant>,
         map: CoverageMap,
+        confirmation: Confirmation,
         progress: (MutantResult) -> Unit,
     ): List<MutantResult> {
         val pool = Executors.newFixedThreadPool(config.parallelism)
         try {
             val completion = ExecutorCompletionService<IndexedValue<MutantResult>>(pool)
             for ((index, mutant) in mutants.withIndex()) {
-                completion.submit(Callable { IndexedValue(index, evaluate(mutant, map.selection(mutant))) })
+                completion.submit(
+                    Callable { IndexedValue(index, evaluate(mutant, map.selection(mutant), confirmation)) },
+                )
             }
             val byIndex = mutableMapOf<Int, MutantResult>()
             repeat(mutants.size) {
@@ -123,15 +128,17 @@ public class RunMutationAnalysis(
     private fun evaluate(
         mutant: Mutant,
         selection: Selection,
+        confirmation: Confirmation,
     ): MutantResult {
         val covering = selection.tests?.map { it.className }
         return try {
             if (covering?.isEmpty() == true) {
                 MutantResult(mutant, MutantStatus.NO_COVERAGE, coveredBy = covering)
             } else {
-                executor
-                    .run(mutant, generator.materialize(mutant), selection.deadline, selection.tests)
-                    .toResult(mutant, covering)
+                val outcome = executor.run(mutant, generator.materialize(mutant), selection.deadline, selection.tests)
+                flakyKiller(outcome, mutant, selection.deadline, confirmation)
+                    ?.let { MutantResult(mutant, MutantStatus.ERROR, "flaky test $it", coveredBy = covering) }
+                    ?: outcome.toResult(mutant, covering)
             }
         } catch (e: TestExecutionStopped) {
             throw e
@@ -143,6 +150,55 @@ public class RunMutationAnalysis(
             MutantResult(mutant, MutantStatus.ERROR, cause(e.toString()), coveredBy = covering)
         }
     }
+
+    // A kill counts only when the killing test class passes on the original classes: one that fails there too is
+    // flaky, and its failure says nothing about the mutant. Each class is confirmed once per run, on its first kill,
+    // which catches a test that fails alone or every time, not every intermittent one.
+    // Returns the killing test when its class is flaky.
+    private fun flakyKiller(
+        outcome: Outcome,
+        mutant: Mutant,
+        deadline: Duration,
+        confirmation: Confirmation,
+    ): String? {
+        val killed = outcome as? Outcome.Killed
+        val test = killed?.test ?: return null
+        val flaky =
+            confirmation.verdict(test) {
+                failsOnOriginal(mutant, confirmation.originals.getValue(mutant.className), deadline, test)
+            }
+        return killed.by.takeIf { flaky }
+    }
+
+    // A rerun that cannot run says nothing about the test, so the kill stands; an executor that cannot continue still
+    // stops the analysis.
+    @Suppress("TooGenericExceptionCaught")
+    private fun failsOnOriginal(
+        mutant: Mutant,
+        original: ByteArray,
+        deadline: Duration,
+        test: TestId,
+    ): Boolean =
+        try {
+            executor.run(mutant, original, deadline, listOf(test)) is Outcome.Killed
+        } catch (e: TestExecutionStopped) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+}
+
+// One run's original class bytes and, per killing test class, whether it failed on them. The lock covers only the
+// lookup; the lazy reruns a class once even when several workers ask for it at the same time.
+private class Confirmation(
+    val originals: Map<String, ByteArray>,
+) {
+    private val flaky = mutableMapOf<TestId, Lazy<Boolean>>()
+
+    fun verdict(
+        test: TestId,
+        rerun: () -> Boolean,
+    ): Boolean = synchronized(flaky) { flaky.getOrPut(test) { lazy(rerun) } }.value
 }
 
 private const val SHUTDOWN_WAIT_SECONDS = 5L

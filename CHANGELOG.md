@@ -7,6 +7,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 ### Changed
 
 - A Jupiter project no longer has to declare `junit-platform-launcher` (Gradle 9 adds none): when the test runtime classpath has `junit-platform-engine` but no launcher, `mutkt` resolves the launcher at the engine's version from the project's repositories, so the mutants run on the project's JUnit Platform rather than MutKt's 1.10.2. Android variants get the same lookup. If it cannot be resolved (offline), the bundled Platform is used as before and the build logs a warning naming the dependency to add.
+- Kills are confirmed: the first time a test class kills a mutant, it runs once more on the original classes, and when it fails there too its kills are ERROR (`flaky test <name>`) rather than KILLED, so a test that fails alone or every time no longer inflates the score. Each distinct killing test class costs one more test class run ([faq](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/faq.md#what-about-flaky-tests)).
 - Fewer mutants in code kotlinc generates: the coroutine state machine (`COROUTINE_SUSPENDED` checks and returns, the `Unit` result of a Unit suspend function, the continuation prologue and re-entry), enum `values`/`valueOf`/`getEntries`, and SAM adapter classes. On the ten release-check projects this removes 437 of 4891 mutants, including 49 of the 77 timeouts ([operators](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md#generated-code-on-the-e2e-corpus)).
 ### Added
 
