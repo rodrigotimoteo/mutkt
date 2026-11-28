@@ -5,6 +5,7 @@ import org.gradle.api.Project
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.CompileClasspath
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.LocalState
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.testfixtures.ProjectBuilder
@@ -103,6 +104,7 @@ class MutKtTaskTest {
                 "testJvmArgs",
                 "testWorkingDir",
                 "testJavaExecutable",
+                "testJavaRuntime",
                 "repositoryRoot",
             ),
             task.inputs.properties.keys,
@@ -117,6 +119,28 @@ class MutKtTaskTest {
 
         assertEquals(System.getenv("GITHUB_WORKSPACE") ?: project.projectDir.absolutePath, task.repositoryRoot.get())
         assertEquals(System.getenv("GITHUB_ACTIONS") == "true", task.githubAnnotations.get())
+    }
+
+    @Test
+    fun `keeps the result history under build mutkt as local state, not as an output`() {
+        val project = project("java")
+        val task = project.task()
+
+        val build =
+            project.layout.buildDirectory
+                .get()
+                .asFile
+        assertEquals(File(build, "mutkt/history.json"), task.historyFile.get().asFile)
+        assertNotNull(MutKtTask::class.java.getMethod("getHistoryFile").getAnnotation(LocalState::class.java))
+        project.mutkt().historyFile.set(project.file("ci/history.json"))
+        assertEquals(project.file("ci/history.json"), task.historyFile.get().asFile)
+    }
+
+    @Test
+    fun `names the test task's Java runtime by vendor and full version`() {
+        val runtime = project("java").task().testJavaRuntime.get()
+
+        assertTrue(System.getProperty("java.runtime.version") in runtime, runtime)
     }
 
     @Test

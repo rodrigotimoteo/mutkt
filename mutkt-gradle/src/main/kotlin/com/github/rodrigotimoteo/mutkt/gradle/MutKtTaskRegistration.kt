@@ -54,18 +54,8 @@ internal fun <T : MutKtTask> Project.registerMutkt(
         task.excludeTags.set(extension.excludeTags)
         task.failBelowScore.set(extension.failBelowScore)
         task.consoleReport.set(extension.reports.console)
-        // Coverage agents would record the mutant runs and rewrite their data files; other agents, such as a
-        // mocking library's, stay because the tests may not run without them.
-        task.testJvmArgs.set(test.map { it.allJvmArgs.filterNot(::isCoverageAgent) })
-        task.testWorkingDir.set(test.map { it.workingDir.absolutePath })
-        task.testJavaExecutable.set(
-            test.map {
-                it.javaLauncher.orNull
-                    ?.executablePath
-                    ?.asFile
-                    ?.absolutePath ?: currentJava()
-            },
-        )
+        task.readTestSettings(test)
+        task.historyFile.set(extension.historyFile)
         task.generatedSourcesDir.set(layout.buildDirectory.dir("generated"))
         task.reportsDir.set(layout.buildDirectory.dir("reports/mutkt"))
         task.repositoryRoot.set(
@@ -73,6 +63,29 @@ internal fun <T : MutKtTask> Project.registerMutkt(
         )
         task.githubAnnotations.set(providers.environmentVariable("GITHUB_ACTIONS").map { it == "true" }.orElse(false))
     }
+
+// The test task's JVM settings, read lazily.
+private fun MutKtTask.readTestSettings(test: Provider<Test>) {
+    // Coverage agents would record the mutant runs and rewrite their data files; other agents, such as a
+    // mocking library's, stay because the tests may not run without them.
+    testJvmArgs.set(test.map { it.allJvmArgs.filterNot(::isCoverageAgent) })
+    testWorkingDir.set(test.map { it.workingDir.absolutePath })
+    testJavaExecutable.set(
+        test.map {
+            it.javaLauncher.orNull
+                ?.executablePath
+                ?.asFile
+                ?.absolutePath ?: currentJava()
+        },
+    )
+    testJavaRuntime.set(
+        test.map { tests ->
+            tests.javaLauncher.orNull
+                ?.metadata
+                ?.let { "${it.vendor} ${it.javaRuntimeVersion}" } ?: currentJavaRuntime()
+        },
+    )
+}
 
 // JaCoCo's jacocoagent.jar, Kover's kover-jvm-agent and the IntelliJ coverage agent Kover used.
 private val COVERAGE_AGENT = Regex("jacoco|kover|intellij-coverage", RegexOption.IGNORE_CASE)
@@ -84,5 +97,8 @@ private fun isCoverageAgent(arg: String): Boolean {
     val jar = AGENT_JAR.find(arg)?.groupValues?.get(1) ?: return false
     return COVERAGE_AGENT.containsMatchIn(jar.substringAfterLast('/').substringAfterLast('\\'))
 }
+
+private fun currentJavaRuntime(): String =
+    "${System.getProperty("java.vendor")} ${System.getProperty("java.runtime.version")}"
 
 private fun currentJava(): String = Paths.get(System.getProperty("java.home"), "bin", "java").toString()

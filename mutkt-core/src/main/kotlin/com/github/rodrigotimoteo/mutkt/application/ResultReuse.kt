@@ -75,17 +75,22 @@ internal class ResultReuse(
         return History(fingerprint, fresh + previous.entries.filter { it.mutant !in seen })
     }
 
-    // The test class and its superclasses and interfaces that are themselves in the test sources.
+    // The test class and its enclosing classes, superclasses and interfaces that are themselves in the test sources. A
+    // root test class can be a static nested class whose outer class holds what it uses.
     private fun testAndBases(name: String): Set<String> {
         val found = mutableSetOf<String>()
         val pending = ArrayDeque(listOf(name))
         while (pending.isNotEmpty()) {
             val next = pending.removeFirst()
-            if (found.add(next)) pending += supertypes[next].orEmpty().filter { it in tests }
+            if (found.add(next)) pending += (supertypes[next].orEmpty() + enclosing(next)).filter { it in tests }
         }
         return found
     }
 }
+
+// a.Outer$Inner$Deep is nested in a.Outer and a.Outer$Inner.
+private fun enclosing(name: String): List<String> =
+    name.indices.filter { name[it] == '$' }.map { name.substring(0, it) }
 
 // ERROR may be transient and NO_COVERAGE comes fresh from every baseline.
 private val KEPT = setOf(MutantStatus.KILLED, MutantStatus.SURVIVED, MutantStatus.TIMEOUT)
