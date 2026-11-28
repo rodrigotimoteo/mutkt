@@ -1,7 +1,10 @@
 package com.github.rodrigotimoteo.mutkt.asm
 
 import org.objectweb.asm.Opcodes.AASTORE
+import org.objectweb.asm.Opcodes.ACC_FINAL
+import org.objectweb.asm.Opcodes.ACC_INTERFACE
 import org.objectweb.asm.Opcodes.ACC_PRIVATE
+import org.objectweb.asm.Opcodes.ACC_PUBLIC
 import org.objectweb.asm.Opcodes.ACC_STATIC
 import org.objectweb.asm.Opcodes.ACC_SYNTHETIC
 import org.objectweb.asm.Opcodes.ACC_TRANSIENT
@@ -21,6 +24,7 @@ import org.objectweb.asm.Opcodes.INVOKESTATIC
 import org.objectweb.asm.Opcodes.INVOKEVIRTUAL
 import org.objectweb.asm.Opcodes.POP
 import org.objectweb.asm.Opcodes.PUTSTATIC
+import org.objectweb.asm.Opcodes.RETURN
 import org.objectweb.asm.Opcodes.SIPUSH
 import org.objectweb.asm.Type
 import org.objectweb.asm.tree.AbstractInsnNode
@@ -42,6 +46,8 @@ internal const val PROBE_FIELD = "\$mutktProbes"
 private const val PROBE_INIT = "\$mutktInit"
 private const val PROBES_TYPE = "[Z"
 private const val HIDDEN = ACC_PRIVATE or ACC_STATIC or ACC_SYNTHETIC
+private const val INTERFACE_FIELD = ACC_PUBLIC or ACC_STATIC or ACC_FINAL or ACC_SYNTHETIC
+private const val CLASS_INIT = "<clinit>"
 
 private const val LOADER = "java/lang/ClassLoader"
 private const val CLASS = "java/lang/Class"
@@ -52,22 +58,25 @@ private const val METHOD = "java/lang/reflect/Method"
 
 /** Sets probe [index] of class [owner] right before each instruction in [at]; leaves the stack as it was. */
 internal fun MethodNode.insertProbe(
-    owner: String,
+    owner: ClassNode,
     at: List<AbstractInsnNode>,
     index: Int,
 ) = at.forEach { instructions.insertBefore(it, probe(owner, index)) }
 
 /** Sets probe [index] of class [owner] first thing on entry, before any instruction a jump could return to. */
 internal fun MethodNode.insertEntryProbe(
-    owner: String,
+    owner: ClassNode,
     index: Int,
 ) = instructions.insert(probe(owner, index))
 
+/** Whether this is an interface, whose members follow stricter rules. */
+internal val ClassNode.isInterface: Boolean get() = access and ACC_INTERFACE != 0
+
 private fun probe(
-    owner: String,
+    owner: ClassNode,
     index: Int,
 ) = InsnList().apply {
-    add(MethodInsnNode(INVOKESTATIC, owner, PROBE_INIT, "()$PROBES_TYPE", false))
+    add(accessor(owner))
     add(pushInt(index))
     add(InsnNode(ICONST_1))
     add(InsnNode(BASTORE))
@@ -85,7 +94,8 @@ private fun pushInt(value: Int): AbstractInsnNode =
  * Adds the probe field and the accessor that fetches its array of [size] from [registry] (a class on the system class
  * path) under [key] on first use. Lazy like JaCoCo's, so it does not depend on when `<clinit>` runs, and a class whose
  * probes were never reached keeps a null field. Through `java.lang.ClassLoader`, which every loader shares, so the
- * copies a sandbox loader (Robolectric's) defines again from the class file all hit one array.
+ * copies a sandbox loader (Robolectric's) defines again from the class file all hit one array. An interface's field
+ * must be public and final, so its `<clinit>` sets it instead.
  */
 internal fun ClassNode.addProbeArray(
     registry: String,
@@ -95,20 +105,42 @@ internal fun ClassNode.addProbeArray(
     check(fields.none { it.name == PROBE_FIELD } && methods.none { it.name == PROBE_INIT }) {
         "$name already has probes"
     }
-    fields.add(FieldNode(HIDDEN or ACC_TRANSIENT, PROBE_FIELD, PROBES_TYPE, null, null))
+    val access = if (isInterface) INTERFACE_FIELD else HIDDEN or ACC_TRANSIENT
+    fields.add(FieldNode(access, PROBE_FIELD, PROBES_TYPE, null, null))
     val owner = name
     methods.add(
         MethodNode(HIDDEN, PROBE_INIT, "()$PROBES_TYPE", null, null).apply {
-            instructions.add(probeInitCode(owner, fetch(registry, key, size)))
+            instructions.add(probeInitCode(owner, fetch(registry, key, size), store = !isInterface))
+        },
+    )
+    if (isInterface) storeOnInit()
+}
+
+// An interface field must be final, so only <clinit> may set it; until then the accessor fetches on every call.
+private fun ClassNode.storeOnInit() {
+    val init =
+        methods.firstOrNull { it.name == CLASS_INIT }
+            ?: MethodNode(ACC_STATIC, CLASS_INIT, "()V", null, null).also {
+                it.instructions.add(InsnNode(RETURN))
+                methods.add(it)
+            }
+    init.instructions.insert(
+        InsnList().apply {
+            add(accessor(this@storeOnInit))
+            add(FieldInsnNode(PUTSTATIC, name, PROBE_FIELD, PROBES_TYPE))
         },
     )
 }
+
+private fun accessor(owner: ClassNode) =
+    MethodInsnNode(INVOKESTATIC, owner.name, PROBE_INIT, "()$PROBES_TYPE", owner.isInterface)
 
 // The unlocked read is safe without volatile: a racing reader at worst sees null and fetches again, and the registry
 // hands every caller for a class the same array, so no hit is lost.
 private fun probeInitCode(
     owner: String,
     fetch: InsnList,
+    store: Boolean,
 ) = InsnList().apply {
     val ready = LabelNode()
     add(FieldInsnNode(GETSTATIC, owner, PROBE_FIELD, PROBES_TYPE))
@@ -116,8 +148,10 @@ private fun probeInitCode(
     add(JumpInsnNode(IFNONNULL, ready))
     add(InsnNode(POP))
     add(fetch)
-    add(InsnNode(DUP))
-    add(FieldInsnNode(PUTSTATIC, owner, PROBE_FIELD, PROBES_TYPE))
+    if (store) {
+        add(InsnNode(DUP))
+        add(FieldInsnNode(PUTSTATIC, owner, PROBE_FIELD, PROBES_TYPE))
+    }
     add(ready)
     add(InsnNode(ARETURN))
 }

@@ -62,10 +62,11 @@ internal class FakeGenerator(
     }
 }
 
-/** Returns [probes] as the instrumented classes' map and records what it was asked to instrument. */
+/** Returns [probes] and the [probed] classes, and records what it was asked to instrument. */
 internal class FakeInstrumenter(
     private val probes: Map<MutantId, Probe> = emptyMap(),
     private val unprobed: Set<String> = emptySet(),
+    private val probed: List<String> = emptyList(),
 ) : CoverageInstrumenter {
     val calls = ConcurrentLinkedQueue<Pair<List<String>, List<Mutant>>>()
     val made = ConcurrentLinkedQueue<Instrumented>()
@@ -75,7 +76,7 @@ internal class FakeInstrumenter(
         mutants: List<Mutant>,
     ): Instrumented {
         calls += classes.map { it.name } to mutants
-        return Instrumented(emptyList(), probes, unprobed).also { made += it }
+        return Instrumented(probed.map(::classFile), probes, unprobed).also { made += it }
     }
 }
 
