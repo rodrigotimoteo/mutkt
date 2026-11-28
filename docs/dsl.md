@@ -12,7 +12,7 @@ Requires the Java, Kotlin JVM or Android plugin. A test fails when this table dr
 | `targetClasses` | List<String> | empty (all) | Class globs to mutate |
 | `excludedClasses` | List<String> | `<generated>` (Android: also the generated-class globs below) | Class globs never mutated; `<generated>` skips classes compiled from generated sources (below) |
 | `excludedMethods` | List<String> | empty | `method` or `pkg.Class#method` entries to skip |
-| `operators` | Set<String> | empty (default operators) | Operator ids to enable, from [operators.md](operators.md); empty runs the six default-on operators, a non-empty set runs exactly those ids (list every id to run all); an unknown id fails the run and lists the valid ones |
+| `operators` | Set<String> | empty (default operators) | Operator ids to enable, from [operators.md](operators.md); empty runs the eight default-on operators, a non-empty set runs exactly those ids (list every id to run all); an unknown id fails the run and lists the valid ones |
 | `threads` | Int | unset (available processors, resolved at run time) | Parallel test runs; more than the cores can cause false TIMEOUTs, since deadlines scale from a baseline run alone |
 | `timeoutMs` | Long | 60000 | Upper bound of the per-mutant deadline in milliseconds; the baseline gets 5 × `timeoutMs` (300 s by default) |
 | `maxMutantsPerClass` | Int | unset (unlimited) | Cap on mutants per class (omissions are shown in the summary, see below) |
