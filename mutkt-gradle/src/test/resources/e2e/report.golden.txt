@@ -5,6 +5,7 @@ Mutants: 16
   TIMEOUT      1
   NO_COVERAGE  0
   ERROR        0
+Killed 13 (assertions 13, exceptions 0)
 Score: 87.5%
 
 Class           Detected  Score

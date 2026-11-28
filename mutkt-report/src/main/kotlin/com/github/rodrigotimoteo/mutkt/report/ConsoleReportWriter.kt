@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.report
 
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
@@ -28,6 +29,7 @@ public class ConsoleReportWriter(
             val count = report.results.count { it.status == status }
             out.appendLine("  ${status.name.padEnd(STATUS_WIDTH)}$count")
         }
+        killSplit(report)?.let { out.appendLine(it) }
         out.appendLine("Score: ${percent(report.score)}${omission(report)}")
         report.deadlineCap?.let { out.appendLine(deadlineWarning(it)) }
         classTable(report)
@@ -114,6 +116,17 @@ public class ConsoleReportWriter(
     private fun detected(report: MutationReport): String {
         val found = report.results.count { it.status == MutantStatus.KILLED || it.status == MutantStatus.TIMEOUT }
         return "$found/${report.results.count { it.status != MutantStatus.ERROR }}"
+    }
+
+    // A kill without a recorded kind is left out of the split rather than guessed.
+    private fun killSplit(report: MutationReport): String? {
+        val assertions = report.results.count { it.killKind == KillKind.ASSERTION }
+        val exceptions = report.results.count { it.killKind == KillKind.EXCEPTION }
+        return if (assertions + exceptions == 0) {
+            null
+        } else {
+            "Killed ${assertions + exceptions} (assertions $assertions, exceptions $exceptions)"
+        }
     }
 
     private fun omission(report: MutationReport): String =

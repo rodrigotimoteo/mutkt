@@ -1,6 +1,8 @@
 package com.github.rodrigotimoteo.mutkt.report
 
 import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
+import com.github.rodrigotimoteo.mutkt.domain.KillKind.ASSERTION
+import com.github.rodrigotimoteo.mutkt.domain.KillKind.EXCEPTION
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
@@ -60,6 +62,15 @@ class ConsoleReportWriterTest {
             """.trimIndent(),
             render(MutationReport(emptyList())),
         )
+    }
+
+    @Test
+    fun `a line before the score splits assertion kills from exception kills`() {
+        val kills = listOf(ASSERTION, ASSERTION, EXCEPTION).map { result(KILLED).copy(killedBy = "t", killKind = it) }
+        val text = render(MutationReport(kills + result(SURVIVED)))
+        assertTrue("  KILLED       3\n" in text, text)
+        assertTrue("Killed 3 (assertions 2, exceptions 1)\nScore: 75.0%\n" in text, text)
+        assertTrue("assertions" !in render(MutationReport(listOf(result(SURVIVED)))))
     }
 
     @Test

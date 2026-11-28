@@ -55,7 +55,9 @@ private fun Project.supportClasses(
     val loaded =
         sourceSets
             .filter { it.name != SourceSet.MAIN_SOURCE_SET_NAME && it.name != SourceSet.TEST_SOURCE_SET_NAME }
-            .filter { set -> set.output.classesDirs.any { it in entries } || jarOf(set) in entries }
+            .filter { set ->
+                set.output.classesDirs.any { it in entries } || jarOf(set)?.let { it in entries } == true
+            }
     return files(loaded.map { it.output.classesDirs })
 }
 

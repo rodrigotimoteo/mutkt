@@ -27,7 +27,7 @@
             }
           },
           "status": "Killed",
-          "statusReason": "Killed by demo.CalcTest.adds()",
+          "statusReason": "Killed by demo.CalcTest.adds() (assertion)",
           "killedBy": [
             "demo.CalcTest.adds()"
           ],
