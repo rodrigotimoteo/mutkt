@@ -145,4 +145,6 @@ dependencies {
 
     testImplementation(project(":mutkt-testing"))
     testImplementation(gradleTestKit())
+    // Jars handed to the Koin TestKit scenario, read from this JVM's classpath.
+    testRuntimeOnly(libs.koin.core)
 }

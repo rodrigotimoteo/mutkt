@@ -20,6 +20,8 @@ konsist = "0.18.1"
 coroutines = "1.11.0"
 # Test scope only: parses the JSON reports the writers produce.
 jackson = "2.23.0"
+# Test scope only (mutkt-gradle): the TestKit scenario with a global Koin context.
+koin = "4.1.1"
 # Test support only (mutkt-testing): the runtime Compose fixtures compile against; its Kotlin metadata must stay
 # readable by the kotlin version above.
 composeRuntime = "1.7.3"
@@ -52,6 +54,7 @@ compose-runtime = { module = "org.jetbrains.compose.runtime:runtime-desktop", ve
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+koin-core = { module = "io.insert-koin:koin-core-jvm", version.ref = "koin" }
 ktlint-gradle-plugin = { module = "org.jlleitschuh.gradle:ktlint-gradle", version.ref = "ktlintGradle" }
 kotlin-stdlib-detekt = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "detektKotlin" }
 detekt-gradle-plugin = { module = "io.gitlab.arturbosch.detekt:detekt-gradle-plugin", version.ref = "detekt" }
