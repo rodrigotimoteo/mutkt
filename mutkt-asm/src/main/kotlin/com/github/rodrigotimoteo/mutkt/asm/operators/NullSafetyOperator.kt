@@ -12,21 +12,20 @@ import org.objectweb.asm.tree.MethodNode
 
 private const val INTRINSICS = "kotlin/jvm/internal/Intrinsics"
 
-// Only the checks the Kotlin compiler inserts at parameters, platform-type results, `!!` and lateinit reads.
-// throwNpe/throwJavaNpe are not listed: current compilers no longer emit them, and a throw cannot be dropped
-// without a replacement value.
+// The checks behind code the user wrote: `!!`, a platform-type result taken as non-null, a lateinit read.
+// checkNotNullParameter is not listed: Kotlin callers cannot pass null, so removing it is equivalent unless Java or
+// reflection calls in. throwNpe/throwJavaNpe are not listed: current compilers no longer emit them, and a throw
+// cannot be dropped without a replacement value.
 private val NULL_CHECKS =
     setOf(
         "checkNotNull",
-        "checkNotNullParameter",
         "checkNotNullExpressionValue",
         "throwUninitializedPropertyAccessException",
     )
 
 /**
  * Kotlin null handling (Kotlin classes only): flips `IFNULL`/`IFNONNULL` (`?.`, `?:`, `== null`) and removes the
- * `Intrinsics` null checks (`!!`, parameter and platform-type checks, `lateinit` reads), leaving their arguments
- * popped.
+ * `Intrinsics` null checks of `!!`, platform-type results and `lateinit` reads, leaving their arguments popped.
  */
 internal object NullSafetyOperator : Operator {
     override val id = OperatorId("null-safety")

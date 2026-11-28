@@ -31,14 +31,14 @@ internal object Operators {
             NullReturnsOperator,
             ReturnValsOperator,
             EmptyReturnsOperator,
+            TrueReturnsOperator,
+            FalseReturnsOperator,
         )
 
     private val optIn: List<Operator> =
         listOf(
             ConstructorCallsOperator,
             IncrementsOperator,
-            TrueReturnsOperator,
-            FalseReturnsOperator,
             VoidMethodCallsOperator,
             NonVoidMethodCallsOperator,
             SealedWhenOperator,

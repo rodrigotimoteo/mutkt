@@ -104,11 +104,12 @@ class CoroutineFiltersTest {
 
     @Test
     fun `a suspend lambda keeps the code the user wrote`() {
-        // The lambda's Unit return stays: its declared type is in the class signature, which filters do not see.
+        // The lambda's Unit return is not a marker: its declared type is in the class signature, which filters do
+        // not see. null-returns skips it as equivalent.
         assertEquals(listOf("IF_ACMPNE", "ARETURN"), markers("SourceKt\$launched\$1\$1", "invokeSuspend"))
         assertEquals(emptyList<String>(), continuation("SourceKt\$launched\$1\$1", "invokeSuspend"))
         assertEquals(
-            listOf("if_icmple -> if_icmpgt", "imul -> idiv", "if_icmple -> if_icmplt", "areturn -> null"),
+            listOf("if_icmple -> if_icmpgt", "imul -> idiv", "if_icmple -> if_icmplt"),
             defaultSites("SourceKt\$launched\$1\$1", "invokeSuspend"),
         )
         // The value runTwice's lambda returns is the user's.
@@ -118,7 +119,6 @@ class CoroutineFiltersTest {
     @Test
     fun `the same shapes outside a suspend function are user code`() {
         assertEquals(emptyList<String>(), markers("SourceKt", "unitValue"))
-        assertEquals(listOf("areturn -> null"), defaultSites("SourceKt", "unitValue"))
         assertEquals(emptyList<String>(), continuation("Counter", "masked"))
         assertEquals(emptyList<String>(), markers("Counter", "masked"))
         assertEquals(listOf("ifeq -> ifne", "isub -> iadd", "ireturn -> 0"), defaultSites("Counter", "masked"))

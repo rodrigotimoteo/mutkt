@@ -29,7 +29,7 @@ class MutKtScenariosTest {
     }
 
     @OnGradleVersions
-    fun `without selected operators only the six defaults run`(version: String) {
+    fun `without selected operators only the defaults run`(version: String) {
         // The word "operators" in the DSL turns off the fixture's default pin; no operator is selected.
         val summary =
             run(
@@ -41,9 +41,10 @@ class MutKtScenariosTest {
                 ),
             )
 
-        // Two sites of add and two of isPositive; true-returns and false-returns would add two more on isPositive.
-        assertLine(summary, "Mutants: 4")
-        assertTrue("true-returns" !in summary && "false-returns" !in summary, summary)
+        // Two sites of add and two of isPositive, plus true-returns and false-returns on isPositive (the weak test
+        // kills only the false one); no opt-in operator has a site here.
+        assertLine(summary, "Mutants: 6")
+        assertTrue("true-returns  ireturn -> true" in summary, summary)
     }
 
     @OnGradleVersions

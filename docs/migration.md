@@ -26,7 +26,7 @@ Recommended (owner to confirm): no alias for the old plugin id. A build that sti
 | `classpath` | removed | The `test` task's runtime classpath is used |
 | `coverageExecFile` | removed | No JaCoCo input; the baseline run replaces it (behavior changes) |
 | `autoRunJaCoCo` | removed | Was already a no-op |
-| `enabledOperators` | `operators` | Ids are kebab-case (`arithmetic`), see [operators.md](operators.md); empty runs the default six |
+| `enabledOperators` | `operators` | Ids are kebab-case (`arithmetic`), see [operators.md](operators.md); empty runs the default eight |
 | `timeoutMs` | `timeoutMs` | Default 30000 ms became 60000 ms, and it now caps a deadline derived from the baseline run (see `docs/dsl.md`) |
 | `mutantTimeoutMs` | `timeoutMs` | Deprecated duplicate |
 | `maxParallelMutants` | `threads` | Default 4 became the available processors |
@@ -74,7 +74,7 @@ ADR 0004: no JUnit extension API and no runner module. Existing tests run unchan
 
 - **Score.** 0.3.x: killed / total as a rounded integer. 0.4.0: (KILLED + TIMEOUT) / (total - ERROR) as a decimal; NO_COVERAGE and SURVIVED count as not detected, ERROR mutants are left out (ADR 0002). Scores move, so re-baseline `failBelowScore`.
 - **Class filters.** Globs only, on dotted names: `*` stays in a segment, `**` crosses dots. 0.3.x slashed patterns such as `**/*Test` become `**Test`. JVM projects have no default exclusions any more (0.3.x skipped tests, `BuildConfig`, `R`, Dagger and Hilt output and more): only `main` classes are mutated, but exclude generated code yourself. Android projects start `excludedClasses` with globs for R, BR, BuildConfig, Hilt, Dagger, view and data binding and Compose (see [dsl.md](dsl.md#android-generated-classes)); `add` extends them and `=` replaces them.
-- **Operators.** The default set is the same six as 0.3.x (`arithmetic`, `conditionals-boundary`, `negate-conditionals`, `null-returns`, `return-vals`, `empty-returns`). A non-empty `operators` runs exactly those ids. Site differences per operator are in [parity.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/parity.md).
+- **Operators.** The default set started as the same six as 0.3.x (`arithmetic`, `conditionals-boundary`, `negate-conditionals`, `null-returns`, `return-vals`, `empty-returns`); `true-returns` and `false-returns` joined it after 0.5.0, as in PIT's defaults. A non-empty `operators` runs exactly those ids. Site differences per operator are in [parity.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/parity.md).
 - **JUnit engines.** Default `junit-jupiter` only; 0.3.x also ran `junit-vintage` and `junit-platform-suite-engine`. Opt in with `engines` and put the engine on the test runtime classpath (ADR 0005); MutKt supplies the vintage engine itself when the project has none.
 - **Forked JVM pool.** Mutants run in child JVMs that copy the `test` task's JVM setup; a hung mutant is killed and reported as TIMEOUT (ADR 0008).
 - **Java agents.** As in 0.3.x, the `test` task's `-javaagent` arguments reach the test runs, so mocking agents (MockK, Mockito inline) keep working; coverage agents (JaCoCo, Kover) are now dropped. See the [FAQ](faq.md#do-mocking-libraries-work).

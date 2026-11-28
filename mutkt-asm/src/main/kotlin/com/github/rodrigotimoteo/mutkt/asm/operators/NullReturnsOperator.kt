@@ -6,8 +6,11 @@ import com.github.rodrigotimoteo.mutkt.asm.Site
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
 import org.objectweb.asm.Opcodes.ACONST_NULL
 import org.objectweb.asm.Opcodes.ARETURN
+import org.objectweb.asm.Opcodes.GETSTATIC
 import org.objectweb.asm.Opcodes.POP
 import org.objectweb.asm.Type
+import org.objectweb.asm.tree.AbstractInsnNode
+import org.objectweb.asm.tree.FieldInsnNode
 import org.objectweb.asm.tree.InsnList
 import org.objectweb.asm.tree.InsnNode
 import org.objectweb.asm.tree.MethodNode
@@ -38,6 +41,8 @@ internal object NullReturnsOperator : Operator {
                 // previous is the adjacent node: a label or frame there marks a merge point, where the value
                 // may not be null, so the site stays. Only a literal null returned directly is equivalent.
                 .filter { it.previous?.opcode != ACONST_NULL }
+                // A lambda or suspend block typed Object returns Unit.INSTANCE; callers never read a Unit result.
+                .filterNot { isUnitInstance(it.previous) }
                 .map { Site(it, "areturn -> null") }
         } else {
             emptyList()
@@ -54,6 +59,9 @@ internal object NullReturnsOperator : Operator {
             add(InsnNode(ACONST_NULL))
         },
     )
+
+    private fun isUnitInstance(insn: AbstractInsnNode?) =
+        insn is FieldInsnNode && insn.opcode == GETSTATIC && insn.owner == "kotlin/Unit" && insn.name == "INSTANCE"
 
     private fun isCandidate(methodDesc: String): Boolean {
         val returnType = Type.getReturnType(methodDesc).descriptor

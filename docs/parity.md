@@ -9,7 +9,7 @@
 - Legacy line `-1` means unknown and matches any line of the same site.
 - The fixture-bytes hash check is informational: the tool and the repo compile the fixtures with the same Kotlin and stdlib, so a hash differs only after a fixture or the Kotlin version changes.
 - Regenerate: `./gradlew -p tools/parity-legacy run --args="$PWD/mutkt-asm/src/test/resources/parity"` (see `tools/parity-legacy/README.md`).
-- Legacy SEALED_WHEN maps to `sealed-when`, NULL_SAFETY to `null-safety` (no deviation: every legacy row has a new site), DATA_CLASS_COPY to `data-class-copy` and COROUTINE to `coroutine`.
+- Legacy SEALED_WHEN maps to `sealed-when`, NULL_SAFETY to `null-safety` (D19: legacy also removes parameter checks), DATA_CLASS_COPY to `data-class-copy` and COROUTINE to `coroutine`.
 - Legacy DATA_CLASS_COPY is order-dependent: it fires on `copy`/`copy$default` only after a `componentN` method was seen in the calling class (a Kotlin class, data class or not). The fixture class `Wrapper` declares `component1()` first, so it is the only caller the legacy table has rows for (D15 covers the other callers).
 
 ## Deviations
@@ -62,6 +62,7 @@ Every documented difference, from `mutkt-asm/src/test/kotlin/com/github/rodrigot
 | D18a | empty-returns | legacy only | Empties the return of the `values()` kotlinc generates for the enums `Color` and `Dir` | Generated, so the rebuild skips `values`, `valueOf` and `getEntries` of a Kotlin enum (see Noise filters in `docs/operators.md`) |
 | D18b | non-void-method-calls | legacy only | Mutates the `clone` and `Enum.valueOf` calls of the generated `values()` and `valueOf` | As D18a |
 | D18c | null-returns | legacy only | Nulls the returns of the generated `valueOf` and `getEntries` | As D18a |
+| D19 | null-safety | legacy only | Removes the `Intrinsics.checkNotNullParameter` calls kotlinc inserts for non-null parameters (legacy rows without a line) | Kotlin callers cannot pass null, so the rebuild skips them as equivalent |
 
 The legacy COROUTINE row has no line, so it pairs with one of the two suspend calls of `chain` (same site, any line) and D11 explains the other: the marker row itself is not matched by a rebuild site.
 
