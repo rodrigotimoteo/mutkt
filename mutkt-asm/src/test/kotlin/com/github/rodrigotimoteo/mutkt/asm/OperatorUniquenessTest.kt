@@ -6,12 +6,13 @@ import org.objectweb.asm.tree.LookupSwitchInsnNode
 import org.objectweb.asm.tree.TableSwitchInsnNode
 import java.nio.ByteBuffer
 
-// Each pair mutates the same instruction to different opcodes (negation vs boundary, constant 1 vs 0),
-// so the mutants differ.
+// Each pair mutates the same instruction differently (negation vs boundary, constant 1 vs 0, a renamed stdlib
+// call vs its default value), so the mutants differ.
 private val SHARING_PAIRS =
     setOf(
         setOf("negate-conditionals", "conditionals-boundary"),
         setOf("true-returns", "false-returns"),
+        setOf("stdlib-swap", "non-void-method-calls"),
     )
 
 internal class OperatorUniquenessTest {
