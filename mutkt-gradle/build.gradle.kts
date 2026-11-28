@@ -101,6 +101,8 @@ val agpTest by tasks.registering(Test::class) {
     useJUnitPlatform { includeTags("agp") }
     // Read at configuration, so a new cell is a new task input rather than an up-to-date skip.
     systemProperty("mutkt.agpVersion", providers.gradleProperty("mutkt.agp").getOrElse(libs.versions.agp.get()))
+    // A Jupiter newer than the bundled Platform, for the scenario without a launcher.
+    systemProperty("mutkt.junitOtherVersion", libs.versions.junitOther.get())
     // The Kotlin Android plugin of the scenario that mutates a Kotlin class.
     systemProperty("mutkt.kotlinVersion", libs.versions.kotlin.get())
     // AGP 8.4's minimum Gradle.
