@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutkt.application.AnalysisConfig
 import com.github.rodrigotimoteo.mutkt.application.ClassFilters
 import com.github.rodrigotimoteo.mutkt.application.Glob
 import com.github.rodrigotimoteo.mutkt.application.RunMutationAnalysis
+import com.github.rodrigotimoteo.mutkt.application.Survivor
 import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
@@ -25,6 +26,7 @@ import com.github.rodrigotimoteo.mutkt.report.deadlineWarning
 import org.gradle.api.GradleException
 import java.io.File
 import java.net.URLClassLoader
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -60,7 +62,15 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
                 }
             }
         }
-    return texts.result(report)
+    val survivors = {
+        survivorsOf(report) { name ->
+            production.dir
+                .resolve("${name.replace('.', '/')}.class")
+                .takeIf(Files::exists)
+                ?.let(Files::readAllBytes)
+        }
+    }
+    return texts.result(report, survivors)
 }
 
 // What the report writers fill during a run.
@@ -71,17 +81,20 @@ private class ReportTexts {
     val sarif = StringBuilder()
     val annotations = StringBuilder()
 
-    fun result(report: MutationReport) =
-        AnalysisResult(
-            summary.toString(),
-            report.score,
-            report.results.size,
-            report.results.count { it.status == MutantStatus.ERROR },
-            json.toString(),
-            html.toString(),
-            sarif.toString(),
-            annotations.toString(),
-        )
+    fun result(
+        report: MutationReport,
+        survivors: () -> List<Survivor>,
+    ) = AnalysisResult(
+        summary.toString(),
+        report.score,
+        report.results.size,
+        report.results.count { it.status == MutantStatus.ERROR },
+        json.toString(),
+        html.toString(),
+        sarif.toString(),
+        annotations.toString(),
+        survivors,
+    )
 }
 
 private fun MutKtTask.reportWriter(texts: ReportTexts): ReportWriter {

@@ -12,6 +12,7 @@ public class MutKtPlugin : Plugin<Project> {
         mutkt.engines.convention(DEFAULT_ENGINES)
         mutkt.reports.console.convention(true)
         mutkt.variant.convention("debug")
+        mutkt.failOnNewSurvivors.convention(false)
         mutkt.historyFile.convention(project.layout.buildDirectory.file("mutkt/history.json"))
         // A value rather than a convention, so add() extends it and set() replaces it, as on Android.
         mutkt.excludedClasses.add(GENERATED_SOURCES)

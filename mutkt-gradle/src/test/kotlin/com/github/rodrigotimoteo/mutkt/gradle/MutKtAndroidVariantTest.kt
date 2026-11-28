@@ -1,10 +1,14 @@
 package com.github.rodrigotimoteo.mutkt.gradle
 
+import com.github.rodrigotimoteo.mutkt.gradle.AndroidBuild.Companion.AGP_VERSION
+import com.github.rodrigotimoteo.mutkt.gradle.AndroidBuild.Companion.JUPITER_JARS
+import com.github.rodrigotimoteo.mutkt.gradle.AndroidBuild.Companion.KGP
+import com.github.rodrigotimoteo.mutkt.gradle.AndroidBuild.Companion.REPOSITORIES
+import com.github.rodrigotimoteo.mutkt.gradle.AndroidBuild.Companion.TEST_KIT_DIR
 import com.github.rodrigotimoteo.mutkt.gradle.TestKitProject.Companion.GATE
 import com.github.rodrigotimoteo.mutkt.gradle.TestKitProject.Companion.JUNIT4_GATE_TEST
 import com.github.rodrigotimoteo.mutkt.gradle.TestKitProject.Companion.JUNIT4_JARS
 import com.github.rodrigotimoteo.mutkt.gradle.TestKitProject.Companion.assertSummaryLines
-import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -12,7 +16,6 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
-import java.util.Properties
 
 /** Android library builds on real AGP; run by `agpTest`, which needs an SDK (ANDROID_HOME) and the network. */
 @Tag("agp")
@@ -20,18 +23,20 @@ class MutKtAndroidVariantTest {
     @TempDir
     lateinit var dir: File
 
+    private val android get() = AndroidBuild(dir)
+
     @Test
     fun `the default debug variant passes configuration`() {
-        setUp("")
+        android.setUp("")
 
-        runner().build()
+        android.runner().build()
     }
 
     @Test
     fun `resolves AGP into the TestKit dir that CI caches`() {
-        setUp("")
+        android.setUp("")
 
-        runner().build()
+        android.runner().build()
 
         val agp = TEST_KIT_DIR.resolve("caches/modules-2/files-2.1/com.android.tools.build/gradle/$AGP_VERSION")
         assertTrue(agp.isDirectory, "$agp is missing")
@@ -39,47 +44,56 @@ class MutKtAndroidVariantTest {
 
     @Test
     fun `another variant with unit tests passes configuration`() {
-        setUp(
+        android.setUp(
             """
             mutkt { variant = 'release' }
             androidComponents { beforeVariants(selector().withName('debug')) { it.enableUnitTest = false } }
             """.trimIndent(),
         )
 
-        runner().build()
+        android.runner().build()
     }
 
     @Test
     fun `a missing variant fails with the variants that have unit tests`() {
-        setUp("mutkt { variant = 'nope' }")
+        android.setUp("mutkt { variant = 'nope' }")
 
-        val output = runner().buildAndFail().output
+        val output = android.runner().buildAndFail().output
 
         assertTrue("MutKt cannot find variant 'nope'; variants with unit tests: debug, release" in output, output)
     }
 
     @Test
     fun `the default variant without unit tests fails with the variants that have them`() {
-        setUp("androidComponents { beforeVariants(selector().withName('debug')) { it.enableUnitTest = false } }")
+        android.setUp(
+            "androidComponents { beforeVariants(selector().withName('debug')) { it.enableUnitTest = false } }",
+        )
 
-        val output = runner().buildAndFail().output
+        val output = android.runner().buildAndFail().output
 
         assertTrue("MutKt variant 'debug' has no unit tests; variants with unit tests: release" in output, output)
     }
 
     @Test
     fun `mutates the variant's Kotlin and Java classes with its unit tests and reuses the configuration cache`() {
-        write("settings.gradle", "rootProject.name = 'sample'\n")
-        write("build.gradle", library(classpath = mutktClasspath() + "\n" + agpClasspath() + "\n" + KGP, dsl = RUN_DSL))
-        write(
+        android.write("settings.gradle", "rootProject.name = 'sample'\n")
+        android.write(
+            "build.gradle",
+            android.library(
+                classpath =
+                    android.mutktClasspath() + "\n" + android.agpClasspath() + "\n" + KGP,
+                dsl = RUN_DSL,
+            ),
+        )
+        android.write(
             "src/main/kotlin/demo/Calc.kt",
             "package demo\n\nclass Calc {\n    fun add(a: Int, b: Int): Int = a + b\n}\n",
         )
-        write("src/main/java/demo/Gate.java", GATE)
-        write("src/test/java/demo/CalcTest.java", CALC_TEST)
+        android.write("src/main/java/demo/Gate.java", GATE)
+        android.write("src/test/java/demo/CalcTest.java", CALC_TEST)
 
-        val first = runner("mutkt").build()
-        val second = runner("mutkt").build()
+        val first = android.runner("mutkt").build()
+        val second = android.runner("mutkt").build()
 
         assertEquals(TaskOutcome.SUCCESS, first.task(":mutkt")?.outcome, first.output)
         assertEquals(null, first.task(":testDebugUnitTest"), "mutkt must not run the unit tests\n${first.output}")
@@ -97,11 +111,11 @@ class MutKtAndroidVariantTest {
         val dsl =
             "$REPOSITORIES\ndependencies { testImplementation files($junit4) }\n" +
                 "mutkt { engines = ['junit-vintage']; operators = ['conditionals-boundary', 'negate-conditionals'] }"
-        setUp(dsl)
-        write("src/main/java/demo/Gate.java", GATE)
-        write("src/test/java/demo/GateTest.java", JUNIT4_GATE_TEST)
+        android.setUp(dsl)
+        android.write("src/main/java/demo/Gate.java", GATE)
+        android.write("src/test/java/demo/GateTest.java", JUNIT4_GATE_TEST)
 
-        val result = runner("mutkt").build()
+        val result = android.runner("mutkt").build()
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":mutkt")?.outcome, result.output)
         val report = dir.resolve("build/reports/mutkt/mutkt.txt").readText()
@@ -111,13 +125,16 @@ class MutKtAndroidVariantTest {
     @Test
     fun `Jupiter tests without a launcher, repositories only in settings, run on a launcher at the engine's version`() {
         val jupiter = "org.junit.jupiter:junit-jupiter:${System.getProperty("mutkt.junitOtherVersion")}"
-        setUp(MODULE_DSL.replace(REPOSITORIES, "").replace(Regex("files\\(.*\\)"), "'$jupiter'"))
+        android.setUp(MODULE_DSL.replace(REPOSITORIES, "").replace(Regex("files\\(.*\\)"), "'$jupiter'"))
         val mode = "repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS"
-        write("settings.gradle", "rootProject.name = 'sample'\ndependencyResolutionManagement { $mode\n$REPOSITORIES }")
-        write("src/main/java/demo/Base.java", BASE.replace("demo.lib", "demo"))
-        write("src/test/java/demo/BaseTest.java", BASE_TEST.replace("demo.lib", "demo"))
+        android.write(
+            "settings.gradle",
+            "rootProject.name = 'sample'\ndependencyResolutionManagement { $mode\n$REPOSITORIES }",
+        )
+        android.write("src/main/java/demo/Base.java", BASE.replace("demo.lib", "demo"))
+        android.write("src/test/java/demo/BaseTest.java", BASE_TEST.replace("demo.lib", "demo"))
 
-        val result = runner("mutkt").build()
+        val result = android.runner("mutkt").build()
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":mutkt")?.outcome, result.output)
         assertTrue("MutKt cannot resolve" !in result.output, result.output)
@@ -126,20 +143,26 @@ class MutKtAndroidVariantTest {
 
     @Test
     fun `skips generated classes by default, and excludedClasses extends or replaces the defaults`() {
-        write("settings.gradle", "rootProject.name = 'sample'\n")
-        write("gradle.properties", "android.useAndroidX=true\n")
-        write("src/main/res/layout/activity_main.xml", LAYOUT)
-        write("src/main/java/demo/Gate.java", GATE)
-        write("src/main/java/demo/Old.java", GATE.replace("Gate", "Old"))
-        write("src/test/java/demo/GateTest.java", GATE_TEST)
-        val classpath = mutktClasspath() + "\n" + agpClasspath()
+        android.write("settings.gradle", "rootProject.name = 'sample'\n")
+        android.write("gradle.properties", "android.useAndroidX=true\n")
+        android.write("src/main/res/layout/activity_main.xml", LAYOUT)
+        android.write("src/main/java/demo/Gate.java", GATE)
+        android.write("src/main/java/demo/Old.java", GATE.replace("Gate", "Old"))
+        android.write("src/test/java/demo/GateTest.java", GATE_TEST)
+        val classpath = android.mutktClasspath() + "\n" + android.agpClasspath()
         val json = dir.resolve("build/reports/mutkt/mutation-report.json")
 
-        write("build.gradle", library(classpath, BINDING_DSL + "\nmutkt { excludedClasses.add('demo.Old') }"))
-        runner("mutkt").build()
+        android.write(
+            "build.gradle",
+            android.library(
+                classpath,
+                BINDING_DSL + "\nmutkt { excludedClasses.add('demo.Old') }",
+            ),
+        )
+        android.runner("mutkt").build()
         val extended = json.readText()
-        write("build.gradle", library(classpath, BINDING_DSL + "\nmutkt { excludedClasses = [] }"))
-        runner("mutkt").build()
+        android.write("build.gradle", android.library(classpath, BINDING_DSL + "\nmutkt { excludedClasses = [] }"))
+        android.runner("mutkt").build()
         val replaced = json.readText()
 
         assertTrue("\"demo/Gate.java\"" in extended, extended)
@@ -149,19 +172,19 @@ class MutKtAndroidVariantTest {
 
     @Test
     fun `an app mutant is killed by tests that need an Android library module and an AAR, and the library runs too`() {
-        write("settings.gradle", "rootProject.name = 'sample'\ninclude 'app', 'lib'\n")
-        write("gradle.properties", "android.useAndroidX=true\n")
-        val plugins = "dependencies {\n${mutktClasspath()}\n${agpClasspath()}\n}"
-        write("build.gradle", "buildscript {\n$REPOSITORIES\n$plugins\n}\n")
-        write("lib/build.gradle", library("", MODULE_DSL, namespace = "demo.lib"))
-        write("lib/src/main/java/demo/lib/Base.java", BASE)
-        write("lib/src/test/java/demo/lib/BaseTest.java", BASE_TEST)
-        write("app/build.gradle", library("", APP_DSL, "com.android.application", "demo.app"))
-        write("app/src/main/AndroidManifest.xml", "<manifest />\n")
-        write("app/src/main/java/demo/app/Score.java", SCORE)
-        write("app/src/test/java/demo/app/ScoreTest.java", SCORE_TEST)
+        android.write("settings.gradle", "rootProject.name = 'sample'\ninclude 'app', 'lib'\n")
+        android.write("gradle.properties", "android.useAndroidX=true\n")
+        val plugins = "dependencies {\n${android.mutktClasspath()}\n${android.agpClasspath()}\n}"
+        android.write("build.gradle", "buildscript {\n$REPOSITORIES\n$plugins\n}\n")
+        android.write("lib/build.gradle", android.library("", MODULE_DSL, namespace = "demo.lib"))
+        android.write("lib/src/main/java/demo/lib/Base.java", BASE)
+        android.write("lib/src/test/java/demo/lib/BaseTest.java", BASE_TEST)
+        android.write("app/build.gradle", android.library("", APP_DSL, "com.android.application", "demo.app"))
+        android.write("app/src/main/AndroidManifest.xml", "<manifest />\n")
+        android.write("app/src/main/java/demo/app/Score.java", SCORE)
+        android.write("app/src/test/java/demo/app/ScoreTest.java", SCORE_TEST)
 
-        val result = runner("mutkt").build()
+        val result = android.runner("mutkt").build()
 
         // The app's original classes are on its unit-test classpath as a jar, so the kill also shows the mutant wins.
         assertEquals(TaskOutcome.SUCCESS, result.task(":app:mutkt")?.outcome, result.output)
@@ -175,75 +198,16 @@ class MutKtAndroidVariantTest {
 
     @Test
     fun `AGP in a child scope of MutKt fails with where to declare it`() {
-        write("settings.gradle", "rootProject.name = 'sample'\ninclude 'lib'\n")
-        write("build.gradle", "buildscript { dependencies { ${mutktClasspath()} } }\n")
-        write("lib/build.gradle", library(classpath = agpClasspath(), dsl = ""))
+        android.write("settings.gradle", "rootProject.name = 'sample'\ninclude 'lib'\n")
+        android.write("build.gradle", "buildscript { dependencies { ${android.mutktClasspath()} } }\n")
+        android.write("lib/build.gradle", android.library(classpath = android.agpClasspath(), dsl = ""))
 
-        val output = runner().buildAndFail().output
+        val output = android.runner().buildAndFail().output
 
         assertTrue("MutKt cannot load the Android Gradle plugin's classes" in output, output)
     }
 
-    // Both plugins go on one buildscript classpath, as with a plugins { } block, so MutKt sees AGP's classes.
-    // AGP 9 gives unit tests only to the tested build type (8.4 has no such option): keep both, as every cell expects.
-    private fun setUp(dsl: String) {
-        write("settings.gradle", "rootProject.name = 'sample'\n")
-        write("gradle.properties", "android.onlyEnableUnitTestForTheTestedBuildType=false\n")
-        write("build.gradle", library(classpath = mutktClasspath() + "\n" + agpClasspath(), dsl = dsl))
-    }
-
-    private fun library(
-        classpath: String,
-        dsl: String,
-        plugin: String = "com.android.library",
-        namespace: String = "demo",
-    ) = """
-        |buildscript {
-        |    repositories {
-        |        google()
-        |        mavenCentral()
-        |    }
-        |    dependencies {
-        |        $classpath
-        |    }
-        |}
-        |apply plugin: '$plugin'
-        |${if (KGP in classpath && !BUILT_IN_KOTLIN) "apply plugin: 'org.jetbrains.kotlin.android'" else ""}
-        |apply plugin: 'io.github.rodrigotimoteo.mutkt'
-        |android {
-        |    namespace = '$namespace'
-        |    compileSdk = 34
-        |}
-        |$dsl
-        """.trimMargin()
-
-    private fun mutktClasspath() =
-        "classpath files(${MUTKT_CLASSPATH.joinToString { "'${it.invariantSeparatorsPath}'" }})"
-
-    private fun agpClasspath() = "classpath 'com.android.tools.build:gradle:$AGP_VERSION'"
-
-    private fun write(
-        path: String,
-        text: String,
-    ) = dir.resolve(path).apply { parentFile.mkdirs() }.writeText(text)
-
-    private fun androidUserHome() = dir.resolve(".android").apply { resolve("cache").mkdirs() }
-
-    private fun runner(task: String = "help") =
-        GradleRunner
-            .create()
-            .withProjectDir(dir)
-            .withTestKitDir(TEST_KIT_DIR)
-            // AGP 8 creates its user home's cache in the first build, which the configuration cache sees as a change.
-            .withEnvironment(System.getenv() + ("ANDROID_USER_HOME" to androidUserHome().absolutePath))
-            .withGradleVersion(GRADLE_VERSION)
-            .withArguments(task, "--configuration-cache", "--console=plain", "--stacktrace", "--warning-mode=fail")
-
     private companion object {
-        val KGP = "classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:${System.getProperty("mutkt.kotlinVersion")}'"
-
-        val JUNIT_JARS = Regex("^(junit-jupiter|junit-platform-(engine|commons|launcher)|opentest4j|apiguardian)")
-
         // Jupiter from this JVM's jars; the arithmetic mutant in Calc is killed, the boundary one in Gate survives.
         val RUN_DSL =
             """
@@ -259,18 +223,16 @@ class MutKtAndroidVariantTest {
                 testOptions { unitTests.all { useJUnitPlatform() } }
             }
             kotlin { compilerOptions { jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17 } }
-            dependencies { testImplementation files(${TestKitProject(File(".")).jars(JUNIT_JARS)}) }
+            dependencies { testImplementation files($JUPITER_JARS) }
             mutkt { operators = ['arithmetic', 'conditionals-boundary'] }
             """.trimIndent()
-
-        const val REPOSITORIES = "repositories {\n    google()\n    mavenCentral()\n}"
 
         // Jupiter from this JVM's jars and the arithmetic operator only, so each module has one mutant.
         val MODULE_DSL =
             """
             $REPOSITORIES
             android { testOptions { unitTests.all { useJUnitPlatform() } } }
-            dependencies { testImplementation files(${TestKitProject(File(".")).jars(JUNIT_JARS)}) }
+            dependencies { testImplementation files($JUPITER_JARS) }
             mutkt { operators = ['arithmetic'] }
             """.trimIndent()
 
@@ -335,7 +297,7 @@ class MutKtAndroidVariantTest {
                 buildFeatures { viewBinding = true }
                 testOptions { unitTests.all { useJUnitPlatform() } }
             }
-            dependencies { testImplementation files(${TestKitProject(File(".")).jars(JUNIT_JARS)}) }
+            dependencies { testImplementation files($JUPITER_JARS) }
             """.trimIndent()
 
         const val LAYOUT =
@@ -376,25 +338,5 @@ class MutKtAndroidVariantTest {
                 }
             }
             """.trimIndent()
-
-        val AGP_VERSION: String = checkNotNull(System.getProperty("mutkt.agpVersion")) { "mutkt.agpVersion is not set" }
-
-        // AGP 9 compiles Kotlin itself and rejects the Kotlin Android plugin; KGP on the classpath sets its version.
-        val BUILT_IN_KOTLIN = AGP_VERSION.substringBefore('.').toInt() >= 9
-        val GRADLE_VERSION: String =
-            checkNotNull(System.getProperty("mutkt.agpGradleVersion")) { "mutkt.agpGradleVersion is not set" }
-
-        val TEST_KIT_DIR = File(checkNotNull(System.getProperty("mutkt.testKitDir")) { "mutkt.testKitDir is not set" })
-
-        // What withPluginClasspath() would inject: the plugin and its runtime dependencies.
-        val MUTKT_CLASSPATH: List<File> =
-            Properties()
-                .apply {
-                    MutKtAndroidVariantTest::class.java
-                        .getResourceAsStream("/plugin-under-test-metadata.properties")
-                        .use(::load)
-                }.getProperty("implementation-classpath")
-                .split(File.pathSeparator)
-                .map(::File)
     }
 }

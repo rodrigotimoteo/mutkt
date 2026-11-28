@@ -47,6 +47,9 @@ public abstract class MutKtExtension {
     /** Skip tests matching one of these JUnit tag expressions. */
     public abstract val excludeTags: SetProperty<String>
 
+    /** Fails the build on survivors that the committed survivor baseline does not accept (`mutktUpdateBaseline`). */
+    public abstract val failOnNewSurvivors: Property<Boolean>
+
     /** Where the results are kept between runs, so mutants whose code and tests did not change are not run again. */
     public abstract val historyFile: RegularFileProperty
 

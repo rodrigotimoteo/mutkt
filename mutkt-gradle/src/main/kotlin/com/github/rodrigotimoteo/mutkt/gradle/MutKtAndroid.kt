@@ -11,8 +11,8 @@ import org.gradle.api.Project
 import org.gradle.api.tasks.testing.Test
 
 /**
- * Registers `mutkt` for the variant the `variant` DSL names, reading the classes from AGP and the tests from the
- * variant's unit-test task; fails the build, once AGP created its variants, unless that variant has unit tests.
+ * Registers the MutKt tasks for the variant the `variant` DSL names, reading the classes from AGP and the tests from
+ * the variant's unit-test task; fails the build, once AGP created its variants, unless that variant has unit tests.
  */
 internal fun Project.wireAndroid(extension: MutKtExtension) {
     // A value rather than a convention, so add() extends the defaults and set() replaces them.
@@ -50,7 +50,7 @@ private fun Project.registerAndroidMutkt(
     val testTask = "test${variant.name.replaceFirstChar(Char::uppercaseChar)}UnitTest"
     val test = providers.provider { unitTestTask(testTask, variant.name) }
     val sources = listOfNotNull(variant.sources.java?.all, variant.sources.kotlin?.all)
-    val mutkt =
+    val tasks =
         registerMutkt(MutKtAndroidTask::class.java, extension, test) { task ->
             task.classesDirs.from(task.classJars, task.classDirectories)
             task.testClassesDirs.from(test.map { it.testClassesDirs })
@@ -61,10 +61,12 @@ private fun Project.registerAndroidMutkt(
             task.compileClasspath.from(variant.compileClasspath)
             task.sourceDirs.from(sources)
         }
-    variant.artifacts
-        .forScope(ScopedArtifacts.Scope.PROJECT)
-        .use(mutkt)
-        .toGet(ScopedArtifact.CLASSES, MutKtAndroidTask::classJars, MutKtAndroidTask::classDirectories)
+    tasks.forEach { task ->
+        variant.artifacts
+            .forScope(ScopedArtifacts.Scope.PROJECT)
+            .use(task)
+            .toGet(ScopedArtifact.CLASSES, MutKtAndroidTask::classJars, MutKtAndroidTask::classDirectories)
+    }
 }
 
 private fun Project.unitTestTask(
