@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 
 // Libraries come from the dependency classpath yet must see the project's classes, as in the project's own test task.
@@ -30,14 +31,18 @@ class ProjectVisibilityTest {
         val library: Path,
     )
 
-    // Finder goes into a jar: it stands in for minutest or Kotest, which resolve names with one-argument Class.forName.
+    // Finder goes into a jar: it stands in for minutest or Kotest, which resolve names with one-argument Class.forName,
+    // and for MockK, Spring or Koin, which resolve them through the context loader or ServiceLoader.
     private fun layout(): Layout {
         val classes = compileKotlin(SOURCE, inheritClassPath = true).map { ClassFile(it.key, it.value) }
         val (library, rest) = classes.partition { it.name.startsWith("p.Finder") }
         val (project, tests) = rest.partition { it.name == "p.Calc" }
         val jar = writeJar(dir.resolve("library.jar"), library.associate { it.name to it.bytes })
         val mainDir = writeClasses(dir.resolve("main"), project)
-        return Layout(project, tests, mainDir, writeClasses(dir.resolve("test"), tests), jar)
+        val testDir = writeClasses(dir.resolve("test"), tests)
+        val services = Files.createDirectories(testDir.resolve("META-INF/services"))
+        Files.writeString(services.resolve("p.FinderService"), "p.CalcService\n")
+        return Layout(project, tests, mainDir, testDir, jar)
     }
 
     private fun mutant() = mutantOf("p.Calc")
@@ -86,10 +91,25 @@ class ProjectVisibilityTest {
                 fun find(name: String): Class<*> = Class.forName(name)
 
                 fun firstFound(name: String): Class<*> = first ?: find(name).also { first = it }
+
+                fun findInContext(name: String): Class<*> =
+                    Class.forName(name, true, Thread.currentThread().contextClassLoader)
+
+                fun services(): List<FinderService> = java.util.ServiceLoader.load(FinderService::class.java).toList()
             }
+
+            interface FinderService { fun add(a: Int, b: Int): Int }
+
+            class CalcService : FinderService { override fun add(a: Int, b: Int) = Calc().add(a, b) }
 
             class CalcTest {
                 @Test fun libraryFindsTheTestClass() = assertSame(CalcTest::class.java, Finder.find("p.CalcTest"))
+
+                @Test fun libraryFindsTheTestClassInTheContextLoader() =
+                    assertSame(CalcTest::class.java, Finder.findInContext("p.CalcTest"))
+
+                @Test fun serviceLoaderFindsTheProjectProvider() =
+                    assertEquals(listOf(3), Finder.services().map { it.add(1, 2) })
 
                 @Test fun libraryStaticsHoldThisRunsCalc() {
                     val calc = Finder.firstFound("p.Calc")
