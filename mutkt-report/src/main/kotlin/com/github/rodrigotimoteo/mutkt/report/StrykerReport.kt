@@ -86,7 +86,11 @@ private fun mutant(
         put("description", mutant.description)
         put("location", location(mutant.line, lines))
         put("status", status(result.status))
-        (result.detail ?: result.killedBy?.let { "Killed by $it${kind(result)}" } ?: hint(result))?.let { put("statusReason", it) }
+        (
+            result.detail ?: result.killedBy?.let {
+                "Killed by $it${kind(result)}"
+            } ?: hint(result)
+        )?.let { put("statusReason", it) }
         result.killedBy?.let { put("killedBy", listOf(it)) }
         result.coveredBy?.let { put("coveredBy", it) }
     }

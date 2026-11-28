@@ -23,6 +23,7 @@ internal val operatorHints: Map<String, String> =
         "coroutine" to "no test waits for the coroutine or checks its result",
         "when-switch" to "no test checks the result of this case or of the else branch",
         "remove-negation" to "no test checks the sign of the value",
+        "stdlib-swap" to "no test checks which element or part of the collection the call returns",
         "extreme" to "tests run this method but no assertion depends on what it does",
     )
 

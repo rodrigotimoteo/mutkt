@@ -88,7 +88,7 @@ class StrykerReportWriterTest {
 
         assertEquals("No test checks what happens on both sides of the condition", reasons["Negated conditional"])
         assertEquals("No test asserts on the computed value", reasons["No debug info"])
-        assertEquals("Killed by demo.CalcTest.adds()", reasons["Replaced + with -"])
+        assertEquals("Killed by demo.CalcTest.adds() (assertion)", reasons["Replaced + with -"])
         assertEquals(null, reasons["Replaced return value"])
     }
 
