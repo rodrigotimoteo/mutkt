@@ -7,4 +7,6 @@ internal data class AnalysisResult(
     val errors: Int,
     val json: String,
     val html: String,
+    val sarif: String,
+    val annotations: String,
 )

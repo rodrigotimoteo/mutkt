@@ -101,7 +101,7 @@ An Android module starts `excludedClasses` with globs for the classes the build 
 
 ## Where are the reports, and why is there no output?
 
-`build/reports/mutkt/` of the project (of each module, on Android too) holds `mutation-report.html`, `mutation-report.json` (Stryker schema) and `mutkt.txt`. An up-to-date run prints nothing: the reports from the last run are still there. `reports.console = false` keeps the summary out of the build log; the files are written on every run that gets past the baseline.
+`build/reports/mutkt/` of the project (of each module, on Android too) holds `mutation-report.html`, `mutation-report.json` (Stryker schema), `mutation-report.sarif` (SARIF 2.1.0) and `mutkt.txt`. An up-to-date run prints nothing: the reports from the last run are still there. `reports.console = false` keeps the summary out of the build log; the files are written on every run that gets past the baseline.
 
 ## Why doesn't `check` run it?
 
