@@ -50,7 +50,14 @@ class ForkedCoverageTest {
         val baseline = executor().baseline(LONG, fixture.instrumented)
         assertEquals(Outcome.Survived, baseline.outcome)
         val hits = baseline.coverage!!.tests.map { it.test to it.hits }
-        assertEquals(listOf(TestId("ATest") to setOf(ADD), TestId("CTest") to setOf(SUB)), hits)
+        val expected =
+            listOf(
+                TestId("ATest") to setOf(),
+                method("ATest", "adds") to setOf(ADD),
+                TestId("CTest") to setOf(),
+                method("CTest", "subtracts") to setOf(SUB),
+            )
+        assertEquals(expected, hits)
     }
 
     @Test
@@ -72,13 +79,20 @@ class ForkedCoverageTest {
     }
 
     @Test
+    fun `a forked run executes only the given test methods`() {
+        val run = executor().run(mutantOf(), bothWrong, LONG, listOf(method("CTest", "subtracts")))
+        assertKilledBy("CTest.subtracts", run)
+    }
+
+    @Test
     fun `with Robolectric on the classpath the baseline reads the probes of sandbox copies`() {
         val robolectric = mapOf("org.robolectric.internal.SandboxManager" to compileKotlin("class X").getValue("X"))
         val jar = writeJar(Files.createDirectories(dir.resolve("jars")).resolve("robolectric.jar"), robolectric)
         val sandboxed = coverageFixture(SANDBOX_TEST)
         val baseline = executor(listOf(jar), sandboxed).baseline(LONG, sandboxed.instrumented)
         assertEquals(Outcome.Survived, baseline.outcome)
-        assertEquals(listOf(TestId("ATest") to setOf(ADD)), baseline.coverage!!.tests.map { it.test to it.hits })
+        val expected = listOf(TestId("ATest") to setOf(), method("ATest", "adds") to setOf(ADD))
+        assertEquals(expected, baseline.coverage!!.tests.map { it.test to it.hits })
     }
 
     private companion object {

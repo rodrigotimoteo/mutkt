@@ -32,7 +32,8 @@ internal class KillConfirmation(
     }
 
     // A rerun that cannot run says nothing about the test, so the kill stands; an executor that cannot continue still
-    // stops the analysis.
+    // stops the analysis. With method selection the killing class still reruns whole, not just the selected methods:
+    // its verdict then holds for every method, so each class reruns once per analysis instead of once per method set.
     @Suppress("TooGenericExceptionCaught")
     private fun failsOnOriginal(
         mutant: Mutant,

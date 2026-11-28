@@ -10,6 +10,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.application.port.TimedOutcome
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
+import org.junit.platform.engine.discovery.DiscoverySelectors.selectUniqueId
 import org.junit.platform.launcher.EngineFilter.includeEngines
 import org.junit.platform.launcher.TagFilter
 import org.junit.platform.launcher.core.LauncherConfig
@@ -91,8 +92,8 @@ public class JUnitTestExecutor(
         tests: List<TestId>?,
         onExecuting: () -> Unit,
     ): TimedOutcome {
-        val names = tests?.map { it.className }?.onEach { require(it in testNameSet) { "No test class $it" } }
-        val request = Request(mutant.id.toString(), classes + (mutant.className to bytes), mutant.className, names)
+        tests?.forEach { require(it.className in testNameSet) { "No test class ${it.className}" } }
+        val request = Request(mutant.id.toString(), classes + (mutant.className to bytes), mutant.className, tests)
         return launch(request, deadline, onExecuting).let { TimedOutcome(it.outcome, it.elapsed) }
     }
 
@@ -163,10 +164,13 @@ public class JUnitTestExecutor(
     ): Pair<Outcome, Coverage?> {
         // A mutant or test class that cannot link is a broken input, not a kill.
         // declaredMethods links the mutant, which is what surfaces VerifyError before any test touches it.
+        val selected = request.tests?.let(::methodsByClass) ?: testNames.associateWith { emptyList() }
         val types =
             try {
                 request.linked?.let { loader.loadClass(it).declaredMethods }
-                (request.tests ?: testNames).map(loader::loadClass).filter(::isRunnableRoot)
+                selected.mapNotNull { (name, methods) ->
+                    loader.loadClass(name).takeIf(::isRunnableRoot)?.let { Selected(it, methods) }
+                }
             } catch (e: LinkageError) {
                 return Outcome.LoadError(e.toString()) to null
             }
@@ -184,7 +188,7 @@ public class JUnitTestExecutor(
             (type.enclosingClass == null || Modifier.isStatic(type.modifiers))
 
     private fun runTests(
-        types: List<Class<*>>,
+        types: List<Selected>,
         executing: () -> Unit,
         coverage: CoverageListener?,
     ): Outcome {
@@ -195,31 +199,56 @@ public class JUnitTestExecutor(
         executing()
         var testsStarted = 0
         // An abandoned (interrupted) worker must not run the remaining classes against a closed loader.
-        for ((type, plan) in types.zip(plans).asSequence().takeWhile { !Thread.currentThread().isInterrupted }) {
+        for ((selected, plan) in types.zip(plans).asSequence().takeWhile { !Thread.currentThread().isInterrupted }) {
             val listener = OutcomeListener()
-            coverage?.testClass = type.name
+            coverage?.testClass = selected.type.name
+            coverage?.methodLevel = methodsIndependent(selected.type, selected.type.classLoader)
             if (coverage == null) launcher.execute(plan, listener) else launcher.execute(plan, listener, coverage)
             testsStarted += listener.started
-            listener.killedBy?.let { return Outcome.Killed(it, listener.kind, listener.cause, TestId(type.name)) }
+            listener.killedBy?.let {
+                return Outcome.Killed(
+                    it,
+                    listener.kind,
+                    listener.cause,
+                    TestId(selected.type.name),
+                )
+            }
         }
         return if (testsStarted == 0) Outcome.NoTests else Outcome.Survived
     }
 
-    // [linked] is the mutated class, linked before the tests run; null when nothing is replaced. [tests] are the test
-    // classes to run, in order (all when null); probes are read only with [instrumented].
+    // [linked] is the mutated class, linked before the tests run; null when nothing is replaced. [tests] are the tests
+    // to run, in order (all when null); probes are read only with [instrumented].
     private data class Request(
         val label: String,
         val loaded: Map<String, ByteArray>,
         val linked: String? = null,
-        val tests: List<String>? = null,
+        val tests: List<TestId>? = null,
         val instrumented: Instrumented? = null,
     )
 
+    // A test class to run: all of it when [methods] (engine unique ids) is empty.
+    private class Selected(
+        val type: Class<*>,
+        val methods: List<String>,
+    )
+
     @Suppress("SpreadOperator")
-    private fun request(type: Class<*>) =
+    private fun request(selected: Selected) =
         request()
-            .selectors(selectClass(type))
-            .filters(*filters.toTypedArray())
+            .selectors(
+                if (selected.methods.isEmpty()) {
+                    listOf(selectClass(selected.type))
+                } else {
+                    selected.methods.map(::selectUniqueId)
+                },
+            ).filters(*filters.toTypedArray())
             .configurationParameter("junit.jupiter.execution.parallel.enabled", "false")
             .build()
 }
+
+// A class that any entry names whole runs whole, else only its listed methods; classes keep their first position.
+private fun methodsByClass(tests: List<TestId>): Map<String, List<String>> =
+    tests.groupBy { it.className }.mapValues { (_, tests) ->
+        if (tests.any { it.isClass }) emptyList() else tests.mapNotNull { it.method }
+    }

@@ -100,7 +100,7 @@ class ForkCodecTest {
 
     @Test
     fun `run request with a test subset round-trips, an empty one too`() {
-        listOf(listOf(TestId("b.BTest"), TestId("a.ATest")), emptyList()).forEach {
+        listOf(listOf(TestId("b.BTest"), TestId("a.ATest", "[engine:e]/[m:a()]")), emptyList()).forEach {
             val request = ForkRequest.Run(mutant(), byteArrayOf(1), 5L, it)
             assertEquals(request, roundTrip(request))
         }
@@ -117,6 +117,7 @@ class ForkCodecTest {
                     1234567.nanoseconds,
                     setOf("a.Calc", "c.Plain"),
                 ),
+                TestCoverage(TestId("a.CalcTest", "[method:adds()]"), setOf(probes[1]), 2.nanoseconds, setOf("a.Calc")),
                 TestCoverage(TestId("b.Empty"), emptySet(), 0.nanoseconds),
             )
         val reply =
@@ -136,6 +137,34 @@ class ForkCodecTest {
         assertEquals(coverage, coverage.fitting(size))
         assertNull(coverage.fitting(size - 1))
         assertEquals(coverage, coverage.fitting())
+    }
+
+    @Test
+    fun `coverage whose methods would not fit in a frame folds them into their classes`() {
+        val a = Probe("a.Calc", 1)
+        val b = Probe("a.Calc", 2)
+        val coverage =
+            Coverage(
+                listOf(
+                    TestCoverage(TestId("a.CalcTest"), setOf(a), 3.nanoseconds, setOf("a.Calc")),
+                    TestCoverage(TestId("a.CalcTest", "[method:adds()]"), setOf(b), 1.nanoseconds, setOf("a.Other")),
+                    TestCoverage(TestId("b.Empty"), emptySet(), 1.nanoseconds),
+                ),
+                setOf(),
+            )
+        val byClass =
+            Coverage(
+                listOf(
+                    TestCoverage(TestId("a.CalcTest"), setOf(a, b), 3.nanoseconds, setOf("a.Calc", "a.Other")),
+                    TestCoverage(TestId("b.Empty"), emptySet(), 1.nanoseconds),
+                ),
+                setOf(),
+            )
+        val size = { encoded: Coverage ->
+            ByteArrayOutputStream().also { DataOutputStream(it).writeCoverage(encoded) }.size()
+        }
+        assertEquals(byClass, coverage.fitting(size(coverage) - 1))
+        assertNull(coverage.fitting(size(byClass) - 1))
     }
 
     @Test
