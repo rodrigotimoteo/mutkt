@@ -20,6 +20,9 @@ konsist = "0.18.1"
 coroutines = "1.11.0"
 # Test scope only: parses the JSON reports the writers produce.
 jackson = "2.23.0"
+# Test support only (mutkt-testing): the runtime Compose fixtures compile against; its Kotlin metadata must stay
+# readable by the kotlin version above.
+composeRuntime = "1.7.3"
 pluginPublish = "2.2.1"
 dokka = "2.3.0"
 # The minimum supported AGP (docs/adr/0006-android.md): compiled against, never a newer one.
@@ -44,6 +47,8 @@ junit-bom-other = { module = "org.junit:junit-bom", version.ref = "junitOther" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 kctfork-core = { module = "dev.zacsweers.kctfork:core", version.ref = "kctfork" }
+kotlin-compose-compiler = { module = "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable", version.ref = "kotlin" }
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime-desktop", version.ref = "composeRuntime" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }

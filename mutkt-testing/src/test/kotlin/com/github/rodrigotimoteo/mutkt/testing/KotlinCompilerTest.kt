@@ -4,11 +4,20 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.Opcodes
 
 private const val JUPITER_SOURCE = """
 package p
 import org.junit.jupiter.api.Test
 class SampleTest { @Test fun works() {} }
+"""
+
+private const val COMPOSE_SOURCE = """
+package p
+import androidx.compose.runtime.Composable
+@Composable fun Greeting(name: String) { name.length }
 """
 
 class KotlinCompilerTest {
@@ -49,6 +58,26 @@ class KotlinCompilerTest {
 
         assertEquals(setOf("p.I", "p.I\$DefaultImpls"), compiled("disable"))
         assertEquals(setOf("p.I"), compiled("all"))
+    }
+
+    @Test
+    fun `compose source goes through the Compose compiler plugin`() {
+        val classes = compileCompose(COMPOSE_SOURCE)
+
+        val descriptors = mutableListOf<String>()
+        val visitor =
+            object : ClassVisitor(Opcodes.ASM9) {
+                override fun visitMethod(
+                    access: Int,
+                    name: String,
+                    descriptor: String,
+                    signature: String?,
+                    exceptions: Array<out String>?,
+                ) = null.also { if (name == "Greeting") descriptors += descriptor }
+            }
+        ClassReader(classes.getValue("p.SourceKt")).accept(visitor, 0)
+
+        assertEquals(listOf("(Ljava/lang/String;Landroidx/compose/runtime/Composer;I)V"), descriptors)
     }
 
     @Test
