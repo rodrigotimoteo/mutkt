@@ -49,6 +49,7 @@ class RunMutationAnalysisHistoryTest {
             emptySet(),
             emptySet(),
             20.seconds,
+            2,
             emptyList(),
             "21",
             "/p",
@@ -140,6 +141,16 @@ class RunMutationAnalysisHistoryTest {
         run()
 
         assertEquals(setOf(foo, whole), run(tests = changed(tests, "ATest\$Nested")).ran)
+    }
+
+    @Test
+    fun `a changed enclosing class re-runs the mutants of its static nested test class`() {
+        // A static nested root test class: ATest$Nested runs on its own, ATest only holds it.
+        val first = coverage.tests.first().copy(test = TestId("ATest\$Nested"))
+        val nested = coverage.copy(tests = listOf(first) + coverage.tests.drop(1))
+        run(coverage = nested)
+
+        assertEquals(setOf(foo, whole), run(tests = changed(tests, "ATest"), coverage = nested).ran)
     }
 
     @Test
