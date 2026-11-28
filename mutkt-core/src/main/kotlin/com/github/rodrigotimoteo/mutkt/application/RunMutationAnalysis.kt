@@ -68,7 +68,9 @@ public class RunMutationAnalysis(
             DeadlineCap(config.timeout, baseline.elapsed, needed)
                 .takeIf { needed > config.timeout }
                 ?.also(onDeadlineCap)
-        val map = CoverageMap(instrumented.probes, baseline.coverage, config.timeout, minOf(config.timeout, needed))
+        val probed = instrumented.classes.mapTo(HashSet()) { it.name }
+        val map =
+            CoverageMap(instrumented.probes, baseline.coverage, probed, config.timeout, minOf(config.timeout, needed))
         val reuse =
             history?.let { ResultReuse(stored, it, classes, baseline.coverage, instrumented.unprobed) }
         val confirmation = KillConfirmation(executor, classes.associate { it.name to it.bytes })

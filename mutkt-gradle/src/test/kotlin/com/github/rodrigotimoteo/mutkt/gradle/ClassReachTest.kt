@@ -14,7 +14,7 @@ import kotlin.time.Duration.Companion.seconds
 /** The instrumenter's probes read by the JUnit executor: which main classes each test class reaches. */
 class ClassReachTest {
     @Test
-    fun `a test class reaching a class only through a method without mutation sites lists it`() {
+    fun `a test class reaching a class or interface only through a method without mutation sites lists it`() {
         val compiled = compileKotlin(SOURCE, inheritClassPath = true).map { ClassFile(it.key, it.value) }
         val (tests, production) = compiled.partition { it.name.endsWith("Test") }
         val mutants = AsmMutantGenerator(::error, ::systemClass).discover(production, production)
@@ -24,7 +24,7 @@ class ClassReachTest {
 
         assertTrue(mutants.none { it.className == "Greeter" })
         assertEquals(
-            mapOf("CalcTest" to setOf("Calc"), "GreeterTest" to setOf("Greeter")),
+            mapOf("CalcTest" to setOf("Calc"), "GreeterTest" to setOf("Greeter", "Named")),
             baseline.coverage!!.tests.associate { it.test.className to it.reached },
         )
     }
@@ -36,9 +36,10 @@ class ClassReachTest {
             import org.junit.jupiter.api.Test
 
             class Calc { fun add(a: Int, b: Int) = a + b }
-            class Greeter { fun greet() {} }
+            interface Named { fun name() = "greeter" }
+            class Greeter : Named { fun greet() {} }
             class CalcTest { @Test fun adds() { assertEquals(5, Calc().add(2, 3)) } }
-            class GreeterTest { @Test fun greets() { Greeter().greet() } }
+            class GreeterTest { @Test fun greets() { Greeter().greet(); Greeter().name() } }
             """.trimIndent()
     }
 }

@@ -16,12 +16,13 @@ internal data class Selection(
 )
 
 /**
- * Picks each mutant's tests from the probes the baseline reached on the instrumented classes; without [coverage]
- * every mutant runs the whole suite within [suiteDeadline].
+ * Picks each mutant's tests from the probes the baseline reached on the instrumented classes, the [probed] ones;
+ * without [coverage] every mutant runs the whole suite within [suiteDeadline].
  */
 internal class CoverageMap(
     private val probes: Map<MutantId, Probe>,
     private val coverage: Coverage?,
+    private val probed: Set<String>,
     private val timeout: Duration,
     private val suiteDeadline: Duration,
 ) {
@@ -40,6 +41,9 @@ internal class CoverageMap(
             (classes.time() - methods.time()).coerceAtLeast(Duration.ZERO)
         }
 
+    private val entered: Set<String> =
+        coverage?.let { it.globalReach + it.tests.flatMap(TestCoverage::reached) }.orEmpty()
+
     init {
         for (test in coverage?.tests.orEmpty()) {
             for (probe in test.hits) reaching.getOrPut(probe) { mutableListOf() } += test
@@ -47,7 +51,7 @@ internal class CoverageMap(
     }
 
     fun selection(mutant: Mutant): Selection {
-        val probe = telling(mutant) ?: return Selection(null, suiteDeadline)
+        val probe = telling(mutant) ?: return whole(mutant)
         val tests = narrowest(reaching[probe].orEmpty())
         val narrowed = tests.filterNot { it.test.isClass }.mapTo(LinkedHashSet()) { it.test.className }
         val elapsed = narrowed.fold(tests.time()) { sum, name -> sum + setUp.getValue(name) }
@@ -60,6 +64,14 @@ internal class CoverageMap(
         val whole = tests.filter { it.test.isClass }.mapTo(HashSet()) { it.test.className }
         return tests.filter { it.test.isClass || it.test.className !in whole }
     }
+
+    // The whole suite, or none when the mutant's class was never entered.
+    private fun whole(mutant: Mutant) = Selection(emptyList<TestId>().takeIf { unreached(mutant) }, suiteDeadline)
+
+    // Every method of a probed class marks it entered, so the baseline ran none of the code of a class nothing entered:
+    // a mutant there needs no test even when its site has no telling probe.
+    private fun unreached(mutant: Mutant): Boolean =
+        coverage != null && mutant.className in probed && mutant.className !in entered
 
     // The mutant's probe when its hits name the tests that depend on the site. One hit outside any test class, or in
     // a class initialiser (which runs once, under whichever test class loads the class first), does not.

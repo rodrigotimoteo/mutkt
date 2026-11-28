@@ -117,6 +117,22 @@ class RunMutationAnalysisCoverageTest {
     }
 
     @Test
+    fun `an unmapped mutant in a probed class no test entered is NO_COVERAGE without a run`() {
+        val executor = FakeExecutor(baselineElapsed = 3.seconds, coverage = coverage)
+        val report =
+            RunMutationAnalysis(
+                FakeClassSource(listOf(classFile("a.Foo"), classFile("a.Bar"))),
+                generator,
+                FakeInstrumenter(probes, probed = listOf("a.Foo", "a.Bar")),
+                executor,
+                writer,
+                AnalysisConfig(ClassFilters(), TIMEOUT, 2),
+            ).run()
+        assertEquals(MutantResult(other, MutantStatus.NO_COVERAGE, coveredBy = emptyList()), report.results[2])
+        assertTrue(executor.selections.none { it.first == other })
+    }
+
+    @Test
     fun `each result names the test classes that reached it, and none when it ran the whole suite`() {
         val executor =
             FakeExecutor(baselineElapsed = 3.seconds, coverage = coverage) {

@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.objectweb.asm.ClassReader
-import org.objectweb.asm.Opcodes.ACC_INTERFACE
 import org.objectweb.asm.util.CheckClassAdapter
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -30,11 +29,9 @@ class ProbedShapesTest {
     fun forgetProbes() = clearProbes()
 
     @Test
-    fun `every class but the interfaces is probed and verifies`() {
-        val interfaces = files.filter { parse(it.bytes).access and ACC_INTERFACE != 0 }.map { it.name }.toSet()
-
-        assertEquals(interfaces, instrumented.unprobed)
-        assertEquals(classes.keys - interfaces, instrumented.classes.map { it.name }.toSet())
+    fun `every class, interfaces included, is probed and verifies`() {
+        assertEquals(emptySet<String>(), instrumented.unprobed)
+        assertEquals(classes.keys, instrumented.classes.map { it.name }.toSet())
         for (probedClass in instrumented.classes) {
             val log = StringWriter()
             CheckClassAdapter.verify(ClassReader(probedClass.bytes), loader, false, PrintWriter(log))
@@ -55,7 +52,7 @@ class ProbedShapesTest {
 
         val reached = instrumented.classes.map { it.name }.filter { probed.probes(it, PROBE_FIELD)?.last() == true }
         val entered =
-            "$SOURCE_KT Registry Color Clock Clock\$Companion Point Box Base Derived Outer Outer\$In Meters Thing"
+            "$SOURCE_KT Registry Color Clock Clock\$Companion Point Box Base Derived Outer Outer\$In Meters Thing Named"
                 .split(" ")
         assertTrue(reached.containsAll(entered), "${entered - reached.toSet()} not reached")
     }

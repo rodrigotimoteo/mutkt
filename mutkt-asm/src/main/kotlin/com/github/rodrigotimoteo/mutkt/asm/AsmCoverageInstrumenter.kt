@@ -8,7 +8,8 @@ import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import org.objectweb.asm.ClassTooLargeException
 import org.objectweb.asm.MethodTooLargeException
-import org.objectweb.asm.Opcodes.ACC_INTERFACE
+import org.objectweb.asm.Opcodes.ACC_ANNOTATION
+import org.objectweb.asm.Opcodes.V1_8
 import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.ClassNode
 import org.objectweb.asm.tree.MethodNode
@@ -22,9 +23,10 @@ import org.objectweb.asm.tree.MethodNode
  * with a public static `probes(String className, int size): boolean[]`. [classpath] is the lookup given to
  * [AsmMutantGenerator], so sites and frames resolve the same way.
  *
- * Interfaces (which cannot hold a private static field), classes without code and classes whose probes would push a
- * method or the class over a JVM size limit (or whose frames need a type [classpath] does not know) stay
- * uninstrumented and are listed as unprobed, as is a class without mutants that fails to rewrite. Sites in a
+ * Classes without code, annotation interfaces (reflection reads an annotation's methods as its members), interfaces
+ * older than Java 8 (which cannot hold the private accessor) and classes whose probes would push a method or the class
+ * over a JVM size limit (or whose frames need a type [classpath] does not know) stay uninstrumented and are listed as
+ * unprobed, as is a class without mutants that fails to rewrite. Sites in a
  * `lazy { }` created while a class initialises stay unprobed (a hit there names only the first test class that read
  * the property); their mutants are unmapped.
  */
@@ -73,11 +75,11 @@ public class AsmCoverageInstrumenter(
         hierarchy: Hierarchy,
     ): Pair<ClassFile, Map<MutantId, Probe>>? {
         val entries = node.methods.filter { it.instructions.size() > 0 }
-        if (node.access and ACC_INTERFACE != 0 || entries.isEmpty()) return null
+        if (entries.isEmpty() || !node.canHoldProbes()) return null
         val (probes, sites) = siteProbes(name, node, mutants, hierarchy)
         // Every method sets the one last slot, after the site probes: reach is per class, and a mutant's probe does not
         // depend on how many methods its class has.
-        entries.forEach { it.insertEntryProbe(node.name, sites) }
+        entries.forEach { it.insertEntryProbe(node, sites) }
         node.addProbeArray(registry, name, sites + 1)
         return ClassFile(name, HierarchyClassWriter(hierarchy).also(node::accept).toByteArray()) to probes
     }
@@ -100,7 +102,7 @@ public class AsmCoverageInstrumenter(
                 val spot = located.method to located.sites.map { it.instruction }
                 mutant.id to Probe(name, spots.getOrPut(spot) { spots.size })
             }
-        spots.forEach { (spot, index) -> spot.first.insertProbe(node.name, spot.second, index) }
+        spots.forEach { (spot, index) -> spot.first.insertProbe(node, spot.second, index) }
         return probes to spots.size
     }
 
@@ -112,3 +114,10 @@ public class AsmCoverageInstrumenter(
             "Unknown operator ${mutant.operator} of mutant ${mutant.id}"
         }
 }
+
+// An annotation's methods are its members to reflection; an interface's private accessor needs Java 8.
+private fun ClassNode.canHoldProbes() =
+    access and ACC_ANNOTATION == 0 && (!isInterface || version and CLASS_MAJOR >= V1_8)
+
+// ClassNode.version keeps the minor version in its high 16 bits.
+private const val CLASS_MAJOR = 0xFFFF

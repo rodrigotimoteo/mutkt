@@ -29,7 +29,15 @@ class CoverageMapTest {
         global.map { Probe("a.Foo", it) }.toSet(),
     )
 
-    private fun map(coverage: Coverage?) = CoverageMap(probes, coverage, TIMEOUT, SUITE)
+    private fun map(
+        coverage: Coverage?,
+        probed: Set<String> = emptySet(),
+    ) = CoverageMap(probes, coverage, probed, TIMEOUT, SUITE)
+
+    private fun reaching(
+        vararg reached: String,
+        globalReach: Set<String> = emptySet(),
+    ) = Coverage(listOf(TestCoverage(TestId("ATest"), emptySet(), 1.seconds, reached.toSet())), emptySet(), globalReach)
 
     @Test
     fun `a mutant no test class reaches selects no test`() =
@@ -138,6 +146,26 @@ class CoverageMapTest {
         assertEquals(Selection(null, SUITE), map(covered("ATest" to 1.seconds, hits = setOf(2))).selection(init))
 
     @Test
+    fun `a mutant without a telling probe in a probed class no test entered selects no test`() {
+        val coverage = reaching("a.Bar")
+        assertEquals(emptyList<TestId>(), map(coverage, setOf("a.Foo")).selection(unmapped).tests)
+        assertEquals(emptyList<TestId>(), map(coverage, setOf("a.Foo")).selection(init).tests)
+    }
+
+    @Test
+    fun `a mutant without a telling probe runs the whole suite when a test or the engine entered its class`() {
+        assertEquals(Selection(null, SUITE), map(reaching("a.Foo"), setOf("a.Foo")).selection(unmapped))
+        val engine = reaching(globalReach = setOf("a.Foo"))
+        assertEquals(Selection(null, SUITE), map(engine, setOf("a.Foo")).selection(unmapped))
+    }
+
+    @Test
+    fun `a mutant in a class without probes runs the whole suite, since no reach can show it`() =
+        assertEquals(Selection(null, SUITE), map(reaching("a.Bar"), setOf("a.Bar")).selection(unmapped))
+
+    @Test
     fun `without coverage every mutant runs the whole suite`() =
-        listOf(add, sub, init, unmapped).forEach { assertEquals(Selection(null, SUITE), map(null).selection(it)) }
+        listOf(add, sub, init, unmapped).forEach {
+            assertEquals(Selection(null, SUITE), map(null, setOf("a.Foo")).selection(it))
+        }
 }
