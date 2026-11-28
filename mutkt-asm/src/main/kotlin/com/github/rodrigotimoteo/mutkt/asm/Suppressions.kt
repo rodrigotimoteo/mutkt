@@ -10,8 +10,10 @@ import org.objectweb.asm.tree.ClassNode
 // Matched by descriptor: the analysed classes are only read, never loaded against this annotation class.
 private val ANNOTATION = Type.getDescriptor(SuppressMutations::class.java)
 
-// Kotlin names the body of a lambda in function f "f$lambda$N" (nested lambdas append another "$lambda$N").
+// Kotlin names the body of a lambda in function f "f$lambda$N". A lambda nested in it is "f$lambda$N$M" from
+// Kotlin 2.2 compilers (one more "$K" per level) and "f$lambda$N$lambda$M" from older ones.
 private val LAMBDA = Regex("""(.+)[$]lambda[$]\d+""")
+private val NESTED_LAMBDA = Regex("""(.+[$]lambda[$]\d+(?:[$]\d+)*)[$]\d+""")
 
 /** Operators switched off for a piece of code: every operator, or the listed ids. */
 private data class Suppression(
@@ -82,7 +84,7 @@ internal class Suppressions(
             node.methods
                 .filter { it.name == name && (descriptor == null || it.desc == descriptor) }
                 .fold(Suppression()) { acc, m -> acc + read(m.visibleAnnotations, "$className.$name") }
-        val owner = LAMBDA.matchEntire(name)?.groupValues?.get(1)
+        val owner = (NESTED_LAMBDA.matchEntire(name) ?: LAMBDA.matchEntire(name))?.groupValues?.get(1)
         return if (owner == null) own else own + forMethod(className, owner, null)
     }
 

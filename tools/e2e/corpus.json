@@ -167,7 +167,7 @@
         "threads": null,
         "timeoutMs": null
       },
-      "why": "Assertion library on the oldest supported Gradle (8.10), buildSrc conventions, Jupiter only; its publishing script needs two properties set to configure."
+      "why": "Assertion library on its own pinned Gradle 8.10 (below MutKt's supported minimum since 0.6.0), buildSrc conventions, Jupiter only; its publishing script needs two properties set to configure."
     },
     {
       "name": "spring-petclinic-kotlin",

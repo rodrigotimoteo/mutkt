@@ -5,6 +5,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.Probe
 import com.github.rodrigotimoteo.mutkt.application.port.TestCoverage
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
@@ -97,7 +98,7 @@ class RunMutationAnalysisCoverageTest {
         val events = ConcurrentLinkedQueue<MutantResult>()
         val executor =
             FakeExecutor(baselineElapsed = 3.seconds, coverage = reachesAdd) {
-                if (it == add) Outcome.Killed("ATest.adds") else Outcome.Survived
+                if (it == add) Outcome.Killed("ATest.adds", KillKind.EXCEPTION) else Outcome.Survived
             }
         val failing = FakeGenerator(mutants, failing = setOf(sub))
         val report =
@@ -119,7 +120,7 @@ class RunMutationAnalysisCoverageTest {
     fun `each result names the test classes that reached it, and none when it ran the whole suite`() {
         val executor =
             FakeExecutor(baselineElapsed = 3.seconds, coverage = coverage) {
-                if (it == add) Outcome.Killed("ATest.adds") else Outcome.Survived
+                if (it == add) Outcome.Killed("ATest.adds", KillKind.EXCEPTION) else Outcome.Survived
             }
         val report = run(executor)
         assertEquals(
@@ -189,8 +190,8 @@ class RunMutationAnalysisCoverageTest {
     fun `a red baseline on both the instrumented and the original classes stops the run with the original's failure`() {
         val executor =
             FakeExecutor(
-                baseline = { Outcome.Killed("a.FooTest.plain") },
-                instrumentedBaseline = { Outcome.Killed("a.FooTest.probed") },
+                baseline = { Outcome.Killed("a.FooTest.plain", KillKind.EXCEPTION) },
+                instrumentedBaseline = { Outcome.Killed("a.FooTest.probed", KillKind.EXCEPTION) },
             )
         val error = assertThrows(IllegalStateException::class.java) { run(executor) }
         assertTrue(

@@ -14,9 +14,8 @@ internal data class Row(
 /**
  * The committed legacy 0.3.3 site table: [rows] already carry new operator ids.
  *
- * The facade `ParityClasses` hashes differently from the header: the tool compiled against kotlin-stdlib 2.1.10,
- * the repo resolves a newer stdlib. Only sites are compared and the stdlib version does not change them, so the
- * hashes are diagnostics (see [ParityTest]), not a gate.
+ * Only sites are compared, so the header's class hashes are diagnostics (see [ParityTest]), not a gate: they differ
+ * when the Kotlin or stdlib that compiles the fixtures differs from the tool's.
  */
 internal class LegacyTable(
     val classHashes: Map<String, Map<String, String>>,

@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -102,7 +103,7 @@ internal class ChildProcess private constructor(
             error("the test JVM exited with code $code on the $classes classes. Last stderr: ${stderr.shown()}")
         }
         return ForkReply.Result(
-            Outcome.Killed(killedBy(code)),
+            Outcome.Killed(killedBy(code), KillKind.EXCEPTION),
             (System.nanoTime() - start).nanoseconds.inWholeMilliseconds,
         )
     }
