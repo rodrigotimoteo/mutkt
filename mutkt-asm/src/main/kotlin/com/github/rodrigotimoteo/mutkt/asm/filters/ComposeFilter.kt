@@ -44,7 +44,7 @@ private val PLUGIN_OWNERS =
         "ComposerKt",
         "ScopeUpdateScope",
         "RecomposeScopeImplKt",
-        "ComposableLambdaKt",
+        "internal/ComposableLambdaKt",
     ).map { RUNTIME + it }.toSet()
 
 /**

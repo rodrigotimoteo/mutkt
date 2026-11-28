@@ -6,6 +6,7 @@ import com.github.rodrigotimoteo.mutkt.asm.parse
 import com.github.rodrigotimoteo.mutkt.asm.toBytes
 import com.github.rodrigotimoteo.mutkt.testing.compileCompose
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 // Real Compose compiler output (Kotlin's Compose plugin, Compose runtime 1.7).
@@ -73,16 +74,25 @@ class ComposeFilterTest {
                 "ifle -> iflt",
                 "imul -> idiv",
                 "ireturn -> 0",
+                "replace call with default: Integer.valueOf",
+                "replace call with default: Number.intValue",
             ),
-            sites("SourceKt", "Remembered").filterNot { it.startsWith("replace call") },
+            sites("SourceKt", "Remembered"),
         )
     }
 
     @Test
     fun `remember without a key keeps only the calculation`() {
         assertEquals(
-            listOf("body -> return 0", "imul -> idiv", "ireturn -> 0", "isub -> iadd"),
-            sites("SourceKt", "NoKey").filterNot { it.startsWith("replace call") },
+            listOf(
+                "body -> return 0",
+                "imul -> idiv",
+                "ireturn -> 0",
+                "isub -> iadd",
+                "replace call with default: Integer.valueOf",
+                "replace call with default: Number.intValue",
+            ),
+            sites("SourceKt", "NoKey"),
         )
     }
 
@@ -96,8 +106,11 @@ class ComposeFilterTest {
                 "imul -> idiv",
                 "ireturn -> 0",
                 "remove Intrinsics.checkNotNullParameter",
+                "replace call with default: Integer.valueOf",
+                "replace call with default: Number.intValue",
+                "replace call with default: String.length",
             ),
-            sites("SourceKt", "TwoKeys").filterNot { it.startsWith("replace call") },
+            sites("SourceKt", "TwoKeys"),
         )
     }
 
@@ -133,25 +146,33 @@ class ComposeFilterTest {
         )
     }
 
+    // Kotlin 2.x compiles the composable lambda to a static SourceKt.UsesLambda$lambda$0 behind invokedynamic.
     @Test
     fun `a composable lambda keeps its own branch`() {
         assertEquals(
-            listOf("body -> return", "if_icmple -> if_icmpgt", "if_icmple -> if_icmplt", "remove call SourceKt.Text"),
-            sites("SourceKt\$UsesLambda\$1", "invoke"),
+            listOf(
+                "body -> return null",
+                "if_icmple -> if_icmpgt",
+                "if_icmple -> if_icmplt",
+                "remove call SourceKt.Text",
+            ),
+            sites("SourceKt", "UsesLambda\$lambda\$0"),
         )
     }
 
     @Test
-    fun `the restart lambda the plugin generates has no sites`() {
-        assertEquals(emptyList<String>(), sites("SourceKt", "Greeting\$lambda\$1"))
+    fun `the restart lambdas the plugin generates have no sites`() {
+        val restart = listOf("Greeting\$lambda\$0", "UsesLambda\$lambda\$1")
+        val methods = parse(classes.getValue("SourceKt")).methods.map { it.name }
+
+        assertTrue(methods.containsAll(restart), methods.toString())
+        restart.forEach { assertEquals(emptyList<String>(), sites("SourceKt", it), it) }
     }
 
+    // The lambda itself is an invokedynamic (no site); rememberComposableLambda around it is plugin code.
     @Test
-    fun `a composable that wraps a lambda keeps the lambda`() {
-        assertEquals(
-            listOf("body -> return", "new SourceKt\$UsesLambda\$1 -> null", "remove call SourceKt.Holder"),
-            sites("SourceKt", "UsesLambda").filterNot { it.startsWith("replace call") },
-        )
+    fun `a composable that passes a lambda keeps the call it makes`() {
+        assertEquals(listOf("body -> return", "remove call SourceKt.Holder"), sites("SourceKt", "UsesLambda"))
     }
 
     @Test
