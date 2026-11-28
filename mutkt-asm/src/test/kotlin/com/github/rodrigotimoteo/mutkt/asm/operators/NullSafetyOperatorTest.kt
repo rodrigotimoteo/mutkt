@@ -47,7 +47,8 @@ private val SOURCE =
     fun platform(): String = System.getProperty("mutkt.absent.property")
     fun platformWide(a: Long): String = java.lang.Long.toString(a)
     fun external(): Int = System.getProperty("mutkt.absent.property")?.length ?: -1
-    fun mixed(s: String?, t: String): Int = (s ?: t).length
+    fun mixed(s: String?, t: String?): Int = (s ?: t!!).length
+    fun checked(s: String, t: String?): Int = s.length + t!!.length
     fun lateRead(): String = Holder().nameOrFail()
     fun lateInit(): String { val h = Holder(); h.name = "x"; return h.nameOrFail() }
     fun readTop(): String = top
@@ -138,17 +139,25 @@ class NullSafetyOperatorTest {
     }
 
     @Test
-    fun `a parameter check is removed, so null passes`() {
-        assertEquals("remove Intrinsics.checkNotNullParameter", sites("param").single().description)
+    fun `a compiler-inserted parameter check is not a site`() {
         assertThrows(NullPointerException::class.java) { loadAndInvoke(classes, "SourceKt", "param", null, 7) }
-        assertEquals(7, run("param", null, 7))
-        assertVerifies("param")
+        assertEquals(emptyList<Any>(), sites("param"))
+        assertEquals(emptyList<Any>(), sites("wideParams"))
+        assertEquals(emptyList<Any>(), sites("setName", "Holder"))
     }
 
     @Test
-    fun `parameter checks in a method with long and double parameters verify`() {
-        assertEquals(5L, run("wideParams", 5L, null, 1.0))
-        assertVerifies("wideParams")
+    fun `a not-null assertion in a method with checked parameters is the only site`() {
+        assertEquals("remove Intrinsics.checkNotNull", sites("checked").single().description)
+        assertThrows(NullPointerException::class.java) { loadAndInvoke(classes, "SourceKt", "checked", "ab", null) }
+        assertThrows(NullPointerException::class.java) { run("checked", "ab", null) }
+        assertEquals(3, run("checked", "ab", "c"))
+        assertVerifies("checked")
+    }
+
+    @Test
+    fun `a platform check in a method with a long parameter verifies`() {
+        assertEquals("remove Intrinsics.checkNotNullExpressionValue", sites("platformWide").single().description)
         assertVerifies("platformWide")
     }
 
@@ -227,8 +236,8 @@ class NullSafetyOperatorTest {
     fun `sites are numbered in instruction order across both kinds`() {
         assertEquals(
             listOf(
-                "remove Intrinsics.checkNotNullParameter" to 0,
-                "ifnonnull -> ifnull" to 1,
+                "ifnonnull -> ifnull" to 0,
+                "remove Intrinsics.checkNotNull" to 1,
             ),
             sites("mixed").map { it.description to it.ordinal },
         )
@@ -247,12 +256,11 @@ class NullSafetyOperatorTest {
         val java =
             buildClass("Java", "m", "(Ljava/lang/Object;)I") {
                 visitVarInsn(ALOAD, 0)
-                visitLdcInsn("o")
                 visitMethodInsn(
                     INVOKESTATIC,
                     "kotlin/jvm/internal/Intrinsics",
-                    "checkNotNullParameter",
-                    "(Ljava/lang/Object;Ljava/lang/String;)V",
+                    "checkNotNull",
+                    "(Ljava/lang/Object;)V",
                     false,
                 )
                 val absent = Label()
