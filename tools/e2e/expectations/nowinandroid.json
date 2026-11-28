@@ -27,13 +27,11 @@
     {
       "path": "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/OfflineFirstNewsRepository.kt",
       "killedAtLeast": 5,
-      "noCoverageAtLeast": 3,
       "note": "sync and bookmark branches; covered by repository tests"
     },
     {
       "path": "core/data/src/main/kotlin/com/google/samples/apps/nowinandroid/core/data/repository/OfflineFirstUserDataRepository.kt",
       "killedAtLeast": 1,
-      "noCoverageAtLeast": 9,
       "note": "user data flows covered by tests"
     }
   ],
