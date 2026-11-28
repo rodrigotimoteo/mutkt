@@ -79,6 +79,12 @@ MutKt then adds `junit-vintage-engine`, of the JUnit version it ships with, to i
 
 Yes, at the cost of one child JVM per mutant. A child JVM normally runs mutant after mutant, but Robolectric caches its sandbox, with the copy of each project class it instrumented, in JVM-wide statics it never resets, so a reused JVM would test the class it loaded first and give wrong counts. When the test runtime classpath has Robolectric (`org/robolectric/internal/SandboxManager.class`), every run gets a fresh child JVM, which pays the JVM and sandbox start-up each time.
 
+## Do Koin, Spring and other global test contexts work?
+
+Yes. Each run loads the dependency jars again in its own class loader, so a library's JVM-wide statics start empty in every run: a Koin `GlobalContext` started by `startKoin` with no `stopKoin`, or Spring's test context cache, never hands a later mutant the classes of an earlier one. Plain JVM statics outside that loader (system properties, security providers) do carry over within a child JVM; Robolectric is the known case and gets a fresh JVM per run (above).
+
+`@QuarkusTest` is not supported: Quarkus starts the application in its own class loader, built from the build's class directories, so those tests run the original classes rather than the mutant and every mutant they reach would survive. Tag them and leave them out with `excludeTags`; plain unit tests in a Quarkus project run as usual.
+
 ## Why was a class skipped?
 
 MutKt recomputes the stack frames of every class it mutates, which needs the supertypes of the types its branches join. It finds them in the test runtime classpath, the main compile classpath (so `compileOnly` types resolve) and the JDK running Gradle. A type missing from all of them, such as a JDK class newer than the Gradle JVM, makes MutKt skip that class: the build log shows `Skipped <class>: cannot resolve <type> to compute stack frames`, and the class has no mutants in the reports. Every other class is still analysed. Running Gradle on the same JDK as the tests avoids this.
