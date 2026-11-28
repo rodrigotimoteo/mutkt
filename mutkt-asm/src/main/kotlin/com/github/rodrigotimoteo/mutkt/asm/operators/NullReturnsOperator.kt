@@ -20,7 +20,10 @@ private const val CONTINUATION = "Lkotlin/coroutines/Continuation;"
 private val SKIPPED_RETURN_TYPES =
     setOf("Ljava/util/List;", "Ljava/util/Set;", "Ljava/util/Map;", "Ljava/util/Collection;", "Lkotlin/Unit;")
 
-/** Replaces the returned object with null, except for array, java.util collection, Unit and suspend returns. */
+/**
+ * Replaces the returned object with null where Kotlin allows it: the return is nullable or of unknown nullability
+ * (private, generic, platform or Java), and is not an array, java.util collection, Unit or suspend return.
+ */
 internal object NullReturnsOperator : Operator {
     override val id = OperatorId("null-returns")
 
@@ -28,7 +31,8 @@ internal object NullReturnsOperator : Operator {
         method: MethodNode,
         cls: ClassInfo,
     ): List<Site> =
-        if (isCandidate(method.desc)) {
+        // A non-null Kotlin return cannot be null: the caller's first use fails with an NPE, a trivial kill.
+        if (isCandidate(method.desc) && !cls.declaresNonNull(method)) {
             method.instructions
                 .filter { it.opcode == ARETURN }
                 // previous is the adjacent node: a label or frame there marks a merge point, where the value

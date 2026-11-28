@@ -147,8 +147,8 @@ class EndToEndTest {
                 // Grade(90) becomes B; gradesBands
                 "conditionals-boundary Grader.grade #0 if_icmplt -> if_icmple" to KILLED,
                 "conditionals-boundary Grader.grade #1 if_icmplt -> if_icmple" to SURVIVED,
-                // Grade returns null; gradesBands
-                "null-returns Grader.grade #0 areturn -> null" to KILLED,
+                // Grade returns "" (its String is non-null, so not null); gradesBands
+                "empty-returns Grader.grade #0 areturn -> \"\"" to KILLED,
             )
     }
 }

@@ -10,7 +10,7 @@ internal val operatorHints: Map<String, String> =
         "arithmetic" to "no test asserts on the computed value",
         "null-returns" to "no test asserts on the returned object",
         "return-vals" to "no test asserts on the returned number",
-        "empty-returns" to "no test asserts on the contents of the returned array or collection",
+        "empty-returns" to "no test asserts on the contents of the returned array, collection or string",
         "true-returns" to "no test expects this method to return false",
         "false-returns" to "no test expects this method to return true",
         "constructor-calls" to "no test uses the object built here",

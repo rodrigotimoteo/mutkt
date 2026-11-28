@@ -39,7 +39,9 @@ internal class OperatorContractTest {
         fresh.loadClass(name).declaredMethods
     }
 
-    private fun corpusSites(op: Operator) = corpus.values.flatMap { bytes -> discover(bytes, op).map { bytes to it } }
+    // Discovery gets the hierarchy mutate gets: operators may decide a site from the classes it knows.
+    private fun corpusSites(op: Operator) =
+        corpus.values.flatMap { bytes -> discover(bytes, op, hierarchy = hierarchy).map { bytes to it } }
 
     private fun verifyLog(bytes: ByteArray) =
         StringWriter()
@@ -73,7 +75,7 @@ internal class OperatorContractTest {
         corpusSites(op).forEach { (bytes, site) ->
             val first = mutate(bytes, op, site, hierarchy)
 
-            assertEquals(discover(bytes, op), discover(bytes, op))
+            assertEquals(discover(bytes, op, hierarchy = hierarchy), discover(bytes, op, hierarchy = hierarchy))
 
             assertArrayEquals(first, mutate(bytes, op, site, hierarchy), "$site is not deterministic")
         }

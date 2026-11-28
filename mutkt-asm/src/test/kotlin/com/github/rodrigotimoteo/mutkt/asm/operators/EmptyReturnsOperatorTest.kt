@@ -36,6 +36,11 @@ private val SOURCE =
     fun emptyStrings(): Array<String> = arrayOf()
 
     fun str(): String = "a"
+    fun maybeStr(): String? = "a"
+    fun emptyStr(): String = ""
+    private fun privStr(): String = "a"
+    fun callPrivStr(): String = privStr()
+    fun pickStr(a: Boolean): String = if (a) "" else "b"
     fun arrayList(): ArrayList<Int> = arrayListOf(1)
     fun hashMap(): HashMap<Int, Int> = hashMapOf(1 to 1)
     fun count(): Int = 1
@@ -134,9 +139,25 @@ class EmptyReturnsOperatorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = ["str", "arrayList", "hashMap", "count", "unit", "suspending"])
+    @ValueSource(strings = ["maybeStr", "privStr", "emptyStr", "arrayList", "hashMap", "count", "unit", "suspending"])
     fun `other return types have no site`(method: String) {
         assertEquals(emptyList<Any>(), sites(method))
+    }
+
+    @Test
+    fun `a non-null String return becomes the empty string`() {
+        val changed = mutant("str")
+
+        assertEquals("a", loadAndInvoke(classes, "SourceKt", "str"))
+        assertEquals("", loadAndInvoke(changed, "SourceKt", "str"))
+        assertEquals("areturn -> \"\"", sites("str").single().description)
+        assertEquals("", verify(changed.getValue("SourceKt")))
+    }
+
+    @Test
+    fun `a String return that merges with an empty arm is still a site`() {
+        assertEquals(1, sites("pickStr").size)
+        assertEquals("", loadAndInvoke(mutant("pickStr"), "SourceKt", "pickStr", false))
     }
 
     @Test
