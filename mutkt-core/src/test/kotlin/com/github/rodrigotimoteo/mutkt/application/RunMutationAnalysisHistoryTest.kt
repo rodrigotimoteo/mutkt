@@ -7,6 +7,7 @@ import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.Probe
 import com.github.rodrigotimoteo.mutkt.application.port.TestCoverage
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
@@ -59,7 +60,7 @@ class RunMutationAnalysisHistoryTest {
 
     private fun behavior(mutant: Mutant): Outcome =
         when (mutant) {
-            foo -> Outcome.Killed("ATest.adds")
+            foo -> Outcome.Killed("ATest.adds", KillKind.ASSERTION)
             bar -> Outcome.Timeout
             else -> Outcome.Survived
         }
@@ -111,11 +112,18 @@ class RunMutationAnalysisHistoryTest {
     }
 
     @Test
-    fun `a reused killed result keeps who killed it`() {
+    fun `a reused killed result keeps who killed it and how`() {
         run()
 
         assertEquals(
-            MutantResult(foo, MutantStatus.KILLED, killedBy = "ATest.adds", coveredBy = listOf("ATest"), reused = true),
+            MutantResult(
+                foo,
+                MutantStatus.KILLED,
+                killedBy = "ATest.adds",
+                coveredBy = listOf("ATest"),
+                killKind = KillKind.ASSERTION,
+                reused = true,
+            ),
             run().report.results[0],
         )
     }

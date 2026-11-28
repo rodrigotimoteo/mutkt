@@ -60,7 +60,7 @@ internal class ResultReuse(
         val fresh =
             evaluated.mapNotNull { (result, key) ->
                 key?.takeIf { result.status in KEPT }?.let {
-                    HistoryEntry(result.mutant.id.toString(), it, result.status, result.killedBy)
+                    HistoryEntry(result.mutant.id.toString(), it, result.status, result.killedBy, result.killKind)
                 }
             }
         val previous = stored?.takeIf { it.fingerprint == fingerprint } ?: return History(fingerprint, fresh)

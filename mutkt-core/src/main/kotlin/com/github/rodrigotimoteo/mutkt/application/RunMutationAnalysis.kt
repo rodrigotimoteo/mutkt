@@ -215,7 +215,8 @@ private fun problem(
 private fun HistoryEntry.toResult(
     mutant: Mutant,
     covering: List<String>?,
-): MutantResult = MutantResult(mutant, status, killedBy = killedBy, coveredBy = covering, reused = true)
+): MutantResult =
+    MutantResult(mutant, status, killedBy = killedBy, coveredBy = covering, killKind = killKind, reused = true)
 
 private fun Outcome.toResult(
     mutant: Mutant,
