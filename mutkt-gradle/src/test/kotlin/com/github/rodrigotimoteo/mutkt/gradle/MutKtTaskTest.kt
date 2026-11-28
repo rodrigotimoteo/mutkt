@@ -143,7 +143,7 @@ class MutKtTaskTest {
         val task = project.task()
 
         assertEquals(listOf("a.*"), task.targetClasses.get())
-        assertEquals(listOf("a.Gen*"), task.excludedClasses.get())
+        assertEquals(listOf(GENERATED_SOURCES, "a.Gen*"), task.excludedClasses.get())
         assertEquals(listOf("toString"), task.excludedMethods.get())
         assertEquals(500L, task.timeoutMs.get())
         assertEquals(3, task.threads.get())

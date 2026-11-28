@@ -4,6 +4,7 @@ import com.android.build.api.artifact.ScopedArtifact
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.variant.HasUnitTest
 import com.android.build.api.variant.ScopedArtifacts
+import com.android.build.api.variant.UnitTest
 import com.android.build.api.variant.Variant
 import org.gradle.api.GradleException
 import org.gradle.api.Project
@@ -22,7 +23,9 @@ internal fun Project.wireAndroid(extension: MutKtExtension) {
     components.onVariants(components.selector().all()) { variant: Variant ->
         val unitTest = (variant as? HasUnitTest)?.unitTest
         variants[variant.name] = unitTest != null
-        if (unitTest != null && variant.name == extension.variant.get()) registerAndroidMutkt(extension, variant)
+        if (unitTest != null && variant.name == extension.variant.get()) {
+            registerAndroidMutkt(extension, variant, unitTest)
+        }
     }
     // Registered after AGP's own afterEvaluate, which runs the onVariants callbacks.
     afterEvaluate {
@@ -41,6 +44,7 @@ internal fun Project.wireAndroid(extension: MutKtExtension) {
 private fun Project.registerAndroidMutkt(
     extension: MutKtExtension,
     variant: Variant,
+    unitTest: UnitTest,
 ) {
     // AGP's name for the unit-test task (computeTaskName("test") on the unit-test component): a convention, not API.
     val testTask = "test${variant.name.replaceFirstChar(Char::uppercaseChar)}UnitTest"
@@ -50,7 +54,10 @@ private fun Project.registerAndroidMutkt(
         registerMutkt(MutKtAndroidTask::class.java, extension, test) { task ->
             task.classesDirs.from(task.classJars, task.classDirectories)
             task.testClassesDirs.from(test.map { it.testClassesDirs })
-            task.testRuntimeClasspath.from(test.map { it.classpath })
+            task.testRuntimeClasspath.from(
+                test.map { it.classpath },
+                missingPlatformLauncher(providers.provider { unitTest.runtimeConfiguration }, extension.engines),
+            )
             task.compileClasspath.from(variant.compileClasspath)
             task.sourceDirs.from(sources)
         }
