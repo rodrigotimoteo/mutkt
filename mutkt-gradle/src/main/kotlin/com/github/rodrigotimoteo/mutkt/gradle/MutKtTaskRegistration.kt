@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.gradle
 
 import org.gradle.api.Project
+import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.testing.Test
@@ -14,7 +15,13 @@ internal fun Project.registerMutktTask(extension: MutKtExtension) {
         task.classesDirs.from(model.mainClasses)
         task.testClassesDirs.from(model.testClasses)
         task.projectSupportClassesDirs.from(model.supportClasses)
-        task.testRuntimeClasspath.from(model.testRuntimeClasspath)
+        task.testRuntimeClasspath.from(
+            model.testRuntimeClasspath,
+            missingPlatformLauncher(
+                configurations.named(JavaPlugin.TEST_RUNTIME_CLASSPATH_CONFIGURATION_NAME),
+                extension.engines,
+            ),
+        )
         task.compileClasspath.from(model.mainCompileClasspath)
         task.sourceDirs.from(model.mainSources)
     }
@@ -59,6 +66,7 @@ internal fun <T : MutKtTask> Project.registerMutkt(
                     ?.absolutePath ?: currentJava()
             },
         )
+        task.generatedSourcesDir.set(layout.buildDirectory.dir("generated"))
         task.reportsDir.set(layout.buildDirectory.dir("reports/mutkt"))
     }
 

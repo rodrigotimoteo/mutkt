@@ -109,6 +109,22 @@ class MutKtAndroidVariantTest {
     }
 
     @Test
+    fun `Jupiter tests without a launcher, repositories only in settings, run on a launcher at the engine's version`() {
+        val jupiter = "org.junit.jupiter:junit-jupiter:${System.getProperty("mutkt.junitOtherVersion")}"
+        setUp(MODULE_DSL.replace(REPOSITORIES, "").replace(Regex("files\\(.*\\)"), "'$jupiter'"))
+        val mode = "repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS"
+        write("settings.gradle", "rootProject.name = 'sample'\ndependencyResolutionManagement { $mode\n$REPOSITORIES }")
+        write("src/main/java/demo/Base.java", BASE.replace("demo.lib", "demo"))
+        write("src/test/java/demo/BaseTest.java", BASE_TEST.replace("demo.lib", "demo"))
+
+        val result = runner("mutkt").build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":mutkt")?.outcome, result.output)
+        assertTrue("MutKt cannot resolve" !in result.output, result.output)
+        assertSummaryLines(dir.resolve("build/reports/mutkt/mutkt.txt").readText(), "Mutants: 1", "KILLED       1")
+    }
+
+    @Test
     fun `skips generated classes by default, and excludedClasses extends or replaces the defaults`() {
         write("settings.gradle", "rootProject.name = 'sample'\n")
         write("gradle.properties", "android.useAndroidX=true\n")
