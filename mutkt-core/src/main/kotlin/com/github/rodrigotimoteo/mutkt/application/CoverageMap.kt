@@ -9,7 +9,7 @@ import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-/** The test classes to run against one mutant, in order, within [deadline]: null runs the whole suite, empty none. */
+/** The tests to run against one mutant, in order, within [deadline]: null runs the whole suite, empty none. */
 internal data class Selection(
     val tests: List<TestId>?,
     val deadline: Duration,
@@ -33,6 +33,13 @@ internal class CoverageMap(
     // context is cached per JVM, so only one class shows it), so the longest class bounds it.
     private val warmUp = coverage?.tests?.maxOfOrNull { it.elapsed } ?: Duration.ZERO
 
+    // A class's time outside its methods (engine and class set-up), which a run of only some of its methods pays too.
+    private val setUp: Map<String, Duration> =
+        coverage?.tests.orEmpty().groupBy { it.test.className }.mapValues { (_, tests) ->
+            val (classes, methods) = tests.partition { it.test.isClass }
+            (classes.time() - methods.time()).coerceAtLeast(Duration.ZERO)
+        }
+
     init {
         for (test in coverage?.tests.orEmpty()) {
             for (probe in test.hits) reaching.getOrPut(probe) { mutableListOf() } += test
@@ -41,9 +48,17 @@ internal class CoverageMap(
 
     fun selection(mutant: Mutant): Selection {
         val probe = telling(mutant) ?: return Selection(null, suiteDeadline)
-        val tests = reaching[probe].orEmpty()
-        val elapsed = tests.fold(Duration.ZERO) { sum, test -> sum + test.elapsed }
+        val tests = narrowest(reaching[probe].orEmpty())
+        val narrowed = tests.filterNot { it.test.isClass }.mapTo(LinkedHashSet()) { it.test.className }
+        val elapsed = narrowed.fold(tests.time()) { sum, name -> sum + setUp.getValue(name) }
         return Selection(tests.map { it.test }, minOf(timeout, neededDeadline(elapsed + warmUp)))
+    }
+
+    // A class that reached the probe outside its methods (a @BeforeAll) runs whole: any of its methods may depend on
+    // what that set up. Otherwise only its methods that reached the probe run.
+    private fun narrowest(tests: List<TestCoverage>): List<TestCoverage> {
+        val whole = tests.filter { it.test.isClass }.mapTo(HashSet()) { it.test.className }
+        return tests.filter { it.test.isClass || it.test.className !in whole }
     }
 
     // The mutant's probe when its hits name the tests that depend on the site. One hit outside any test class, or in
@@ -53,6 +68,8 @@ internal class CoverageMap(
         return probes[mutant.id]?.takeUnless { it in global || mutant.methodName == CLASS_INIT }
     }
 }
+
+private fun List<TestCoverage>.time(): Duration = fold(Duration.ZERO) { sum, test -> sum + test.elapsed }
 
 /** The deadline tests that ran for [elapsed] on the original classes need against a mutant. */
 internal fun neededDeadline(elapsed: Duration): Duration = elapsed * MUTANT_DEADLINE_FACTOR + MUTANT_DEADLINE_CONSTANT

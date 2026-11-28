@@ -33,7 +33,14 @@ internal class ResultReuse(
     private val supertypes = settings.testSupertypes
     private val main = mainClasses.associate { it.name to sha256(it.bytes) }
     private val tests = settings.testClasses.classes().associate { it.name to sha256(it.bytes) }
-    private val reach = coverage?.tests?.associate { it.test.className to it.reached }.orEmpty()
+
+    // A class entry's reach includes its methods' (TestCoverage), so method entries add nothing here.
+    private val reach =
+        coverage
+            ?.tests
+            ?.filter { it.test.isClass }
+            ?.associate { it.test.className to it.reached }
+            .orEmpty()
     private val reachedByAll = unprobed + coverage?.globalReach.orEmpty()
 
     // A whole-suite mutant (null [covering]) can be reached by any test, so every class is in its key.

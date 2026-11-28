@@ -152,6 +152,22 @@ class RunMutationAnalysisHistoryTest {
     }
 
     @Test
+    fun `a mutant test methods cover keys on everything their class reached`() {
+        val methods =
+            coverage.copy(
+                tests =
+                    listOf(
+                        coverage.tests[0],
+                        TestCoverage(TestId("BTest"), emptySet(), 1.seconds, setOf("a.Bar", "a.Baz")),
+                        TestCoverage(TestId("BTest", "b"), setOf(Probe("a.Bar", 0)), 1.seconds, setOf("a.Bar")),
+                    ),
+            )
+        run(coverage = methods)
+
+        assertEquals(setOf(bar, whole), run(main = changed(main, "a.Baz"), coverage = methods).ran)
+    }
+
+    @Test
     fun `an unprobed class counts as reached by every test`() {
         unprobed = setOf("a.Qux")
         run()
