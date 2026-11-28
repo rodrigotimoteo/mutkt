@@ -61,6 +61,10 @@ internal fun <T : MutKtTask> Project.registerMutkt(
         )
         task.generatedSourcesDir.set(layout.buildDirectory.dir("generated"))
         task.reportsDir.set(layout.buildDirectory.dir("reports/mutkt"))
+        task.repositoryRoot.set(
+            providers.environmentVariable("GITHUB_WORKSPACE").orElse(layout.projectDirectory.asFile.absolutePath),
+        )
+        task.githubAnnotations.set(providers.environmentVariable("GITHUB_ACTIONS").map { it == "true" }.orElse(false))
     }
 
 // JaCoCo's jacocoagent.jar, Kover's kover-jvm-agent and the IntelliJ coverage agent Kover used.

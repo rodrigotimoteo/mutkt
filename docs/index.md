@@ -18,7 +18,7 @@ plugins {
 ./gradlew mutkt
 ```
 
-The score and the surviving mutants are printed in the build log. Reports land in `build/reports/mutkt/`: `mutation-report.html` (one offline page), `mutation-report.json` (Stryker schema) and `mutkt.txt` (the printed summary).
+The score and the surviving mutants are printed in the build log. Reports land in `build/reports/mutkt/`: `mutation-report.html` (one offline page), `mutation-report.json` (Stryker schema), `mutation-report.sarif` (SARIF 2.1.0, for GitHub code scanning) and `mutkt.txt` (the printed summary).
 
 ## Next
 

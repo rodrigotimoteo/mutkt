@@ -71,9 +71,37 @@ All in `build/reports/mutkt/`, rewritten on every run (a run that fails before s
 |---|---|
 | `mutation-report.html` | One offline page: source with each mutant and its status |
 | `mutation-report.json` | Stryker mutation-testing-elements schema 2, sources included |
+| `mutation-report.sarif` | SARIF 2.1.0: survivors and uncovered mutants at their source lines, for code scanning |
 | `mutkt.txt` | The summary printed in the build log |
 
 The task is up to date until classes, sources, the test classpath or the settings change; an up-to-date run prints nothing.
+
+## GitHub Actions
+
+On a GitHub runner (`GITHUB_ACTIONS=true`) the task logs the first 50 survivors as warning annotations, which show on the pull request diff; an up-to-date run logs none. To list survivors and uncovered mutants under code scanning alerts too, upload the SARIF file:
+
+```yaml
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: ./gradlew mutkt
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: build/reports/mutkt/mutation-report.sarif
+          category: mutkt
+```
+
+`if: always()` uploads the report when `failBelowScore` fails the build; a red baseline writes no report, so that step fails too. Paths in the file are relative to the checkout (`GITHUB_WORKSPACE`), so a module in a subdirectory works as is: point `sarif_file` at that module's `build/reports/mutkt/`, and give each module's upload its own `category`.
 
 ## Android
 

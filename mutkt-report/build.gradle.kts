@@ -2,7 +2,7 @@ plugins {
     id("mutkt.published-library")
 }
 
-description = "Console, HTML and JSON report writers of MutKt."
+description = "Console, HTML, JSON and SARIF report writers of MutKt."
 
 dependencies {
     implementation(project(":mutkt-core"))

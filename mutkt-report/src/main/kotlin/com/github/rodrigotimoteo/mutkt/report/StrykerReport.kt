@@ -49,7 +49,7 @@ private fun config(report: MutationReport): Map<String, Any> =
     }
 
 // A class without a SourceFile attribute has no file to show; its path is the class name so it still gets an entry.
-private fun filePath(result: MutantResult): String {
+internal fun filePath(result: MutantResult): String {
     val mutant = result.mutant
     val directory = mutant.className.substringBeforeLast('.', "").replace('.', '/')
     return mutant.sourceFile?.let { if (directory.isEmpty()) it else "$directory/$it" }
