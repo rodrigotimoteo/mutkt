@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- JDK 17 or 21, Gradle 8.11 or later, including 9.x.
+- JDK 17 or 21, Gradle 8.11 or later, including 9.x. The `test` task must run on Java 17 or newer too: a JDK 8 or 11 test toolchain fails `mutkt` with a message naming its version.
 - The `java`, `kotlin("jvm")` or an Android plugin (AGP 8.4 to 9.x, see [Android](#android)); MutKt fails the build without one.
 - Tests on the JUnit Platform. Jupiter runs by default; JUnit 4 tests need `engines` (see [dsl.md](dsl.md)).
 - A green test suite: MutKt runs it once on the original classes first and stops if anything fails.

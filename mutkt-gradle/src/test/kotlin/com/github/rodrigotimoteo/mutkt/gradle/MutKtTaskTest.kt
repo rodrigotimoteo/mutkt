@@ -1,5 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.gradle
 
+import io.mockk.every
+import io.mockk.mockk
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.tasks.Classpath
@@ -8,6 +10,8 @@ import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.LocalState
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaLauncher
 import org.gradle.testfixtures.ProjectBuilder
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -105,6 +109,7 @@ class MutKtTaskTest {
                 "testWorkingDir",
                 "testJavaExecutable",
                 "testJavaRuntime",
+                "testJavaVersion",
                 "repositoryRoot",
             ),
             task.inputs.properties.keys,
@@ -141,6 +146,37 @@ class MutKtTaskTest {
         val runtime = project("java").task().testJavaRuntime.get()
 
         assertTrue(System.getProperty("java.runtime.version") in runtime, runtime)
+    }
+
+    @Test
+    fun `reads the test task's Java language version`() {
+        assertEquals(Runtime.version().feature(), project("java").task().testJavaVersion.get())
+    }
+
+    // MutKt's own classes, which the child JVMs load, are Java 17 bytecode.
+    @Test
+    fun `fails before running when the test task runs on a Java older than 17`() {
+        val project = project("java")
+        val launcher =
+            mockk<JavaLauncher> {
+                every { metadata.languageVersion } returns JavaLanguageVersion.of(11)
+                every { metadata.vendor } returns "Homebrew"
+                every { metadata.javaRuntimeVersion } returns "11.0.33"
+                every { executablePath.asFile } returns File("/jdk-11/bin/java")
+            }
+        project.tasks.named("test", org.gradle.api.tasks.testing.Test::class.java).configure {
+            it.javaLauncher.set(launcher)
+        }
+        val task = project.task()
+
+        val failure = assertThrows<GradleException> { task.runAnalysis() }
+
+        assertEquals(11, task.testJavaVersion.get())
+        assertEquals(
+            "MutKt runs the tests on the test task's Java launcher, which is Java 11 (Homebrew 11.0.33), but needs " +
+                "Java 17 or newer: set the test task's javaLauncher to a Java 17 or newer toolchain",
+            failure.message,
+        )
     }
 
     @Test

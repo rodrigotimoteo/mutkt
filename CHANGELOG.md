@@ -23,6 +23,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 - Survivor triage: the console summary groups survivors by method, the method with the most first, names the test classes that reached them and ends with a one-line hint per operator; it lists at most 10 methods and 5 survivors per method, the rest are in the HTML report. The JSON and HTML reports put the hint in each survivor's `statusReason`.
 ### Fixed
 
+- A `test` task on a JDK 8 or 11 toolchain fails `mutkt` at once with a message naming that Java version and asking for a Java 17 or newer launcher, instead of a baseline failure with an `UnsupportedClassVersionError` from the child JVMs.
 - Docs: mutants reached only through another project's classes on the test classpath (its test fixtures, for instance) are killed, as they have been since 0.5.0 loads each run in one class loader. The known-gap note is gone, and a multi-module build now tests it.
 
 ## [0.5.0] - 2026-11-27

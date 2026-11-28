@@ -85,6 +85,14 @@ private fun MutKtTask.readTestSettings(test: Provider<Test>) {
                 ?.let { "${it.vendor} ${it.javaRuntimeVersion}" } ?: currentJavaRuntime()
         },
     )
+    testJavaVersion.set(
+        test.map {
+            it.javaLauncher.orNull
+                ?.metadata
+                ?.languageVersion
+                ?.asInt() ?: Runtime.version().feature()
+        },
+    )
 }
 
 // JaCoCo's jacocoagent.jar, Kover's kover-jvm-agent and the IntelliJ coverage agent Kover used.
