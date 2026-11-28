@@ -6,11 +6,11 @@ import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import java.nio.file.Path
 
-internal const val PROTOCOL_VERSION: Int = 9
+internal const val PROTOCOL_VERSION: Int = 10
 
 internal sealed interface ForkRequest {
     /**
-     * Run the test classes in [tests], in order (all when null), with [bytes] replacing the mutant's class; the
+     * Run the tests in [tests], in order (all when null), with [bytes] replacing the mutant's class; the
      * deadline is relative to the start of execution.
      */
     data class Run(

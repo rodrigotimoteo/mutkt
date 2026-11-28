@@ -13,7 +13,8 @@ class JUnitTestExecutorSubsetTest {
             "$IMPORTS$CALC\n" +
                 "class ATest { @Test fun a() { fail<Unit>(\"a\") } }\n" +
                 "class BTest { @Test fun b() { assertEquals(5, Calc().add(2, 3)) } }\n" +
-                "class CTest { @Test fun c() { fail<Unit>(\"c\") } }",
+                "class CTest { @Test fun c() { fail<Unit>(\"c\") } }\n" +
+                "class MTest { @Test fun passes() {}\n@Test fun fails() { fail<Unit>(\"m\") } }",
         )
 
     @AfterEach
@@ -30,6 +31,14 @@ class JUnitTestExecutorSubsetTest {
     fun `runs the given test classes in the given order`() {
         assertKilledBy("CTest.c", run("BTest", "CTest", "ATest"))
         assertKilledBy("ATest.a", run("ATest", "CTest"))
+    }
+
+    @Test
+    fun `runs only the given test methods of a class`() {
+        val run = { tests: List<TestId> -> executor.run(mutantOf(), mutantBytes(CALC), deadline, tests) }
+        assertEquals(Outcome.Survived, run(listOf(method("MTest", "passes"))))
+        assertKilledBy("MTest.fails", run(listOf(method("MTest", "passes"), method("MTest", "fails"))))
+        assertKilledBy("MTest.fails", run(listOf(TestId("MTest"), method("MTest", "passes"))))
     }
 
     @Test
