@@ -89,6 +89,40 @@ class CoverageMapTest {
     }
 
     @Test
+    fun `a mutant reached only inside test methods selects those methods, timed by them and their classes' set-up`() {
+        val coverage =
+            Coverage(
+                listOf(
+                    TestCoverage(TestId("ATest"), emptySet(), 3.seconds),
+                    TestCoverage(TestId("ATest", "a1"), setOf(Probe("a.Foo", 0)), 1.seconds),
+                    TestCoverage(TestId("ATest", "a2"), setOf(Probe("a.Foo", 1)), 1.seconds),
+                    TestCoverage(TestId("BTest"), emptySet(), 1.seconds),
+                    TestCoverage(TestId("BTest", "b1"), setOf(Probe("a.Foo", 0)), 500.milliseconds),
+                ),
+                emptySet(),
+            )
+        val methods = listOf(TestId("ATest", "a1"), TestId("BTest", "b1"))
+        // Each class's time outside its methods (1 s and 0.5 s) is paid again around the selected methods.
+        assertEquals(Selection(methods, 28.seconds), map(coverage).selection(add))
+    }
+
+    @Test
+    fun `a probe a test class reached outside its methods selects the whole class`() {
+        val coverage =
+            Coverage(
+                listOf(
+                    TestCoverage(TestId("ATest"), setOf(Probe("a.Foo", 0)), 2.seconds),
+                    TestCoverage(TestId("ATest", "a1"), setOf(Probe("a.Foo", 0)), 1.seconds),
+                    TestCoverage(TestId("BTest"), emptySet(), 1.seconds),
+                    TestCoverage(TestId("BTest", "b1"), setOf(Probe("a.Foo", 0)), 1.seconds),
+                ),
+                emptySet(),
+            )
+        val tests = listOf(TestId("ATest"), TestId("BTest", "b1"))
+        assertEquals(Selection(tests, 24.seconds), map(coverage).selection(add))
+    }
+
+    @Test
     fun `a mutant without a probe runs the whole suite`() =
         assertEquals(Selection(null, SUITE), map(covered("ATest" to 1.seconds)).selection(unmapped))
 

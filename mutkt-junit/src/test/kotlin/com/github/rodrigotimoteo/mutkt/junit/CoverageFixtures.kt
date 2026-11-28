@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.junit
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.Instrumented
 import com.github.rodrigotimoteo.mutkt.application.port.Probe
+import com.github.rodrigotimoteo.mutkt.application.port.TestId
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 
 internal const val PLAIN_CALC = "class Calc { fun add(a: Int, b: Int) = a + b\nfun sub(a: Int, b: Int) = a - b }"
@@ -31,6 +32,12 @@ internal const val SANDBOX_TEST =
         "assertNotSame(Calc::class.java, calc)\n" +
         "val add = calc.getMethod(\"add\", Integer.TYPE, Integer.TYPE)\n" +
         "assertEquals(5, add.invoke(calc.getDeclaredConstructor().newInstance(), 2, 3)) } }"
+
+/** Jupiter's id of test method [name] (no parameters) of root class [testClass]. */
+internal fun method(
+    testClass: String,
+    name: String,
+) = TestId(testClass, "[engine:junit-jupiter]/[class:$testClass]/[method:$name()]")
 
 internal val ADD = Probe("Calc", 0)
 internal val SUB = Probe("Calc", 1)
