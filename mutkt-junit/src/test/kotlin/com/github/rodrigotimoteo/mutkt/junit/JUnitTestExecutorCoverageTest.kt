@@ -38,6 +38,7 @@ class JUnitTestExecutorCoverageTest {
         val expected = listOf(TestId("ATest") to setOf(ADD), TestId("BTest") to setOf(SUB), TestId("CTest") to setOf())
         assertEquals(expected, coverage.hits())
         assertEquals(emptySet<Probe>(), coverage.global)
+        assertEquals(emptySet<String>(), coverage.globalReach)
         val reached = coverage.tests.map { it.test.className to it.reached }
         assertEquals(listOf("ATest" to setOf("Calc"), "BTest" to setOf("Calc"), "CTest" to setOf()), reached)
     }
@@ -60,7 +61,7 @@ class JUnitTestExecutorCoverageTest {
     }
 
     @Test
-    fun `a probe reached while discovering the tests is global`() {
+    fun `a probe and a class reached while discovering the tests are global`() {
         val generator =
             "class Names : DisplayNameGenerator.Standard() { " +
                 "override fun generateDisplayNameForClass(type: Class<*>) = \"n\" + Calc().sub(3, 2) }\n"
@@ -68,6 +69,7 @@ class JUnitTestExecutorCoverageTest {
         val coverage = baseline(coverageFixture(generator + test)).coverage!!
         assertEquals(listOf(TestId("ATest") to setOf(ADD)), coverage.hits())
         assertEquals(setOf(SUB), coverage.global)
+        assertEquals(setOf("Calc"), coverage.globalReach)
     }
 
     @Test

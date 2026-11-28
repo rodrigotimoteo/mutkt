@@ -81,6 +81,13 @@ class ConsoleReportWriterTest {
     }
 
     @Test
+    fun `the mutant count names the results reused from history`() {
+        val text = render(MutationReport(listOf(result(KILLED).copy(reused = true), result(SURVIVED, method = "baz"))))
+        assertTrue("Mutants: 2 (1 reused)\n" in text, text)
+        assertTrue("reused" !in render(MutationReport(listOf(result(KILLED)))))
+    }
+
+    @Test
     fun `a capped deadline adds a warning naming the timeoutMs to set`() {
         val cap = DeadlineCap(10.seconds, 12_345.milliseconds, 53_380.milliseconds)
         val text = render(MutationReport(listOf(result(KILLED)), deadlineCap = cap))

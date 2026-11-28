@@ -18,8 +18,8 @@ internal fun strykerReport(
     buildMap {
         put("schemaVersion", SCHEMA_VERSION)
         put("thresholds", mapOf("high" to HIGH_THRESHOLD, "low" to LOW_THRESHOLD))
-        // The schema leaves config free-form; this keeps the cap omission and a capped deadline visible outside the
-        // console summary.
+        // The schema leaves config free-form; this keeps the cap omission, a capped deadline and the results reused
+        // from history visible outside the console summary.
         config(report).takeIf { it.isNotEmpty() }?.let { put("config", it) }
         put(
             "files",
@@ -42,6 +42,7 @@ private fun testFiles(report: MutationReport): Map<String, Any> =
 private fun config(report: MutationReport): Map<String, Any> =
     buildMap {
         if (report.omitted > 0) put("omittedByCap", report.omitted)
+        if (report.reused > 0) put("reused", report.reused)
         report.deadlineCap?.let { cap ->
             put("deadlineCappedAtMs", cap.timeout.inWholeMilliseconds)
             put("baselineMs", cap.baseline.inWholeMilliseconds)

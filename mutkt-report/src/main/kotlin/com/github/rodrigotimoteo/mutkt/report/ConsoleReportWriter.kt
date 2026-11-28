@@ -24,7 +24,7 @@ public class ConsoleReportWriter(
 ) : ReportWriter {
     override fun write(report: MutationReport) {
         out.appendLine("Mutation report")
-        out.appendLine("Mutants: ${report.results.size}")
+        out.appendLine("Mutants: ${report.results.size}${if (report.reused == 0) "" else " (${report.reused} reused)"}")
         MutantStatus.entries.forEach { status ->
             val count = report.results.count { it.status == status }
             out.appendLine("  ${status.name.padEnd(STATUS_WIDTH)}$count")
