@@ -22,6 +22,7 @@ class HistoryReuseTest {
             emptySet(),
             emptySet(),
             60.seconds,
+            4,
             emptyList(),
             "21",
             "/p",

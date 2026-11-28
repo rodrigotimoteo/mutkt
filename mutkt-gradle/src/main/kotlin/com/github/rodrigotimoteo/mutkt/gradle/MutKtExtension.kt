@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.gradle
 
 import org.gradle.api.Action
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
@@ -45,6 +46,9 @@ public abstract class MutKtExtension {
 
     /** Skip tests matching one of these JUnit tag expressions. */
     public abstract val excludeTags: SetProperty<String>
+
+    /** Where the results are kept between runs, so mutants whose code and tests did not change are not run again. */
+    public abstract val historyFile: RegularFileProperty
 
     /** Android only: the variant whose unit tests run against the mutants. */
     public abstract val variant: Property<String>
