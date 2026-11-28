@@ -49,7 +49,8 @@ private val PLUGIN_OWNERS =
 
 /**
  * In a method that takes a `Composer` (a `@Composable` function or lambda), the code the Compose compiler plugin
- * inserts: calls on the runtime API it targets (groups, `changed`, `getSkipping`, tracing, `updateScope`), the jumps
+ * inserts: calls on the runtime API it targets (groups, `changed`, `getSkipping`, tracing, `updateScope`) and the
+ * trace and source information strings passed to them, the jumps
  * that test their results, the jumps that test `$changed`/`$default`/`$dirty` bits, and the `remember` cache
  * around the user's calculation. The restart lambda generated for each restartable function is noise as a whole.
  * Bit operations and int constants are no operator's sites, so only the jumps that consume them are listed.
@@ -72,7 +73,16 @@ internal object ComposeFilter : SiteFilter {
             method.instructions
                 .filterIsInstance<JumpInsnNode>()
                 .filter { it.opcode != GOTO && (testsPluginCall(it) || testsBits(it, slots) || testsInvalid(it)) }
-        return (method.instructions.filter(::isPluginCall) + jumps).toSet()
+        // Trace and source information strings are the last argument of the plugin call they feed.
+        val strings =
+            method.instructions.filter {
+                it is LdcInsnNode &&
+                    it.cst is String &&
+                    isPluginCall(
+                        realAfter(it),
+                    )
+            }
+        return (method.instructions.filter(::isPluginCall) + jumps + strings).toSet()
     }
 
     // `Greeting$lambda$1(name, count, $changed, $composer, $force)` re-invokes Greeting with updateChangedFlags.

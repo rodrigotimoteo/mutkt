@@ -17,6 +17,7 @@ import com.github.rodrigotimoteo.mutkt.asm.operators.RemoveNegationOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.ReturnValsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.SealedWhenOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.StdlibSwapOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.StringsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.TrueReturnsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.VoidMethodCallsOperator
 import com.github.rodrigotimoteo.mutkt.asm.operators.WhenSwitchOperator
@@ -49,6 +50,7 @@ internal object Operators {
             RemoveNegationOperator,
             StdlibSwapOperator,
             ExtremeOperator,
+            StringsOperator,
         )
 
     /** Every operator, in the order they are applied and reported. */

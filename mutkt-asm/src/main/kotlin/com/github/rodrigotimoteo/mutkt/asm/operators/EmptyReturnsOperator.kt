@@ -15,14 +15,11 @@ import org.objectweb.asm.tree.AbstractInsnNode
 import org.objectweb.asm.tree.InsnList
 import org.objectweb.asm.tree.InsnNode
 import org.objectweb.asm.tree.IntInsnNode
-import org.objectweb.asm.tree.JumpInsnNode
 import org.objectweb.asm.tree.LabelNode
 import org.objectweb.asm.tree.LdcInsnNode
 import org.objectweb.asm.tree.LineNumberNode
-import org.objectweb.asm.tree.LookupSwitchInsnNode
 import org.objectweb.asm.tree.MethodInsnNode
 import org.objectweb.asm.tree.MethodNode
-import org.objectweb.asm.tree.TableSwitchInsnNode
 import org.objectweb.asm.tree.TypeInsnNode
 
 private const val STRING = "Ljava/lang/String;"
@@ -69,18 +66,6 @@ internal object EmptyReturnsOperator : Operator {
     private fun returnsString(method: MethodNode) = method.returned == STRING
 
     private val MethodNode.returned get() = Type.getReturnType(desc).descriptor
-
-    private fun jumpTargets(method: MethodNode): Set<LabelNode> =
-        buildSet {
-            method.instructions.forEach {
-                when (it) {
-                    is JumpInsnNode -> add(it.label)
-                    is TableSwitchInsnNode -> addAll(it.labels + it.dflt)
-                    is LookupSwitchInsnNode -> addAll(it.labels + it.dflt)
-                }
-            }
-            method.tryCatchBlocks.forEach { add(it.handler) }
-        }
 
     // Line-number labels sit between the value and the return; a jump target or frame there is a merge point,
     // where the value may not be empty, so the site stays.

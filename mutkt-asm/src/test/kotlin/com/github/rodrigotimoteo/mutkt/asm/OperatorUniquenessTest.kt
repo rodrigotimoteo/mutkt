@@ -2,17 +2,19 @@ package com.github.rodrigotimoteo.mutkt.asm
 
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.objectweb.asm.tree.InvokeDynamicInsnNode
 import org.objectweb.asm.tree.LookupSwitchInsnNode
 import org.objectweb.asm.tree.TableSwitchInsnNode
 import java.nio.ByteBuffer
 
 // Each pair mutates the same instruction differently (negation vs boundary, constant 1 vs 0, a renamed stdlib
-// call vs its default value), so the mutants differ.
+// call vs its default value, a dropped StringBuilder.append vs a null builder), so the mutants differ.
 private val SHARING_PAIRS =
     setOf(
         setOf("negate-conditionals", "conditionals-boundary"),
         setOf("true-returns", "false-returns"),
         setOf("stdlib-swap", "non-void-method-calls"),
+        setOf("strings", "non-void-method-calls"),
     )
 
 internal class OperatorUniquenessTest {
@@ -35,7 +37,8 @@ internal class OperatorUniquenessTest {
     }
 
     // A site is the instruction an operator will change; two operators claiming one instruction can both mutate it.
-    // Only a switch may be claimed more than once by one operator (it has a site per branch).
+    // Only a switch (a site per branch) or a string concatenation (a site per part) may be claimed more than once
+    // by one operator.
     private fun sharedInstructions(operators: List<Operator>): List<String> =
         corpus.values.flatMap { bytes ->
             val node = parse(bytes)
@@ -51,12 +54,16 @@ internal class OperatorUniquenessTest {
                     .groupBy({ it.first }, { it.second to it.third })
                     .filterValues { claimed ->
                         val ids = claimed.map { it.first.id.value }.toSet()
-                        val isSwitch =
+                        val isMultiSite =
                             claimed.first().second.let {
                                 it is TableSwitchInsnNode ||
-                                    it is LookupSwitchInsnNode
+                                    it is LookupSwitchInsnNode ||
+                                    (
+                                        it is InvokeDynamicInsnNode &&
+                                            it.bsm.owner == "java/lang/invoke/StringConcatFactory"
+                                    )
                             }
-                        if (ids.size == 1) claimed.size > 1 && !isSwitch else ids !in SHARING_PAIRS
+                        if (ids.size == 1) claimed.size > 1 && !isMultiSite else ids !in SHARING_PAIRS
                     }.mapValues { (_, claimed) -> claimed.map { it.first } }
                     .map { (index, ops) ->
                         "${ops.joinToString {

@@ -221,6 +221,10 @@ private val SOURCE =
     fun lateName(l: Late): String = l.name
     fun forced(s: String?): Int = s!!.length + 1
     fun platformValue(): String = System.getProperty("mutkt.absent.property")
+    // String shapes: a message literal, a builder with wide appends, a key literal that is not a site.
+    fun message(n: Int): String = if (n > 0) "positive" else "other"
+    fun built(a: Long, d: Double): String = buildString { append("v="); append(a); append(';'); append(d) }
+    fun keyed(): Class<*> = Class.forName("java.lang.String")
 
     fun pick(flag: Boolean, a: Int): Int {
         val pet: Animal = if (flag) Dog() else Cat()
