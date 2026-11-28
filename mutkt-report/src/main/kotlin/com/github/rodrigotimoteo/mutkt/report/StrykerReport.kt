@@ -1,6 +1,7 @@
 package com.github.rodrigotimoteo.mutkt.report
 
 import com.github.rodrigotimoteo.mutkt.application.port.SourceLookup
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.MutationReport
@@ -86,7 +87,7 @@ private fun mutant(
         put("description", mutant.description)
         put("location", location(mutant.line, lines))
         put("status", status(result.status))
-        (result.detail ?: result.killedBy?.let { "Killed by $it" })?.let { put("statusReason", it) }
+        (result.detail ?: result.killedBy?.let { "Killed by $it${kind(result)}" })?.let { put("statusReason", it) }
         result.killedBy?.let { put("killedBy", listOf(it)) }
         result.coveredBy?.let { put("coveredBy", it) }
     }
@@ -106,6 +107,13 @@ private fun location(
         "end" to mapOf("line" to clamped, "column" to maxOf(start + 1, text.length + 1)),
     )
 }
+
+private fun kind(result: MutantResult): String =
+    when (result.killKind) {
+        KillKind.ASSERTION -> " (assertion)"
+        KillKind.EXCEPTION -> " (exception)"
+        null -> ""
+    }
 
 private fun status(status: MutantStatus): String =
     when (status) {

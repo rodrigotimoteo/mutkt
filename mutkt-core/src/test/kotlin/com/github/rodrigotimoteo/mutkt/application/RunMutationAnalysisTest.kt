@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.application
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.domain.DeadlineCap
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
@@ -20,6 +21,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 private const val WAIT_SECONDS = 10L
+
+private val KILLED = Outcome.Killed("t", KillKind.EXCEPTION)
 
 // What ChildProcess throws for a child that died before the tests started; the stderr tail may hold paths and is not
 // part of the cause.
@@ -62,15 +65,17 @@ class RunMutationAnalysisTest {
                 MutantStatus.NO_COVERAGE,
                 MutantStatus.ERROR,
             ),
-            statuses(Outcome.Killed("t"), Outcome.Survived, Outcome.Timeout, Outcome.NoTests, Outcome.LoadError("x")),
+            statuses(KILLED, Outcome.Survived, Outcome.Timeout, Outcome.NoTests, Outcome.LoadError("x")),
         )
 
     @Test
-    fun `keeps the first failing test only on killed mutants`() {
-        val outcomes = listOf(Outcome.Killed("a.FooTest.adds [2] 2, 2, 4"), Outcome.Survived, Outcome.LoadError("x"))
+    fun `keeps the first failing test and how it failed only on killed mutants`() {
+        val adds = Outcome.Killed("a.FooTest.adds [2] 2, 2, 4", KillKind.ASSERTION)
+        val outcomes = listOf(adds, KILLED, Outcome.Survived, Outcome.LoadError("x"))
         val mutants = outcomes.indices.map { mutant(ordinal = it) }
         val results = analysis(mutants, FakeExecutor { outcomes[it.id.ordinal] }).run().results
-        assertEquals(listOf("a.FooTest.adds [2] 2, 2, 4", null, null), results.map { it.killedBy })
+        assertEquals(listOf("a.FooTest.adds [2] 2, 2, 4", "t", null, null), results.map { it.killedBy })
+        assertEquals(listOf(KillKind.ASSERTION, KillKind.EXCEPTION, null, null), results.map { it.killKind })
     }
 
     @Test
@@ -111,7 +116,7 @@ class RunMutationAnalysisTest {
         val mutants = (0 until 200).map { mutant(ordinal = it) }
         val outcomes =
             mutants.associateWith {
-                listOf(Outcome.Survived, Outcome.NoTests, Outcome.Timeout, Outcome.Killed("t"), null).random(random)
+                listOf(Outcome.Survived, Outcome.NoTests, Outcome.Timeout, KILLED, null).random(random)
             }
         val failing = mutants.filter { random.nextInt(10) == 0 }.toSet()
         val executor = FakeExecutor { outcomes.getValue(it) ?: error("boom") }
@@ -144,7 +149,7 @@ class RunMutationAnalysisTest {
                     2 -> fail(NoClassDefFoundError(long))
                     3 -> fail(IllegalStateException())
                     4 -> fail(IllegalStateException(" "))
-                    else -> Outcome.Killed("t")
+                    else -> KILLED
                 }
             }
         val results = analysis(mutants, executor).run().results
@@ -202,7 +207,7 @@ class RunMutationAnalysisTest {
     @Test
     fun `reports how many eligible mutants the cap omitted`() {
         val mutants = (0 until 3).map { mutant("a.Foo", ordinal = it) }
-        val executor = FakeExecutor { Outcome.Killed("t") }
+        val executor = FakeExecutor { KILLED }
         val report = analysis(mutants, executor, filters = ClassFilters(maxMutantsPerClass = 1)).run()
         assertEquals(1.0, report.score)
         assertEquals(1, report.results.size)
@@ -316,7 +321,7 @@ class RunMutationAnalysisTest {
 
     @Test
     fun `a red baseline stops the run naming the failing test, before any mutant or report`() {
-        val executor = FakeExecutor(baseline = { Outcome.Killed("a.FooTest.unrelated") })
+        val executor = FakeExecutor(baseline = { Outcome.Killed("a.FooTest.unrelated", KillKind.EXCEPTION) })
         val error = assertThrows(IllegalStateException::class.java) { analysis(listOf(mutant()), executor).run() }
         assertTrue("a.FooTest.unrelated" in error.message.orEmpty(), error.message)
         assertTrue(executor.received.isEmpty())
@@ -326,7 +331,7 @@ class RunMutationAnalysisTest {
     @Test
     fun `a red baseline names the cause of its first failure`() {
         val cause = "org.opentest4j.AssertionFailedError: red"
-        val executor = FakeExecutor(baseline = { Outcome.Killed("a.FooTest.unrelated", cause) })
+        val executor = FakeExecutor(baseline = { Outcome.Killed("a.FooTest.unrelated", KillKind.ASSERTION, cause) })
         val error = assertThrows(IllegalStateException::class.java) { analysis(listOf(mutant()), executor).run() }
         assertTrue("the first failure is a.FooTest.unrelated: $cause" in error.message.orEmpty(), error.message)
     }
@@ -378,7 +383,7 @@ class RunMutationAnalysisTest {
 
     @Test
     fun `an empty run skips the baseline`() {
-        val executor = FakeExecutor(baseline = { Outcome.Killed("red") })
+        val executor = FakeExecutor(baseline = { Outcome.Killed("red", KillKind.EXCEPTION) })
         analysis(emptyList(), executor).run()
         assertTrue(executor.baselines.isEmpty())
         assertEquals(1, writer.written.size)

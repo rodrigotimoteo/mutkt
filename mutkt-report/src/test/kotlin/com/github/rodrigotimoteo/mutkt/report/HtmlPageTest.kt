@@ -34,6 +34,7 @@ class HtmlPageTest {
         assertTrue("<mutation-test-report-app></mutation-test-report-app>" in html)
         assertTrue("\"demo/Calc.kt\"" in html)
         assertTrue("Negated conditional" in html)
+        assertTrue("Killed by demo.CalcTest.adds() (assertion)" in html, "how the killing test failed")
     }
 
     @Test
