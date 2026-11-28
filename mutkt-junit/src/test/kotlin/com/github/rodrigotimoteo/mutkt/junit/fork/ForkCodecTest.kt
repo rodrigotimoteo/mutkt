@@ -119,7 +119,12 @@ class ForkCodecTest {
                 ),
                 TestCoverage(TestId("b.Empty"), emptySet(), 0.nanoseconds),
             )
-        val reply = ForkReply.Result(Outcome.Survived, 7L, coverage = Coverage(tests, setOf(probes[0])))
+        val reply =
+            ForkReply.Result(
+                Outcome.Survived,
+                7L,
+                coverage = Coverage(tests, setOf(probes[0]), setOf("d.Discovery")),
+            )
         assertEquals(reply, roundTrip(reply))
     }
 

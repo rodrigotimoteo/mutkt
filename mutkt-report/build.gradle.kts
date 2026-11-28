@@ -10,3 +10,9 @@ dependencies {
     testImplementation(project(":mutkt-testing"))
     testImplementation(libs.jackson.databind)
 }
+
+tasks.test {
+    val operatorsDoc = rootProject.layout.projectDirectory.file("docs/operators.md")
+    inputs.file(operatorsDoc)
+    systemProperty("mutkt.operatorsDoc", operatorsDoc.asFile.absolutePath)
+}

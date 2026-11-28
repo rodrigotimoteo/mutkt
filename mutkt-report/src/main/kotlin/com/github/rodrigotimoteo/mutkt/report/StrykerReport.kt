@@ -18,8 +18,8 @@ internal fun strykerReport(
     buildMap {
         put("schemaVersion", SCHEMA_VERSION)
         put("thresholds", mapOf("high" to HIGH_THRESHOLD, "low" to LOW_THRESHOLD))
-        // The schema leaves config free-form; this keeps the cap omission and a capped deadline visible outside the
-        // console summary.
+        // The schema leaves config free-form; this keeps the cap omission, a capped deadline and the results reused
+        // from history visible outside the console summary.
         config(report).takeIf { it.isNotEmpty() }?.let { put("config", it) }
         put(
             "files",
@@ -42,6 +42,7 @@ private fun testFiles(report: MutationReport): Map<String, Any> =
 private fun config(report: MutationReport): Map<String, Any> =
     buildMap {
         if (report.omitted > 0) put("omittedByCap", report.omitted)
+        if (report.reused > 0) put("reused", report.reused)
         report.deadlineCap?.let { cap ->
             put("deadlineCappedAtMs", cap.timeout.inWholeMilliseconds)
             put("baselineMs", cap.baseline.inWholeMilliseconds)
@@ -86,11 +87,22 @@ private fun mutant(
         put("description", mutant.description)
         put("location", location(mutant.line, lines))
         put("status", status(result.status))
-        (result.detail ?: result.killedBy?.let { "Killed by $it${kind(result)}" })?.let { put("statusReason", it) }
+        (
+            result.detail ?: result.killedBy?.let {
+                "Killed by $it${kind(result)}"
+            } ?: hint(result)
+        )?.let { put("statusReason", it) }
         result.killedBy?.let { put("killedBy", listOf(it)) }
         result.coveredBy?.let { put("coveredBy", it) }
     }
 }
+
+// The viewer shows statusReason with the mutant, so a survivor's hint lands there without custom HTML.
+private fun hint(result: MutantResult): String? =
+    result.mutant.operator
+        .takeIf { result.status == MutantStatus.SURVIVED }
+        ?.let(::operatorHint)
+        ?.replaceFirstChar(Char::uppercaseChar)
 
 // Bytecode only knows the line, so the mutant spans that line's text, at least one column (end is exclusive). A
 // missing line, a missing source (one empty line) or a line past the end is clamped so the viewer can place it.

@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.application
 
 import com.github.rodrigotimoteo.mutkt.application.port.History
 import com.github.rodrigotimoteo.mutkt.application.port.HistoryEntry
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -90,6 +91,9 @@ class HistoryReuseTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             HistoryEntry(a.toString(), "k", MutantStatus.SURVIVED, killedBy = "a.ATest")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            HistoryEntry(a.toString(), "k", MutantStatus.SURVIVED, killKind = KillKind.EXCEPTION)
         }
     }
 
