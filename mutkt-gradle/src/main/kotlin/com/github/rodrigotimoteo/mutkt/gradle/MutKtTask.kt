@@ -16,6 +16,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.LocalState
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
@@ -108,6 +109,21 @@ public abstract class MutKtTask : DefaultTask() {
     @get:Optional
     public abstract val failBelowScore: Property<Int>
 
+    /** See [MutKtExtension.failOnNewSurvivors]. */
+    @get:Input
+    public abstract val failOnNewSurvivors: Property<Boolean>
+
+    /** The committed survivor baseline, read only with [failOnNewSurvivors]; a missing file accepts no survivor. */
+    @get:InputFiles
+    @get:Optional
+    @get:PathSensitive(PathSensitivity.NONE)
+    public abstract val survivorBaseline: RegularFileProperty
+
+    /** Set on `mutktUpdateBaseline` only: receives this run's survivors as the new baseline. */
+    @get:OutputFile
+    @get:Optional
+    public abstract val updatedSurvivorBaseline: RegularFileProperty
+
     /** Whether the summary is logged. */
     @get:Input
     public abstract val consoleReport: Property<Boolean>
@@ -151,28 +167,48 @@ public abstract class MutKtTask : DefaultTask() {
     @get:OutputDirectory
     public abstract val reportsDir: DirectoryProperty
 
-    /** Runs the analysis, writes and logs the summary, then applies the score threshold. */
+    /** Runs the analysis, writes and logs the summary, then applies the score threshold and the survivor baseline. */
     @TaskAction
     public fun analyse() {
+        // Read first so a corrupt baseline fails before the run.
+        val baselineFile = survivorBaseline.orNull?.asFile?.takeIf { failOnNewSurvivors.get() }
+        val accepted = baselineFile?.let { it.path to readSurvivorBaseline(it) }
         val dir = reportsDir.get().asFile.also(File::mkdirs)
         val names = listOf("mutkt.txt", "mutation-report.json", "mutation-report.html", "mutation-report.sarif")
         val reports = names.map { File(dir, it) }
         // A run that fails before writing (a red baseline) must not leave the last run's reports looking current.
         reports.forEach(File::delete)
         val result = runAnalysis()
-        val (summary, score) = result
-        val texts = listOf(summary, result.json, result.html, result.sarif)
+        val texts = listOf(result.summary, result.json, result.html, result.sarif)
         reports.zip(texts).forEach { (file, text) -> file.writeText(text) }
-        if (consoleReport.get()) logger.lifecycle(summary.trimEnd())
+        if (consoleReport.get()) logger.lifecycle(result.summary.trimEnd())
         if (githubAnnotations.get()) result.annotations.lines().forEach { if (it.isNotEmpty()) logger.warn(it) }
+        val update = updatedSurvivorBaseline.orNull?.asFile
+        val survivors = if (update != null || accepted != null) result.survivors() else emptyList()
+        update?.let { file ->
+            writeSurvivorBaseline(file, survivors)
+            logger.lifecycle("Accepted ${survivors.size} survivors in ${file.path}")
+        }
+        val newSurvivors = accepted?.let { (path, baseline) -> newSurvivorsFailure(baseline, survivors, path) }
+        failure(result, reports.first().path, newSurvivors)?.let { throw GradleException(it) }
+    }
+
+    // Why the build fails, null when it passes; [newSurvivors] is the survivor baseline's failure, when it fails.
+    private fun failure(
+        result: AnalysisResult,
+        reportPath: String,
+        newSurvivors: String?,
+    ): String? {
         // Every error is a mutant the tests never ran against: not a clean build.
         if (result.mutants > 0 && result.errors == result.mutants) {
-            throw GradleException("All ${result.mutants} mutants ended in ERROR: none loaded or ran, see the report")
+            return "All ${result.mutants} mutants ended in ERROR: none loaded or ran, see the report"
         }
-        if (score == null) {
+        if (result.score == null) {
             val note = if (failBelowScore.isPresent) "; failBelowScore is not applied" else ""
             logger.warn("No mutants were generated or scored, so there is no mutation score$note")
         }
-        thresholdFailure(score, failBelowScore.orNull, reports.first().path)?.let { throw GradleException(it) }
+        // Both gates are named when both fail, so one fix does not reveal the other.
+        val gates = listOfNotNull(thresholdFailure(result.score, failBelowScore.orNull, reportPath), newSurvivors)
+        return gates.joinToString("\n").ifEmpty { null }
     }
 }

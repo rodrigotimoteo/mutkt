@@ -7,7 +7,7 @@ import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.testing.Test
 import java.nio.file.Paths
 
-/** Registers `mutkt` for a project with the java plugin, reading the JVM settings of its `test` task. */
+/** Registers the MutKt tasks for a project with the java plugin, reading the JVM settings of its `test` task. */
 internal fun Project.registerMutktTask(extension: MutKtExtension) {
     val model = checkNotNull(mutktModel()) { "The MutKt model exists once the java plugin is applied" }
     val test = providers.provider { tasks.named("test", Test::class.java).get() }
@@ -28,41 +28,72 @@ internal fun Project.registerMutktTask(extension: MutKtExtension) {
 }
 
 /**
- * Registers `mutkt`, deliberately not attached to `check`, with the DSL values and the JVM settings of [test];
+ * Registers `mutkt`, deliberately not attached to `check`, and `mutktUpdateBaseline`, which runs the same analysis and
+ * writes its survivors to the project's [SURVIVOR_BASELINE], with the DSL values and the JVM settings of [test];
  * [inputs] sets the classes, classpaths and sources. [test] must not be a mapped task provider, which would make
- * mutkt depend on (and run) the tests. Read lazily, later changes are seen and the task keeps no project reference.
+ * them depend on (and run) the tests. Read lazily, later changes are seen and the tasks keep no project reference.
  */
 internal fun <T : MutKtTask> Project.registerMutkt(
     type: Class<T>,
     extension: MutKtExtension,
     test: Provider<Test>,
     inputs: (T) -> Unit,
-): TaskProvider<T> =
-    tasks.register("mutkt", type) { task ->
-        task.group = "verification"
-        task.description = "Runs mutation testing against the compiled classes"
-        inputs(task)
-        task.targetClasses.set(extension.targetClasses)
-        task.excludedClasses.set(extension.excludedClasses)
-        task.excludedMethods.set(extension.excludedMethods)
-        task.threads.set(extension.threads)
-        task.timeoutMs.set(extension.timeoutMs)
-        task.maxMutantsPerClass.set(extension.maxMutantsPerClass)
-        task.operators.set(extension.operators)
-        task.engines.set(extension.engines)
-        task.includeTags.set(extension.includeTags)
-        task.excludeTags.set(extension.excludeTags)
-        task.failBelowScore.set(extension.failBelowScore)
-        task.consoleReport.set(extension.reports.console)
-        task.readTestSettings(test)
-        task.historyFile.set(extension.historyFile)
-        task.generatedSourcesDir.set(layout.buildDirectory.dir("generated"))
-        task.reportsDir.set(layout.buildDirectory.dir("reports/mutkt"))
-        task.repositoryRoot.set(
-            providers.environmentVariable("GITHUB_WORKSPACE").orElse(layout.projectDirectory.asFile.absolutePath),
-        )
-        task.githubAnnotations.set(providers.environmentVariable("GITHUB_ACTIONS").map { it == "true" }.orElse(false))
-    }
+): List<TaskProvider<T>> {
+    val baseline = layout.projectDirectory.file(SURVIVOR_BASELINE)
+    val update =
+        tasks.register("mutktUpdateBaseline", type) { task ->
+            configureMutkt(task, extension, test, inputs)
+            task.description = "Runs mutation testing and accepts every survivor in $SURVIVOR_BASELINE"
+            task.failOnNewSurvivors.set(false)
+            // Accepting the survivors is the point, so the score gate does not block the update.
+            task.failBelowScore.set(null as Int?)
+            task.updatedSurvivorBaseline.set(baseline)
+        }
+    val mutkt =
+        tasks.register("mutkt", type) { task ->
+            configureMutkt(task, extension, test, inputs)
+            task.failOnNewSurvivors.set(extension.failOnNewSurvivors)
+            // An input only when the gate reads it, so editing the file does not rerun an ungated task.
+            task.survivorBaseline.set(extension.failOnNewSurvivors.map { on -> baseline.takeIf { on } })
+            // Run together, the update writes the baseline this task reads.
+            task.mustRunAfter(update)
+        }
+    return listOf(mutkt, update)
+}
+
+/** The committed survivor baseline, in the project directory. */
+internal const val SURVIVOR_BASELINE: String = "mutkt-baseline.json"
+
+private fun <T : MutKtTask> Project.configureMutkt(
+    task: T,
+    extension: MutKtExtension,
+    test: Provider<Test>,
+    inputs: (T) -> Unit,
+) {
+    task.group = "verification"
+    task.description = "Runs mutation testing against the compiled classes"
+    inputs(task)
+    task.targetClasses.set(extension.targetClasses)
+    task.excludedClasses.set(extension.excludedClasses)
+    task.excludedMethods.set(extension.excludedMethods)
+    task.threads.set(extension.threads)
+    task.timeoutMs.set(extension.timeoutMs)
+    task.maxMutantsPerClass.set(extension.maxMutantsPerClass)
+    task.operators.set(extension.operators)
+    task.engines.set(extension.engines)
+    task.includeTags.set(extension.includeTags)
+    task.excludeTags.set(extension.excludeTags)
+    task.failBelowScore.set(extension.failBelowScore)
+    task.consoleReport.set(extension.reports.console)
+    task.readTestSettings(test)
+    task.historyFile.set(extension.historyFile)
+    task.generatedSourcesDir.set(layout.buildDirectory.dir("generated"))
+    task.reportsDir.set(layout.buildDirectory.dir("reports/mutkt"))
+    task.repositoryRoot.set(
+        providers.environmentVariable("GITHUB_WORKSPACE").orElse(layout.projectDirectory.asFile.absolutePath),
+    )
+    task.githubAnnotations.set(providers.environmentVariable("GITHUB_ACTIONS").map { it == "true" }.orElse(false))
+}
 
 // The test task's JVM settings, read lazily.
 private fun MutKtTask.readTestSettings(test: Provider<Test>) {

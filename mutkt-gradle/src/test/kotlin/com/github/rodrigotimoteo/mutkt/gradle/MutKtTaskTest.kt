@@ -71,7 +71,7 @@ class MutKtTaskTest {
             annotated(Classpath::class.java),
         )
         assertEquals(setOf("compileClasspath"), annotated(CompileClasspath::class.java))
-        assertEquals(setOf("sourceDirs"), annotated(InputFiles::class.java))
+        assertEquals(setOf("sourceDirs", "survivorBaseline"), annotated(InputFiles::class.java))
         assertEquals(
             PathSensitivity.RELATIVE,
             MutKtTask::class.java
@@ -101,6 +101,7 @@ class MutKtTaskTest {
                 "includeTags",
                 "excludeTags",
                 "failBelowScore",
+                "failOnNewSurvivors",
                 "threads",
                 "maxMutantsPerClass",
                 "timeoutMs",
@@ -298,6 +299,28 @@ class MutKtTaskTest {
         assertEquals(listOf("slow"), settings.excludeTags)
         assertEquals(Path.of("main"), settings.projectClassDir)
         assertEquals(main.origins + test.origins, settings.codeSources)
+    }
+
+    @Test
+    fun `reads the survivor baseline only with failOnNewSurvivors, and the update ignores failBelowScore`() {
+        val project = project("java")
+        project.mutkt().failBelowScore.set(80)
+        val update = project.tasks.getByName("mutktUpdateBaseline") as MutKtTask
+        val baseline = project.file("mutkt-baseline.json")
+
+        assertFalse(project.task().survivorBaseline.isPresent)
+        project.mutkt().failOnNewSurvivors.set(true)
+        assertEquals(
+            baseline,
+            project
+                .task()
+                .survivorBaseline
+                .get()
+                .asFile,
+        )
+        assertEquals(baseline, update.updatedSurvivorBaseline.get().asFile)
+        assertFalse(update.failOnNewSurvivors.get() || update.failBelowScore.isPresent)
+        assertEquals(80, project.task().failBelowScore.get())
     }
 
     @Test
