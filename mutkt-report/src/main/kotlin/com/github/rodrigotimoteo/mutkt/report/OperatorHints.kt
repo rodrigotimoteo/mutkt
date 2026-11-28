@@ -25,6 +25,7 @@ internal val operatorHints: Map<String, String> =
         "remove-negation" to "no test checks the sign of the value",
         "stdlib-swap" to "no test checks which element or part of the collection the call returns",
         "extreme" to "tests run this method but no assertion depends on what it does",
+        "strings" to "no test checks this text (a message, log line or part of a template)",
     )
 
 /** What a surviving mutant of [operator] usually says is missing from the tests; null for an operator without one. */

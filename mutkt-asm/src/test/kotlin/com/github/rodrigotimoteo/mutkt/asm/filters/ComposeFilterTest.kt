@@ -46,6 +46,8 @@ class ComposeFilterTest {
         assertEquals(
             listOf(
                 "body -> return",
+                "concat part 1/2 (String) -> dropped",
+                "concat part 2/2 (int) -> dropped",
                 "if_icmple -> if_icmpgt",
                 "if_icmple -> if_icmplt",
                 "remove call SourceKt.Text",
@@ -58,7 +60,13 @@ class ComposeFilterTest {
     @Test
     fun `default parameter masks are noise, the default values are not`() {
         assertEquals(
-            listOf("body -> return", "if_icmple -> if_icmpgt", "if_icmple -> if_icmplt", "remove call SourceKt.Text"),
+            listOf(
+                "\"x\" -> \"\"",
+                "body -> return",
+                "if_icmple -> if_icmpgt",
+                "if_icmple -> if_icmplt",
+                "remove call SourceKt.Text",
+            ),
             sites("SourceKt", "WithDefault"),
         )
     }
@@ -133,6 +141,7 @@ class ComposeFilterTest {
     fun `a stable class parameter keeps only the user's code`() {
         assertEquals(
             listOf(
+                "\"y\" -> \"\"",
                 "body -> return",
                 "if_icmple -> if_icmpgt",
                 "if_icmple -> if_icmplt",
@@ -148,6 +157,7 @@ class ComposeFilterTest {
     fun `a composable lambda keeps its own branch`() {
         assertEquals(
             listOf(
+                "\"a\" -> \"\"",
                 "body -> return null",
                 "if_icmple -> if_icmpgt",
                 "if_icmple -> if_icmplt",

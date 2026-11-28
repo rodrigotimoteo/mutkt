@@ -5,6 +5,7 @@ import com.github.rodrigotimoteo.mutkt.asm.filters.ContinuationFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.InlinedBodyFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.InlinedClassFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.InlinedFinallyFilter
+import com.github.rodrigotimoteo.mutkt.asm.filters.ResumeMessageFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.StringWhenFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.SuspendMarkerFilter
 import com.github.rodrigotimoteo.mutkt.asm.filters.WhenMappingsFilter
@@ -18,6 +19,7 @@ internal object SiteFilters {
             InlinedBodyFilter,
             InlinedClassFilter,
             InlinedFinallyFilter,
+            ResumeMessageFilter,
             StringWhenFilter,
             SuspendMarkerFilter,
             WhenMappingsFilter,

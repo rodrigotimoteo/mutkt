@@ -1,9 +1,11 @@
 package com.github.rodrigotimoteo.mutkt.asm.filters
 
+import com.github.rodrigotimoteo.mutkt.asm.Found
 import com.github.rodrigotimoteo.mutkt.asm.Operators
 import com.github.rodrigotimoteo.mutkt.asm.discover
 import com.github.rodrigotimoteo.mutkt.asm.mutate
 import com.github.rodrigotimoteo.mutkt.asm.operators.NegateConditionalsOperator
+import com.github.rodrigotimoteo.mutkt.asm.operators.StringsOperator
 import com.github.rodrigotimoteo.mutkt.asm.parse
 import com.github.rodrigotimoteo.mutkt.asm.toBytes
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
@@ -12,7 +14,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.objectweb.asm.tree.LineNumberNode
 
-// SuspendMarkerFilter and ContinuationFilter: the two halves of the coroutine plumbing, on one compilation.
+// SuspendMarkerFilter, ContinuationFilter and ResumeMessageFilter: the coroutine plumbing, on one compilation.
 class CoroutineFiltersTest {
     private val classes =
         compileKotlin(
@@ -114,6 +116,13 @@ class CoroutineFiltersTest {
         )
         // The value runTwice's lambda returns is the user's.
         assertEquals(listOf("areturn -> null"), defaultSites("SourceKt\$runTwice\$1", "invokeSuspend"))
+    }
+
+    @Test
+    fun `the state machine's resume message is noise`() {
+        assertEquals(listOf("LDC"), ResumeMessageFilter.noiseIn(classes, "SourceKt", "twice"))
+        assertEquals(listOf("LDC"), ResumeMessageFilter.noiseIn(classes, "SourceKt\$launched\$1\$1", "invokeSuspend"))
+        assertEquals(emptyList<Found>(), discover(file, StringsOperator).filter { it.methodName == "twice" })
     }
 
     @Test
