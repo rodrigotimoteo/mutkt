@@ -34,6 +34,7 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
     // Class directories reach the child through the staged copies, so only jars and resource directories remain.
     val dependencies = testRuntimeClasspath.files.filterNot { it in classDirs }.map(File::toPath)
     val config = analysisConfig(DirectoryClassSource(production.dir))
+    val history = historyReuse(production, projectClasses, tests, dependencies, config)
     val summary = StringBuilder()
     val json = StringBuilder()
     val html = StringBuilder()
@@ -50,7 +51,7 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
             val source = DirectoryClassSource(production.dir)
             ForkedTestExecutor(forkSettings(projectClasses, tests, dependencies, config.parallelism)).use { executor ->
                 try {
-                    RunMutationAnalysis(source, generator, instrumenter, executor, writer, config)
+                    RunMutationAnalysis(source, generator, instrumenter, executor, writer, config, history)
                         // Logged as soon as the baseline ends so a long run shows the hint before its mutants.
                         .run(onDeadlineCap = { logger.warn(deadlineWarning(it)) }, onWarning = { logger.warn(it) })
                 } catch (e: TestExecutionStopped) {

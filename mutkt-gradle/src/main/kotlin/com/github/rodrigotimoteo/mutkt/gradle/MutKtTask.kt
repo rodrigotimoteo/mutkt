@@ -4,6 +4,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.SetProperty
@@ -12,6 +13,7 @@ import org.gradle.api.tasks.CompileClasspath
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.LocalState
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
@@ -22,7 +24,8 @@ import java.io.File
 
 /**
  * Runs the mutation analysis in the Gradle daemon; the tests run in child JVMs (ADR 0008, no Worker API).
- * Everything the action reads is a declared input, so it never touches the project at execution time.
+ * Everything the action reads is a declared input or its local state (the result history), so it never touches the
+ * project at execution time.
  */
 @DisableCachingByDefault(because = "The result is a console report; tests run in forked JVMs")
 public abstract class MutKtTask : DefaultTask() {
@@ -120,6 +123,14 @@ public abstract class MutKtTask : DefaultTask() {
     /** The `java` executable of the `test` task's launcher. */
     @get:Input
     public abstract val testJavaExecutable: Property<String>
+
+    /** Vendor and full version of that Java runtime, which the result history is only valid for. */
+    @get:Input
+    public abstract val testJavaRuntime: Property<String>
+
+    /** See [MutKtExtension.historyFile]. Local state rather than an output, so no build cache ever restores it. */
+    @get:LocalState
+    public abstract val historyFile: RegularFileProperty
 
     /** Receives `mutkt.txt` (the console summary), `mutation-report.json` and `mutation-report.html`. */
     @get:OutputDirectory

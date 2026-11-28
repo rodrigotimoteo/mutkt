@@ -6,6 +6,7 @@ import kotlin.time.Duration
  * Everything outside the main and test classes that can change a result, so any change drops the whole history.
  * [classpath] (the test runtime entries that are not class directories) and [helperTestClasses] (test classes that
  * are not run as tests) map names to content digests; [classpath] stays in classpath order, which can pick a class.
+ * [threads] is the resolved number of parallel runs: their load decides whether a slow mutant ends in TIMEOUT.
  * [java] names the runtime's vendor and full version (java.vendor + java.runtime.version), not just the major.
  */
 public data class RunFingerprint(
@@ -15,6 +16,7 @@ public data class RunFingerprint(
     val includeTags: Set<String>,
     val excludeTags: Set<String>,
     val timeout: Duration,
+    val threads: Int,
     val jvmArgs: List<String>,
     val java: String,
     val workingDir: String,
@@ -26,7 +28,7 @@ public data class RunFingerprint(
         sha256(
             listOf(pluginVersion) + operators.sorted().counted() + engines.sorted().counted() +
                 includeTags.sorted().counted() + excludeTags.sorted().counted() +
-                timeout.inWholeMilliseconds.toString() + jvmArgs.counted() + java + workingDir +
+                timeout.inWholeMilliseconds.toString() + threads.toString() + jvmArgs.counted() + java + workingDir +
                 classpath.parts() + helperTestClasses.toSortedMap().parts(),
         )
 }

@@ -125,6 +125,9 @@ dependencies {
     implementation(project(":mutkt-asm"))
     implementation(project(":mutkt-junit"))
     implementation(project(":mutkt-report"))
+    // Reads the test classes' supertypes and test methods for the result history.
+    implementation(libs.asm)
+    implementation(libs.asm.tree)
     compileOnly(libs.agp.api)
 
     testImplementation(project(":mutkt-testing"))

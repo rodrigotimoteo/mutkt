@@ -173,3 +173,18 @@ To run it with `check`:
 ```kotlin
 tasks.check { dependsOn("mutkt") }
 ```
+
+## Keep results between CI runs
+
+`mutkt` stores its results in `build/mutkt/history.json` and the next run reuses those of mutants whose code, covering tests and reached classes did not change ([dsl.md](dsl.md#result-history)). A fresh CI checkout has no `build/`, so keep the file with your CI's cache. On GitHub Actions, restore the newest history before the run and save a new one after it:
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: "**/build/mutkt/history.json"
+    key: mutkt-history-${{ runner.os }}-${{ github.sha }}
+    restore-keys: mutkt-history-${{ runner.os }}-
+- run: ./gradlew mutkt
+```
+
+A cache entry cannot be overwritten, so the key changes with every commit and `restore-keys` picks the latest one. The history records absolute paths, so it is reused on the same runner image, not across operating systems or between a laptop and CI. A stale or foreign history only costs time: MutKt reruns every mutant whose inputs differ.

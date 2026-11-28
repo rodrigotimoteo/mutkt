@@ -66,6 +66,14 @@ internal fun <T : MutKtTask> Project.registerMutkt(
                     ?.absolutePath ?: currentJava()
             },
         )
+        task.testJavaRuntime.set(
+            test.map { tests ->
+                tests.javaLauncher.orNull
+                    ?.metadata
+                    ?.let { "${it.vendor} ${it.javaRuntimeVersion}" } ?: currentJavaRuntime()
+            },
+        )
+        task.historyFile.set(extension.historyFile)
         task.generatedSourcesDir.set(layout.buildDirectory.dir("generated"))
         task.reportsDir.set(layout.buildDirectory.dir("reports/mutkt"))
     }
@@ -80,5 +88,8 @@ private fun isCoverageAgent(arg: String): Boolean {
     val jar = AGENT_JAR.find(arg)?.groupValues?.get(1) ?: return false
     return COVERAGE_AGENT.containsMatchIn(jar.substringAfterLast('/').substringAfterLast('\\'))
 }
+
+private fun currentJavaRuntime(): String =
+    "${System.getProperty("java.vendor")} ${System.getProperty("java.runtime.version")}"
 
 private fun currentJava(): String = Paths.get(System.getProperty("java.home"), "bin", "java").toString()
