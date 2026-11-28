@@ -4,6 +4,7 @@ import com.github.rodrigotimoteo.mutkt.application.AnalysisConfig
 import com.github.rodrigotimoteo.mutkt.application.ClassFilters
 import com.github.rodrigotimoteo.mutkt.application.Glob
 import com.github.rodrigotimoteo.mutkt.application.RunMutationAnalysis
+import com.github.rodrigotimoteo.mutkt.application.port.ClassSource
 import com.github.rodrigotimoteo.mutkt.application.port.ReportWriter
 import com.github.rodrigotimoteo.mutkt.application.port.TestExecutionStopped
 import com.github.rodrigotimoteo.mutkt.asm.AsmCoverageInstrumenter
@@ -32,7 +33,7 @@ internal fun MutKtTask.runAnalysis(): AnalysisResult {
     val classDirs = classesDirs.files + testClassesDirs.files + projectSupportClassesDirs.files
     // Class directories reach the child through the staged copies, so only jars and resource directories remain.
     val dependencies = testRuntimeClasspath.files.filterNot { it in classDirs }.map(File::toPath)
-    val config = analysisConfig()
+    val config = analysisConfig(DirectoryClassSource(production.dir))
     val summary = StringBuilder()
     val json = StringBuilder()
     val html = StringBuilder()
@@ -89,17 +90,29 @@ private fun MutKtTask.generator(loader: ClassLoader) =
 private fun ClassLoader.classBytes(name: String): ByteArray? =
     getResourceAsStream("$name.class")?.use { it.readBytes() }
 
-private fun MutKtTask.analysisConfig() =
+private fun MutKtTask.analysisConfig(source: ClassSource) =
     AnalysisConfig(
         ClassFilters(
             includes = targetClasses.get().map(::Glob),
-            excludes = excludedClasses.get().map(::Glob),
+            excludes = classExcludes(source),
             excludedMethods = excludedMethods.get().toSet(),
             maxMutantsPerClass = maxMutantsPerClass.orNull,
         ),
         timeoutMs.get().milliseconds,
         threads.orNull ?: Runtime.getRuntime().availableProcessors(),
     )
+
+// Each generated class is excluded by its exact name, which escapes '$' like any other literal.
+private fun MutKtTask.classExcludes(source: ClassSource): List<Glob> {
+    val entries = excludedClasses.get()
+    val globs = entries.filter { it != GENERATED_SOURCES }.map(::Glob)
+    if (GENERATED_SOURCES !in entries) return globs
+    val root = generatedSourcesDir.get().asFile.toPath()
+    val main = sourceDirs.files.map(File::toPath).filterNot { it.startsWith(root) }
+    val generated = generatedClasses(source.classes(), root, main)
+    if (generated.isNotEmpty()) logger.info("MutKt skips ${generated.size} classes compiled from generated sources")
+    return globs + generated.sorted().map(::Glob)
+}
 
 internal fun MutKtTask.forkSettings(
     production: Staged,

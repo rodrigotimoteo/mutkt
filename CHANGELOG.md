@@ -12,6 +12,7 @@ All notable changes to this project are documented here. Format: Keep a Changelo
 
 - Opt-in `when-switch` operator: a `when` over Int, Char or String constants sends one case to the else branch, or the else branch to the first case ([docs/operators.md](https://github.com/rodrigotimoteo/mutkt/blob/master/docs/operators.md)).
 - Opt-in operator `remove-negation`: removes a unary minus (`INEG`/`LNEG`/`FNEG`/`DNEG`), so `-x` becomes `x`, as PIT's negation mutator does.
+- Classes compiled from sources under `build/generated` (KSP, kapt, AGP: Room's `_Impl`, Moshi adapters) are skipped by default, found by their `SourceFile` rather than by name; a class is still mutated when a file of that name exists anywhere in the main source directories. `excludedClasses` starts with `<generated>`. A JVM build that sets `excludedClasses` with `=` (or `set`) drops the default `<generated>` entry and so still mutates generated classes; use `excludedClasses.add(...)` to keep it.
 ### Fixed
 
 - Docs: mutants reached only through another project's classes on the test classpath (its test fixtures, for instance) are killed, as they have been since 0.5.0 loads each run in one class loader. The known-gap note is gone, and a multi-module build now tests it.
