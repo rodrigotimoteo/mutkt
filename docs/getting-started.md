@@ -48,7 +48,7 @@ If the launcher cannot be resolved (offline, for instance), the mutants run on t
 ./gradlew mutkt
 ```
 
-MutKt mutates the `main` classes with the six default operators and runs the `test` classes against each mutant, in child JVMs set up like the `test` task. The build log shows the counts per status, the score, a table per class and every survivor with its source line:
+MutKt mutates the `main` classes with the six default operators and runs the `test` classes against each mutant, in child JVMs set up like the `test` task. The build log shows the counts per status, the score, a table per class and the survivors grouped by method, with their source lines, covering test classes and a hint per operator:
 
 ```text
 Mutation report

@@ -85,11 +85,18 @@ private fun mutant(
         put("description", mutant.description)
         put("location", location(mutant.line, lines))
         put("status", status(result.status))
-        (result.detail ?: result.killedBy?.let { "Killed by $it" })?.let { put("statusReason", it) }
+        (result.detail ?: result.killedBy?.let { "Killed by $it" } ?: hint(result))?.let { put("statusReason", it) }
         result.killedBy?.let { put("killedBy", listOf(it)) }
         result.coveredBy?.let { put("coveredBy", it) }
     }
 }
+
+// The viewer shows statusReason with the mutant, so a survivor's hint lands there without custom HTML.
+private fun hint(result: MutantResult): String? =
+    result.mutant.operator
+        .takeIf { result.status == MutantStatus.SURVIVED }
+        ?.let(::operatorHint)
+        ?.replaceFirstChar(Char::uppercaseChar)
 
 // Bytecode only knows the line, so the mutant spans that line's text, at least one column (end is exclusive). A
 // missing line, a missing source (one empty line) or a line past the end is clamped so the viewer can place it.
