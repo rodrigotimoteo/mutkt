@@ -14,13 +14,25 @@ import kotlin.time.Duration.Companion.nanoseconds
 private const val RESULT_HEADROOM = 64 * 1024
 
 /**
- * This coverage, or null when it encodes to more than [limit] bytes and so would not fit in a Result frame: a baseline
- * without coverage leaves the analysis running every test per mutant instead of failing it.
+ * This coverage when it encodes to at most [limit] bytes and so fits in a Result frame, else the same per test class
+ * only, else null: a baseline without coverage leaves the analysis running every test per mutant instead of failing it.
  */
-internal fun Coverage.fitting(limit: Int = MAX_FRAME_BYTES - RESULT_HEADROOM): Coverage? {
-    // DataOutputStream counts what it writes; the bytes themselves are discarded.
-    val counter = DataOutputStream(OutputStream.nullOutputStream()).apply { writeCoverage(this@fitting) }
-    return takeIf { counter.size() <= limit }
+internal fun Coverage.fitting(limit: Int = MAX_FRAME_BYTES - RESULT_HEADROOM): Coverage? =
+    sequenceOf(this, byClass()).firstOrNull { it.encodedSize() <= limit }
+
+// DataOutputStream counts what it writes; the bytes themselves are discarded.
+private fun Coverage.encodedSize(): Int =
+    DataOutputStream(OutputStream.nullOutputStream()).apply { writeCoverage(this@encodedSize) }.size()
+
+// Each class with its methods' hits and reached classes; its time already includes theirs.
+private fun Coverage.byClass(): Coverage {
+    val methods = tests.filterNot { it.test.isClass }.groupBy { it.test.className }
+    val classes =
+        tests.filter { it.test.isClass }.map { test ->
+            val own = methods[test.test.className].orEmpty()
+            test.copy(hits = test.hits + own.flatMap { it.hits }, reached = test.reached + own.flatMap { it.reached })
+        }
+    return copy(tests = classes)
 }
 
 // Class names go once into a table, each test's hits are a bitset per class and its reached classes are indexes into
@@ -34,7 +46,7 @@ internal fun DataOutputStream.writeCoverage(coverage: Coverage) {
     writeHits(coverage.global, index)
     writeList(coverage.globalReach) { writeInt(index.getValue(it)) }
     writeList(coverage.tests) {
-        writeString(it.test.className)
+        writeTestId(it.test)
         writeLong(it.elapsed.inWholeNanoseconds)
         writeHits(it.hits, index)
         writeList(it.reached) { name -> writeInt(index.getValue(name)) }
@@ -47,13 +59,20 @@ internal fun DataInputStream.readCoverage(): Coverage {
     val globalReach = readList { names.className(readInt()) }.toSet()
     val tests =
         readList {
-            val test = TestId(readString())
+            val test = readTestId()
             val elapsed = readLong().nanoseconds
             val hits = readHits(names)
             TestCoverage(test, hits, elapsed, readList { names.className(readInt()) }.toSet())
         }
     return Coverage(tests, global, globalReach)
 }
+
+internal fun DataOutputStream.writeTestId(test: TestId) {
+    writeString(test.className)
+    writeOptional(test.method) { writeString(it) }
+}
+
+internal fun DataInputStream.readTestId(): TestId = TestId(readString(), readOptional { readString() })
 
 private fun DataOutputStream.writeHits(
     hits: Set<Probe>,

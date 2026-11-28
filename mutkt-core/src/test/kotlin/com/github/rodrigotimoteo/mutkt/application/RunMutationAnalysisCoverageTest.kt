@@ -130,6 +130,22 @@ class RunMutationAnalysisCoverageTest {
     }
 
     @Test
+    fun `a mutant several methods of one test class reach names that class once`() {
+        val methods =
+            Coverage(
+                listOf(
+                    TestCoverage(TestId("ATest"), emptySet(), 1.seconds),
+                    TestCoverage(TestId("ATest", "a1"), setOf(Probe("a.Foo", 0)), 1.seconds),
+                    TestCoverage(TestId("ATest", "a2"), setOf(Probe("a.Foo", 0)), 1.seconds),
+                ),
+                emptySet(),
+            )
+        val executor = FakeExecutor(baselineElapsed = 3.seconds, coverage = methods) { Outcome.Survived }
+        assertEquals(listOf("ATest"), run(executor).results.first().coveredBy)
+        assertEquals(listOf(TestId("ATest", "a1"), TestId("ATest", "a2")), executor.selectionOf(add))
+    }
+
+    @Test
     fun `a whole-suite run that finds no tests is NO_COVERAGE covered by none`() {
         val report = run(FakeExecutor(baselineElapsed = 3.seconds) { Outcome.NoTests })
         assertEquals(listOf(emptyList<String>()), report.results.map { it.coveredBy }.distinct())
