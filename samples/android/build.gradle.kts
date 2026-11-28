@@ -1,3 +1,6 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android) apply false
@@ -22,6 +25,12 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all { it.useJUnitPlatform() }
     }
+}
+
+// Kotlin's default target is the running JDK; on JDK 21 it would disagree with Java's 17. The task type covers both
+// the Kotlin Android plugin (AGP 8) and AGP 9's built-in Kotlin.
+tasks.withType<KotlinJvmCompile>().configureEach {
+    compilerOptions.jvmTarget = JvmTarget.JVM_17
 }
 
 dependencies {

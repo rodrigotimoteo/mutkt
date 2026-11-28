@@ -24,6 +24,7 @@ Unit tests confirmed passing at the pinned commits (2026-11-26) for all 10 repos
 ## Choices
 
 - `targetClasses` is the module's main package, narrowed to `util` for tusky to keep a run within minutes. http4k targets `:http4k-security-digest`: `:http4k-core` has tests that fail on the local Sun HTTP server.
+- strikt runs on its own pinned Gradle 8.10 wrapper, below MutKt's supported minimum (8.11) since 0.6.0.
 - strikt has `gradleArgs` (`-PossrhToken=unused -PossrhTokenPassword=unused`): its `buildSrc` publishing script casts both properties to `String` at configuration time. They are placeholders, not credentials.
 - `vintage` in `tests` means JUnit 4 tests, which also need the vintage engine and the Platform launcher on the test runtime classpath; the Gradle 9 Jupiter repos need the launcher declared.
 - Left out: Kotlin Multiplatform projects (timber, kotlinpoet, kotlin-faker; MutKt applies to the Kotlin JVM and Android plugins only), projects whose tests run on a JDK 8 or 11 toolchain (hoplite, mockito-kotlin, kotlin-jdsl; the child JVMs use the `test` task's launcher), and ktlint (Kotlin release candidate, JDK 25 toolchain).

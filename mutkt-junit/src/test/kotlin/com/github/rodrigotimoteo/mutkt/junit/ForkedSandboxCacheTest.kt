@@ -3,6 +3,7 @@ package com.github.rodrigotimoteo.mutkt.junit
 import com.github.rodrigotimoteo.mutkt.application.port.ClassFile
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.testing.compileKotlin
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -12,7 +13,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.seconds
 
-private val KILLED = Outcome.Killed("CalcTest.adds", test = TestId("CalcTest"))
+private val KILLED = Outcome.Killed("CalcTest.adds", KillKind.ASSERTION, test = TestId("CalcTest"))
 
 // Robolectric caches the project classes it loaded in JVM-wide statics, so a reused child would test a stale class.
 @Timeout(value = 120, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)

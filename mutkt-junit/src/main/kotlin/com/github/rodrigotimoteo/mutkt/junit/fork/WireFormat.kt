@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantId
 import com.github.rodrigotimoteo.mutkt.domain.OperatorId
@@ -69,6 +70,7 @@ internal fun DataOutputStream.writeOutcome(outcome: Outcome) {
             writeString(outcome.by)
             writeBoolean(outcome.cause != null)
             outcome.cause?.let(::writeString)
+            writeByte(outcome.kind.ordinal)
             writeBoolean(outcome.test != null)
             outcome.test?.let { writeString(it.className) }
         }
@@ -95,5 +97,9 @@ internal fun DataInputStream.readOutcome(): Outcome =
 private fun DataInputStream.readKilled(): Outcome.Killed {
     val by = readString()
     val cause = if (readBoolean()) readString() else null
-    return Outcome.Killed(by, cause, if (readBoolean()) TestId(readString()) else null)
+    val kind = readKillKind()
+    return Outcome.Killed(by, kind, cause, if (readBoolean()) TestId(readString()) else null)
 }
+
+private fun DataInputStream.readKillKind(): KillKind =
+    readUnsignedByte().let { KillKind.entries.getOrNull(it) ?: throw ForkProtocolException("Unknown kill kind $it") }

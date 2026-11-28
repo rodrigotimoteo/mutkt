@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.application
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.domain.Mutant
 import com.github.rodrigotimoteo.mutkt.domain.MutantResult
 import com.github.rodrigotimoteo.mutkt.domain.MutantStatus
@@ -15,7 +16,7 @@ private const val WAIT_SECONDS = 10L
 
 private val KILLER = TestId("a.FooTest")
 
-private val KILLED = Outcome.Killed("a.FooTest.adds", "boom", KILLER)
+private val KILLED = Outcome.Killed("a.FooTest.adds", KillKind.ASSERTION, "boom", KILLER)
 
 class RunMutationAnalysisFlakyTest {
     private val m = mutant()
@@ -47,7 +48,7 @@ class RunMutationAnalysisFlakyTest {
     @Test
     fun `keeps a kill when the killing test passes on the original classes`() =
         assertEquals(
-            MutantResult(m, MutantStatus.KILLED, killedBy = "a.FooTest.adds"),
+            MutantResult(m, MutantStatus.KILLED, killedBy = "a.FooTest.adds", killKind = KillKind.ASSERTION),
             run(FakeExecutor(behavior = { KILLED }, original = { Outcome.Survived })),
         )
 
@@ -64,7 +65,8 @@ class RunMutationAnalysisFlakyTest {
 
     @Test
     fun `does not rerun a kill that names no test class`() {
-        val executor = FakeExecutor(behavior = { Outcome.Killed("JVM exit 7") }, original = { KILLED })
+        val executor =
+            FakeExecutor(behavior = { Outcome.Killed("JVM exit 7", KillKind.EXCEPTION) }, original = { KILLED })
         assertEquals(MutantStatus.KILLED, run(executor).status)
         assertEquals(1, executor.received.size)
     }
@@ -81,7 +83,9 @@ class RunMutationAnalysisFlakyTest {
     @Test
     fun `confirms a flaky killing test class once and reports its later kills as errors`() {
         val mutants = (0..2).map { mutant(ordinal = it) }
-        val byOrdinal = { mutant: Mutant -> Outcome.Killed("a.FooTest.t${mutant.id.ordinal}", null, KILLER) }
+        val byOrdinal = { mutant: Mutant ->
+            Outcome.Killed("a.FooTest.t${mutant.id.ordinal}", KillKind.ASSERTION, null, KILLER)
+        }
         val executor = FakeExecutor(behavior = byOrdinal, original = { KILLED })
         val results = analysis(executor, mutants).run().results
         assertEquals(List(3) { MutantStatus.ERROR }, results.map { it.status })
@@ -108,13 +112,15 @@ class RunMutationAnalysisFlakyTest {
     fun `a rerun that exits its JVM is flaky`() =
         assertEquals(
             MutantStatus.ERROR,
-            run(FakeExecutor(behavior = { KILLED }, original = { Outcome.Killed("JVM exit 7") })).status,
+            run(
+                FakeExecutor(behavior = { KILLED }, original = { Outcome.Killed("JVM exit 7", KillKind.EXCEPTION) }),
+            ).status,
         )
 
     @Test
     fun `keeps a kill when the rerun throws`() =
         assertEquals(
-            MutantResult(m, MutantStatus.KILLED, killedBy = "a.FooTest.adds"),
+            MutantResult(m, MutantStatus.KILLED, killedBy = "a.FooTest.adds", killKind = KillKind.ASSERTION),
             run(FakeExecutor(behavior = { KILLED }, original = { throw IllegalStateException("child died") })),
         )
 

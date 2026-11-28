@@ -2,6 +2,7 @@ package com.github.rodrigotimoteo.mutkt.junit.fork
 
 import com.github.rodrigotimoteo.mutkt.application.port.Outcome
 import com.github.rodrigotimoteo.mutkt.application.port.TestId
+import com.github.rodrigotimoteo.mutkt.domain.KillKind
 import com.github.rodrigotimoteo.mutkt.junit.CALC
 import com.github.rodrigotimoteo.mutkt.junit.CALC_MUTANT
 import com.github.rodrigotimoteo.mutkt.junit.IMPORTS
@@ -20,7 +21,7 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 
-private val KILLED = Outcome.Killed("CalcTest.adds", test = TestId("CalcTest"))
+private val KILLED = Outcome.Killed("CalcTest.adds", KillKind.ASSERTION, test = TestId("CalcTest"))
 
 @Timeout(30)
 class ForkLoopTest {
