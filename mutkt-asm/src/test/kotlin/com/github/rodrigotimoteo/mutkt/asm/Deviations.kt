@@ -378,5 +378,14 @@ internal object Deviations {
             legacyOnly("D18a", "empty-returns", ENUM_MEMBER_REASON) { it.inGeneratedEnumMember },
             legacyOnly("D18b", "non-void-method-calls", ENUM_MEMBER_REASON) { it.inGeneratedEnumMember },
             legacyOnly("D18c", "null-returns", ENUM_MEMBER_REASON) { it.inGeneratedEnumMember },
+            legacyOnly(
+                "D19",
+                "null-safety",
+                "legacy removes the parameter checks kotlinc inserts; Kotlin callers cannot pass null, " +
+                    "so the rebuild skips them as equivalent",
+            ) {
+                // Parameter checks run before the first line number.
+                it.opcode == "INVOKESTATIC" && it.line == -1
+            },
         )
 }
