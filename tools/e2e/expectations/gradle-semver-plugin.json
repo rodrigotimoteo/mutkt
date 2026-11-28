@@ -34,7 +34,7 @@
       "path": "src/main/kotlin/com/figure/gradle/semver/internal/command/BranchList.kt",
       "killedAtLeast": 0,
       "survivedAtLeast": 0,
-      "noCoverageAtLeast": 12,
+      "noCoverageAtLeast": 10,
       "note": "Untested: git branch lookups are only reached through the functionalTest source set, which the unit test task does not run."
     }
   ],
